@@ -1,0 +1,82 @@
+{
+  "kanten": [
+    {
+      "nach": "knowledge/demo-okf/okf.md",
+      "typ": "basiert_auf",
+      "von": "knowledge/demo-okf/llm-wiki-muster.md"
+    },
+    {
+      "nach": "knowledge/demo-okf/llm-wiki-muster.md",
+      "typ": "formalisiert",
+      "von": "knowledge/demo-okf/okf.md"
+    },
+    {
+      "nach": "knowledge/demo-okf/llm-wiki-muster.md",
+      "typ": "praezisiert",
+      "von": "knowledge/demo-okf/ontologie-strategie.md"
+    }
+  ],
+  "knoten": [
+    {
+      "claims": [
+        "C-0290",
+        "C-0291"
+      ],
+      "domaene": "demo-okf",
+      "id": "knowledge/demo-okf/fakten.md",
+      "konfidenz": "mittel",
+      "stand": "2026-07-04",
+      "status": "aktiv",
+      "titel": "Faktensammlung demo-okf",
+      "typ": "faktensammlung"
+    },
+    {
+      "claims": [
+        "C-0101",
+        "C-0102",
+        "C-0103",
+        "C-0104"
+      ],
+      "domaene": "demo-okf",
+      "id": "knowledge/demo-okf/llm-wiki-muster.md",
+      "konfidenz": "mittel",
+      "stand": "2026-07-04",
+      "status": "aktiv",
+      "titel": "LLM-Wiki-Muster (Karpathy) und Praxisregeln",
+      "typ": "konzept"
+    },
+    {
+      "claims": [
+        "C-0001",
+        "C-0002",
+        "C-0003",
+        "C-0004",
+        "C-0005"
+      ],
+      "domaene": "demo-okf",
+      "id": "knowledge/demo-okf/okf.md",
+      "konfidenz": "hoch",
+      "stand": "2026-07-04",
+      "status": "aktiv",
+      "titel": "Open Knowledge Format (OKF)",
+      "typ": "konzept"
+    },
+    {
+      "claims": [
+        "C-0201",
+        "C-0202",
+        "C-0203",
+        "C-0204",
+        "C-0205"
+      ],
+      "domaene": "demo-okf",
+      "id": "knowledge/demo-okf/ontologie-strategie.md",
+      "konfidenz": "mittel",
+      "stand": "2026-07-04",
+      "status": "aktiv",
+      "titel": "Ontologie-Strategie — kleine fixe Basis, Clash-getriebene Erweiterung",
+      "typ": "konzept"
+    }
+  ],
+  "profil": "oksv-lite/1.0"
+}

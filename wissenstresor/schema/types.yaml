@@ -1,0 +1,45 @@
+# Typ-Registry des Wissenstresors (Profil oksv-lite/1.0)
+# ------------------------------------------------------
+# Dies ist die EINZIGE Quelle erlaubter Datentypen. Der Validator lehnt
+# jede Seite mit unbekanntem 'type' ab (fail-closed). Neue Typen entstehen
+# ausschliesslich ueber das Type-Onboarding (references/befuellen.md, Schritt 3):
+# Der Skill stoppt, stellt die fuenf Onboarding-Fragen an den Menschen und
+# traegt die Antworten hier ein — genau einmal pro Typ.
+#
+# Format (zweistufig, mehr laesst der Parser bewusst nicht zu):
+#   typname:
+#     beschreibung: Was ist das?
+#     kriterien: Woran erkennt man beim Einlesen, dass ein Inhalt dieser Typ ist?
+#     besonderheiten: Was ist beim Extrahieren/Antworten zu beachten?
+#     pflicht_extra: Zusaetzliche Angaben, die Claims dieses Typs tragen muessen
+#     graph_rolle: Rolle im Wissensgraph und typische ausgehende Relationen
+
+_relationstypen: [formalisiert, basiert_auf, praezisiert, ersetzt, verweist_auf, widerspricht]
+
+konzept:
+  beschreibung: Abstrakte Idee, Muster, Format oder Definition
+  kriterien: Hat eine eigenstaendige Definition; andere Seiten wuerden darauf verlinken
+  besonderheiten: Kurzfassung muss die Definition in max. 5 Saetzen tragen
+  pflicht_extra: keine
+  graph_rolle: Knoten; typisch formalisiert, basiert_auf, verweist_auf
+
+entscheidung:
+  beschreibung: Getroffene Architektur- oder Betriebsentscheidung mit Begruendung
+  kriterien: Beschreibt eine Wahl zwischen Alternativen samt Konsequenz
+  besonderheiten: Verworfene Alternativen zusaetzlich in notes/dead-ends.md notieren
+  pflicht_extra: Claims der Art Auslegung muessen die Abwaegung nennen
+  graph_rolle: Knoten; typisch ersetzt, praezisiert
+
+runbook:
+  beschreibung: Schrittfolge fuer einen wiederkehrenden Ablauf
+  kriterien: Nummerierte, ausfuehrbare Schritte mit definiertem Ergebnis
+  besonderheiten: Schritte muessen deterministisch formuliert sein (Script vor Modell)
+  pflicht_extra: keine
+  graph_rolle: Knoten; typisch verweist_auf
+
+faktensammlung:
+  beschreibung: Sammelseite einer Domaene fuer atomare Einzelaussagen ohne eigene Konzeptseite
+  kriterien: Claim ist belegwuerdig, passt aber zu keiner bestehenden Seite und rechtfertigt allein keine neue
+  besonderheiten: Primaer per Volltextsuche auffindbar; Kurzfassung beschreibt nur den Zweck der Sammelseite
+  pflicht_extra: Befoerderungsregel beachten — ab etwa drei thematisch verwandten Claims eigene Konzeptseite anlegen und Claims dorthin umziehen (IDs bleiben)
+  graph_rolle: Knoten ohne ausgehende Relationen (bewusst unverdrahtet)

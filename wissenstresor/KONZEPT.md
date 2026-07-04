@@ -149,6 +149,15 @@ Modell) — der Linter repariert nur Metadaten und Router, nie Inhalte.
 * Extraktion und Verdichtung bleiben Modellarbeit und damit
   probabilistisch; das Profil macht ihre Ergebnisse prüfbar, nicht ihre
   Entstehung deterministisch.
+* Nicht-Text-Quellen (Scan, Bild, Bild-PDF) hängen von der Lesefähigkeit
+  des Modells ab (inkl. OCR); der Tresor prüft nur das Ergebnis
+  (Claim-Grammatik, Fundstelle), nie die Bilderkennung selbst — unsichere
+  Erkennung ist fail-closed zu behandeln (Regel 4).
+* Seitengröße hat keine harte Obergrenze. `doctor` meldet ab
+  Claims-/Zeilenschwelle einen Split-Kandidaten als Hinweis (ℹ️, keine
+  Fehler-/Warnstufe) — Entscheidung und Ausführung bleiben Modellarbeit
+  im Befüllen-Workflow, nie automatisches Zerschneiden (das wäre genau
+  das Chunking, das AD-01 ablehnt).
 
 ## Übernahmen aus der Quellenanalyse
 

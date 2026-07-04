@@ -10,7 +10,8 @@ nach jedem größeren Ingest und zusätzlich turnusmäßig, nicht nur „bei Bed
 
 * **Das Script prüft Struktur.** `python3 scripts/vault.py doctor` findet
   deterministisch: Validierungsfehler, INDEX-/Graph-Drift, Router-Lücken,
-  Orphans, Manifest-Abweichungen, Domänen-überlappende Schlagworte.
+  Orphans, Manifest-Abweichungen, Domänen-überlappende Schlagworte,
+  Split-Kandidaten (Seiten über Claims-/Zeilenschwelle).
 * **Das Modell prüft Semantik** (Schritte 2–4 unten) — das, was kein
   Script sehen kann.
 * **Der Linter repariert nur Metadaten und meldet.** Er erstellt keine
@@ -40,6 +41,9 @@ Ampel und Befundliste sind die Arbeitsgrundlage. Rote Befunde zuerst.
 * **Kompressionsprüfung:** Spiegelt eine Seite im Wesentlichen ein
   einzelnes Quelldokument (Body groß, Verdichtung gering)? Dann kostet
   sie doppelt statt zu sparen — als Merge-/Verdichtungs-Kandidat melden.
+  `doctor` markiert ergänzend deterministisch Seiten über Claims-/
+  Zeilenschwelle als Split-Kandidat (ℹ️ Hinweis) — das ersetzt dieses
+  semantische Urteil nicht, sondern liefert den Ausgangspunkt dafür.
 * **Duplikat-/Merge-Kandidaten:** Zwei Seiten mit stark überlappendem
   Gegenstand → Vorschlag zum Mergen (Ausführung: Befüllen-Workflow).
 * **Tote Quellen:** Register-Einträge, auf die kein einziger Claim

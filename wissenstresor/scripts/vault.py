@@ -51,6 +51,12 @@ CONF_WERTE = {"hoch", "mittel", "niedrig"}
 LOG_AKTIONEN = {"ingest", "update", "lint", "release", "note", "onboarding"}
 TRUST_WERTE = {"T1", "T2", "T3"}
 
+# Split-Kandidaten (doctor, nur Hinweis): keine harte Obergrenze, kein
+# automatisches Zerschneiden — Schwellen markieren nur, wann ein Mensch/
+# das Modell die Kompressions- bzw. Beförderungsregel prüfen sollte.
+SPLIT_CLAIMS_SCHWELLE = 20
+SPLIT_ZEILEN_SCHWELLE = 400
+
 CLAIM_START = "- **C-"
 CLAIM_RE = re.compile(
     r"^- \*\*(C-\d{4})\*\* \[(S-\d{4}) \| ([^\]|]+?) \| (Wortlaut|Auslegung)\] (.+)$")
@@ -321,7 +327,8 @@ def lade_seiten(register, typen, reltypen):
                               f"{rel(aufgeloest)} — domänenübergreifend nur als "
                               f"typisierte relation im Frontmatter")
 
-        seiten[rp] = {"fm": fm, "claims": claims, "relationen": relationen, "pfad": p}
+        seiten[rp] = {"fm": fm, "claims": claims, "relationen": relationen, "pfad": p,
+                      "zeilen": len(body.split("\n"))}
     return seiten, alle_claims, fehler, warnungen
 
 
@@ -691,6 +698,20 @@ def cmd_doctor():
         if len(ds) > 1:
             hinweise.append(f"Schlagwort {w!r} in mehreren Domänen ({', '.join(sorted(ds))}) "
                             f"— Treffer in beiden ⇒ Mischfrage melden")
+
+    # Split-Kandidaten: kein Fehler, keine Warnung — nur ein deterministisches
+    # Signal, wann Kompressions- bzw. Beförderungsregel geprüft werden sollte.
+    # Splitten selbst bleibt Modellarbeit (Befüllen-Workflow), nie automatisch.
+    for rp, s in sorted(seiten.items()):
+        n_claims = len(s["claims"])
+        n_zeilen = s.get("zeilen", 0)
+        if n_claims > SPLIT_CLAIMS_SCHWELLE:
+            hinweise.append(f"{rp}: {n_claims} Claims (Schwelle {SPLIT_CLAIMS_SCHWELLE}) "
+                            f"— Split-Kandidat: thematisch verwandte Claims ggf. in eigene "
+                            f"Konzeptseite auslagern (Befüllen-Workflow, Beförderungsregel)")
+        if n_zeilen > SPLIT_ZEILEN_SCHWELLE:
+            hinweise.append(f"{rp}: Body {n_zeilen} Zeilen (Schwelle {SPLIT_ZEILEN_SCHWELLE}) "
+                            f"— möglicher Verdichtungs-/Split-Kandidat, siehe Kompressionsregel")
 
     if MANIFEST.exists():
         print("── Prüfsummen ─────────────────────────────────────────────────")

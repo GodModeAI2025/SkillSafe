@@ -54,6 +54,18 @@ präzise Fundstelle (Abschnitt/Seite/Absatz) und ehrliche Markierung —
 Claim-IDs fortlaufend und tresorweit eindeutig (Kollisionen fängt der
 Validator). Zahlen, Namen, Daten exakt übernehmen.
 
+**Nicht-Text-Quellen (PDF, Bild, Scan).** Der Tresor kennt kein
+gesondertes OCR-Werkzeug und keinen Vektorindex dafür — das Modell liest
+den Inhalt (inkl. Bilderkennung/OCR) beim Extrahieren direkt, genau wie
+bei Text. `Fundstelle` referenziert dabei so präzise wie bei Text möglich
+(z. B. „S. 3, Tabelle unten links" statt nur „Anhang"). Ist die Erkennung
+unsicher — schlechte Scanqualität, mehrdeutige Handschrift, nicht
+eindeutig lesbare Zahl oder Name — gilt Regel 4 (fail closed): nicht
+raten, Passage als unklar markieren, Mensch bestätigt vor Claim-Anlage.
+Sehr umfangreiche PDFs werden abschnittsweise gelesen und die Claims
+fortlaufend ergänzt; das ist kein Sonderweg, sondern dieselbe Kompressions-
+und Fundstellen-Pflicht wie bei jeder anderen Quelle.
+
 **5. Seite anlegen oder erweitern.** Heuristik: Beschreibt der Inhalt eine
 **eigenständige Entität, auf die andere Seiten verlinken würden** → neue
 Seite `knowledge/<domäne>/<konzept>.md`. Ist es ein Attribut oder Update

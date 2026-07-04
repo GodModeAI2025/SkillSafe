@@ -13,3 +13,5 @@ Eintraege nur ueber `python3 scripts/vault.py log <aktion> "<text>"`.
 ## [2026-07-04] ingest | S-0003 (Iusztin: Stop Chasing the Perfect Ontology) registriert; Seiten demo-okf/ontologie-strategie.md (C-0201..C-0205) und demo-okf/fakten.md (C-0290..C-0291); Router um Ontologie-Schlagworte erweitert
 ## [2026-07-04] release | v0.2.0 — 4 Seiten, 16 Claims, 3 Quellen (minor)
 ## [2026-07-04] release | v0.2.1 — 4 Seiten, 16 Claims, 3 Quellen (patch)
+## [2026-07-04] note | Engine erweitert: doctor meldet Split-Kandidaten ueber Claims-/Zeilenschwelle (vault.py); befuellen.md/KONZEPT.md um Anweisung fuer Nicht-Text-Quellen (PDF/Bild/OCR, fail-closed bei unsicherer Erkennung) ergaenzt
+## [2026-07-04] release | v0.3.0 — 4 Seiten, 16 Claims, 3 Quellen (minor)

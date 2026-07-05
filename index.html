@@ -215,6 +215,7 @@
         <a href="#warum">Warum</a>
         <a href="#regeln">Regeln</a>
         <a href="#architektur">Architektur</a>
+        <a href="#tresore">Tresore</a>
         <a href="#demo">Demo</a>
         <a href="#quellen">Quellen</a>
       </span>
@@ -240,7 +241,7 @@
           <a class="btn btn-ghost" href="wissenstresor/SKILL.md">Skill-Vertrag</a>
         </div>
       </div>
-      <div class="stamp"><span><b>VALIDATE</b>0 Fehler<br>4 Seiten · 16 Claims<br>v0.5.0</span></div>
+      <div class="stamp"><span><b>VALIDATE</b>0 Fehler<br>4 Seiten · 16 Claims<br>v0.5.1</span></div>
     </div>
   </section>
 
@@ -295,6 +296,23 @@
         <div class="zone"><span class="zname">Assurance</span><span class="zwhat"><code>doctor + Lint-Workflow</code></span><span class="zprotect">Nur diagnostisch. Gold-Holdouts gehören nie in den Skill (Leakage).</span></div>
         <div class="zone"><span class="zname">Release</span><span class="zwhat"><code>VERSION, MANIFEST.sha256, log.md</code></span><span class="zprotect">Release-Gate fail-closed; ein neues Manifest invalidiert alte Prüfsummen.</span></div>
       </div>
+    </div>
+  </section>
+
+  <section id="tresore">
+    <div class="wrap-wide">
+      <div class="section-head reveal">
+        <p class="eyebrow">AD-06</p>
+        <h2>Mehrere Tresore: Rangfolge, kein Zugriffssystem</h2>
+        <p class="lede">Organisation, Fachbereich, Projekt und privates Wissen bekommen je eine eigene, vollständige Tresor-Kopie. Die Grenze ist der Installationsort (Repo-Rechte, privater Skill-Ordner) — nie eine Zugriffskontrolle im Skill, denn der Tresor hat kein Server- oder Auth-Konzept.</p>
+      </div>
+      <div class="zones reveal">
+        <div class="zone"><span class="zname">Organisation</span><span class="zwhat">Basis</span><span class="zprotect">Gilt immer, für alle geladenen Tresore darunter.</span></div>
+        <div class="zone"><span class="zname">Fachbereich</span><span class="zwhat">Überschreiben + Ergänzen</span><span class="zprotect">Kann Organisation für den eigenen Bereich ersetzen und um eigenes Wissen erweitern.</span></div>
+        <div class="zone"><span class="zname">Projekt</span><span class="zwhat">Überschreiben + Ergänzen</span><span class="zprotect">Kann Fachbereich (und damit Organisation) für das eigene Projekt ersetzen und erweitern.</span></div>
+        <div class="zone"><span class="zname">Persönlich</span><span class="zwhat">Nur Ergänzen</span><span class="zprotect">Kann nie überschreiben — ein Widerspruch bleibt offener Konflikt, wie bei <code>widerspricht</code>.</span></div>
+      </div>
+      <p class="lede reveal" style="margin-top:20px;">Überschreiben ist keine Wahrheitsfrage — mehrere Ebenen können gleichzeitig korrekt sein, nur mit unterschiedlichem Geltungsbereich. Aufgelöst wird nach fester Reihenfolge, aber immer transparent: die überschriebene Basis wird genannt, nie kommentarlos ausgeblendet. Details: <a href="wissenstresor/references/mehrere-tresore.md">references/mehrere-tresore.md</a>.</p>
     </div>
   </section>
 

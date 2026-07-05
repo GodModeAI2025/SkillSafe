@@ -131,10 +131,12 @@ Zwischen den Scopes gilt eine feste Prioritätsreihenfolge — eine
 Eigenschaft des Scope-**Typs**, nicht eine Relation zwischen konkreten
 Instanzen, kommt also ohne Cross-Tresor-Link aus: **Organisation** ist
 Basis und gilt immer; **Fachbereich** kann Organisation für den eigenen
-Fachbereich überschreiben; **Projekt** kann Fachbereich (und damit
-Organisation) für das eigene Projekt überschreiben; **Persönlich** ist
-rein additiv und kann nichts überschreiben oder ersetzen. Details und
-Anwendung: `references/mehrere-tresore.md`.
+Fachbereich sowohl überschreiben (bestehende Aussage ersetzen) als auch
+ergänzen (eigenes Wissen ohne Gegenstück auf Organisationsebene
+hinzufügen); **Projekt** kann Fachbereich (und damit Organisation) für
+das eigene Projekt ebenso überschreiben und ergänzen; **Persönlich** kann
+nur ergänzen — nie überschreiben oder ersetzen. Details und Anwendung:
+`references/mehrere-tresore.md`.
 
 **Begründung:** Der Tresor hat kein Server-, Nutzer- oder Auth-Konzept —
 eine interne Zugriffskontrolle wäre eine trügerische Sicherheit, die die

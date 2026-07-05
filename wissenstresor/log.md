@@ -19,3 +19,5 @@ Eintraege nur ueber `python3 scripts/vault.py log <aktion> "<text>"`.
 ## [2026-07-05] release | v0.4.0 — 4 Seiten, 16 Claims, 3 Quellen (minor)
 ## [2026-07-05] note | Prioritaetsreihenfolge zwischen Scopes ergaenzt: Organisation < Fachbereich < Projekt (jeweils Ueberschreibung fuer den eigenen Scope), Persoenlich rein additiv, nie ueberschreibend. AD-06/KONZEPT.md erweitert, neue Sektion 8 in references/mehrere-tresore.md, kurzer Verweis in references/antworten.md
 ## [2026-07-05] release | v0.5.0 — 4 Seiten, 16 Claims, 3 Quellen (minor)
+## [2026-07-05] note | Praezisierung: Fachbereich und Projekt koennen jeweils sowohl ueberschreiben als auch ergaenzen, persoenlich kann nur ergaenzen (KONZEPT.md AD-06, references/mehrere-tresore.md Sektion 8). Landingpage (index.html) um Sektion 'Mehrere Tresore' ergaenzt, Nav-Link 'Tresore' hinzugefuegt
+## [2026-07-05] release | v0.5.1 — 4 Seiten, 16 Claims, 3 Quellen (patch)

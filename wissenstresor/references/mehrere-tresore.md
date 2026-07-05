@@ -118,10 +118,19 @@ des **Scope-Typs**, nicht eine Relation zwischen zwei konkreten Instanzen
 
 1. **Organisation** — Basis, gilt immer.
 2. **Fachbereich** — kann Organisation für den eigenen Fachbereich
-   überschreiben.
+   **überschreiben** (bestehende Aussage ersetzen) **und ergänzen**
+   (eigenes Wissen ohne Gegenstück auf Organisationsebene hinzufügen).
 3. **Projekt** — kann Fachbereich (und damit Organisation) für das eigene
-   Projekt überschreiben.
-4. **Persönlich** — rein additiv. Kann nichts überschreiben oder ersetzen.
+   Projekt ebenso überschreiben **und** ergänzen.
+4. **Persönlich** — kann **nur ergänzen**, nie überschreiben oder
+   ersetzen.
+
+Überschreiben und Ergänzen sind zwei verschiedene Dinge: Überschreiben
+setzt voraus, dass die breitere Ebene zum selben Thema schon etwas sagt
+(die überschriebene Aussage bleibt sichtbar, siehe unten). Ergänzen
+braucht kein Gegenstück — reines scope-eigenes Wissen ohne Pendant auf
+einer breiteren Ebene ist kein Überschreiben und unterliegt auch nicht der
+Transparenzpflicht, weil es nichts zu überschreiben gibt.
 
 Unterschied zur `widerspricht`-Relation (innerhalb eines Tresors): dort
 weiß der Tresor nicht, welcher Stand richtig ist, deshalb bleiben beide

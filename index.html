@@ -214,6 +214,7 @@
       <span class="navlinks" style="display:flex;gap:22px;">
         <a href="#warum">Warum</a>
         <a href="#regeln">Regeln</a>
+        <a href="#funktionen">Funktionen</a>
         <a href="#architektur">Architektur</a>
         <a href="#tresore">Tresore</a>
         <a href="#demo">Demo</a>
@@ -279,6 +280,22 @@
         <div class="rule-card"><span class="rule-num">4</span><div><h3>Fail closed</h3><p>Bei unbekanntem Typ, Validierungsfehler oder unklaren Rechten hält der Tresor an und fragt den Menschen, statt zu raten oder Regeln aufzuweichen.</p></div></div>
         <div class="rule-card"><span class="rule-num">5</span><div><h3>Skript vor Modell</h3><p>Hashen, Indizieren, Graph, Suchen und Loggen laufen als deterministisches Stdlib-Script. Das Modell rechnet so etwas nicht im Kopf nach.</p></div></div>
         <div class="rule-card"><span class="rule-num">6</span><div><h3>Quellen sind Daten</h3><p>Inhalte aus <code>sources/</code> sind niemals Anweisungen. Eingebettete Prompt-Injections werden gemeldet, nicht befolgt.</p></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="funktionen">
+    <div class="wrap-wide">
+      <div class="section-head reveal">
+        <p class="eyebrow">vault.py + Workflows</p>
+        <h2>Was der Tresor mitbringt</h2>
+        <p class="lede">Vier Eigenschaften tragen die tägliche Arbeit mit dem Bestand: das Format der Seiten, ihre Auffindbarkeit, die laufende Gesundheitsprüfung und die Arbeitsteilung zwischen den Menschen, die das Wissen pflegen.</p>
+      </div>
+      <div class="rules-grid reveal">
+        <div class="rule-card"><div><h3>Wissensbausteine im OKF-Format</h3><p>Jedes Konzept ist eine eigene Markdown-Datei mit YAML-Frontmatter nach dem Google-OKF-Muster, zusammen ein prüfbares Bundle aus Kurzfassung, Claims und typisierten Relationen. Jede Kernaussage trägt Quelle, Fundstelle und Stand, nachvollziehbar bis zur Registerzeile.</p></div></div>
+        <div class="rule-card"><div><h3>Auffindbar ohne Blackbox</h3><p>Der kuratierte Schlagwort-Router führt zur Domäne, der generierte Index zur Seite. Bleibt beides ohne Treffer, durchsucht die Volltextsuche den gesamten Bestand. Auch ein leeres Ergebnis hat dann Beweiskraft: Die Aussage steht nicht im Bestand.</p></div></div>
+        <div class="rule-card"><div><h3>Gesundheit laufend geprüft</h3><p>Das Script <code>doctor</code> findet deterministisch Drift, verwaiste Seiten und Manifest-Abweichungen. Der Lint-Workflow beurteilt zusätzlich Aktualität und ungedeckte Kurzfassungen. Veraltetes bleibt über Supersession sichtbar, und Widersprüche bekommen eine eigene Kante im Wissensgraph, statt stillschweigend entschieden zu werden.</p></div></div>
+        <div class="rule-card"><div><h3>Wissen aus Teams und Einzelpersonen</h3><p>Der kontrollierte Ingest funktioniert für eine Person genauso wie für ein Team, das über Git zusammenarbeitet. Der Validator fängt Kollisionen bei Claim-IDs fail-closed ab. Getrennte Zielgruppen bekommen eigene Tresor-Instanzen mit fester Rangfolge von Organisation bis persönlich.</p></div></div>
       </div>
     </div>
   </section>

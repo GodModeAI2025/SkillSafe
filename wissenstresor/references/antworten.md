@@ -4,6 +4,13 @@ Ziel: eine Antwort, die vollständig aus dem Bestand stammt, jede Kernaussage
 belegt, ihren Stand nennt und Lücken ehrlich macht. Die eisernen Regeln 1–3
 (Geschlossene Welt, Vertrauen zur Abfragezeit, Map first) tragen alles.
 
+Sind in der Session mehrere Tresore geladen und mehr als einer zum Thema
+einschlägig: zuerst die Prioritätsreihenfolge aus
+`references/mehrere-tresore.md` anwenden (Organisation < Fachbereich <
+Projekt, Persönlich nur additiv, nie überschreibend), dann dieses
+Protokoll für den jeweils maßgeblichen Tresor durchlaufen — eine
+überschriebene Basis dabei immer benennen, nie kommentarlos auslassen.
+
 ## Protokoll
 
 1. **Routen.** `ROUTER.md` lesen (nur den Router — keine Seitenkörper).

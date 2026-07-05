@@ -127,6 +127,15 @@ Jeder Scope bekommt eine eigene, vollständige Motor-plus-Content-Kopie;
 Inhalte werden zwischen Kopien nie automatisch geteilt, nur als weiche,
 textuelle Verweise (siehe `references/mehrere-tresore.md`).
 
+Zwischen den Scopes gilt eine feste Prioritätsreihenfolge — eine
+Eigenschaft des Scope-**Typs**, nicht eine Relation zwischen konkreten
+Instanzen, kommt also ohne Cross-Tresor-Link aus: **Organisation** ist
+Basis und gilt immer; **Fachbereich** kann Organisation für den eigenen
+Fachbereich überschreiben; **Projekt** kann Fachbereich (und damit
+Organisation) für das eigene Projekt überschreiben; **Persönlich** ist
+rein additiv und kann nichts überschreiben oder ersetzen. Details und
+Anwendung: `references/mehrere-tresore.md`.
+
 **Begründung:** Der Tresor hat kein Server-, Nutzer- oder Auth-Konzept —
 eine interne Zugriffskontrolle wäre eine trügerische Sicherheit, die die
 eigene „kein Server"-Grundannahme verletzt. Die Bewegung ist nicht neu,
@@ -138,6 +147,16 @@ hart an ihren eigenen Ordner, und die Cross-Domain-Link-Prüfung schlägt
 bereits fail-closed fehl, sobald ein Ziel außerhalb von `ROOT` liegt — eine
 zweite Instanz kann technisch gar nicht versehentlich in eine andere
 hineinlesen.
+
+Die Prioritätsreihenfolge ist keine Wahrheitsfrage wie bei der
+`widerspricht`-Relation (dort weiß der Tresor nicht, welcher Stand richtig
+ist, deshalb bleiben beide offen stehen). Organisations-, Fachbereichs-
+und Projektwissen können alle gleichzeitig korrekt sein, nur mit
+unterschiedlichem Geltungsbereich — wie eine betriebliche Regelung, die
+eine allgemeinere Vorgabe für einen engeren Rahmen präzisiert. Deshalb
+wird hier nach fester Reihenfolge aufgelöst statt offen gelassen — aber
+transparent, nie kommentarlos: analog zur Supersession bleibt die
+überschriebene Basis benannt, nur nicht mehr als maßgeblich dargestellt.
 
 **Grenze:** Eine Person mit legitimem Zugriff auf zwei Tresore gleichzeitig
 ist unproblematisch — das Restrisiko ist Antwort-Attribution/Vermischung

@@ -51,9 +51,12 @@ nur anzunehmen.
 
 1. Ganzen `wissenstresor/`-Ordner an den neuen Ort kopieren, Ordner nach
    Konvention aus Abschnitt 3 umbenennen.
-2. In `SKILL.md`: `name:` und `description:` an den neuen Scope anpassen
-   (Beschreibung soll den Scope explizit nennen, damit er in einer Session
-   mit mehreren Tresoren unterscheidbar bleibt).
+2. In `SKILL.md`: `name:` und `description:` an den neuen Scope anpassen.
+   Die Beschreibung muss den Scope-Typ explizit als eines von
+   Organisation/Fachbereich/Projekt/Persönlich benennen (z. B.
+   „Scope: Fachbereich") — das ist die Grundlage für die
+   Prioritätsreihenfolge in Abschnitt 8 und macht den Tresor in einer
+   Session mit mehreren Instanzen unterscheidbar.
 3. Demo-Inhalt entfernen: `knowledge/demo-okf/` löschen,
    `sources/raw/` und `sources/quarantine/` leeren.
 4. `sources/REGISTER.md` auf die Kopfzeile zurücksetzen (keine Einträge).
@@ -106,7 +109,49 @@ innerhalb eines Tresors gibt es keine Garantie, dass eine Überschneidung
 bemerkt wird. Diese Grenze in Antworten so benennen, nicht Vollständigkeit
 suggerieren.
 
-## 8. Was das hier NICHT ist
+## 8. Prioritätsreihenfolge zwischen Scopes
+
+Sind in einer Session mehrere Tresore geladen und mehr als einer zum
+selben Thema einschlägig, gilt eine feste Rangfolge — eine Eigenschaft
+des **Scope-Typs**, nicht eine Relation zwischen zwei konkreten Instanzen
+(kein Cross-Tresor-Link nötig, keine Verletzung der Pfad-Portabilität):
+
+1. **Organisation** — Basis, gilt immer.
+2. **Fachbereich** — kann Organisation für den eigenen Fachbereich
+   überschreiben.
+3. **Projekt** — kann Fachbereich (und damit Organisation) für das eigene
+   Projekt überschreiben.
+4. **Persönlich** — rein additiv. Kann nichts überschreiben oder ersetzen.
+
+Unterschied zur `widerspricht`-Relation (innerhalb eines Tresors): dort
+weiß der Tresor nicht, welcher Stand richtig ist, deshalb bleiben beide
+Stände offen stehen, nie still entschieden. Zwischen Scopes ist das keine
+Wahrheitsfrage — Organisations-, Fachbereichs- und Projektwissen können
+alle gleichzeitig korrekt sein, nur mit unterschiedlichem Geltungsbereich
+(wie eine betriebliche Regelung, die eine allgemeinere Vorgabe für einen
+engeren Rahmen präzisiert). Deshalb wird hier nach fester Reihenfolge
+aufgelöst — aber **transparent**, nie kommentarlos: Wer nach der
+spezifischsten geladenen Stufe fragt, bekommt deren Antwort, die
+überschriebene Basis wird aber immer benannt (analog zur Supersession:
+die ältere Fassung verschwindet nie kommentarlos, sie gilt nur nicht mehr
+als maßgeblich).
+
+**Persönlich überschreibt nie.** Widerspricht ein persönlicher Inhalt
+einer Organisations-, Fachbereichs- oder Projektaussage, ist das ein
+Konflikt (wie `widerspricht`), keine gültige Überschreibung — beide
+Stände nennen, nie zugunsten der persönlichen Notiz auflösen.
+
+**Wo das deklariert wird:** Jede Instanz nennt ihren Scope-Typ explizit in
+der `SKILL.md`-`description` (Bootstrap-Rezept, Schritt 2) — nur so kann
+das Modell die Rangfolge anwenden, wenn mehrere Tresor-Beschreibungen in
+einer Session sichtbar sind.
+
+**Grenze:** Wie die Mischfrage über Tresore hinweg (Abschnitt 7) ist das
+Best-Effort-Modellurteil, sobald mehrere Tresor-Beschreibungen sichtbar
+sind — kein Script prüft das mechanisch (kein gemeinsamer Router über
+Tresor-Grenzen hinweg). Nicht als Vollständigkeitsgarantie missverstehen.
+
+## 9. Was das hier NICHT ist
 
 Kein ACL-/Rollensystem, kein Meta-Router-Script, kein
 `vault.py identity`/`whoami`-Kommando, kein Content-Sync zwischen

@@ -17,3 +17,5 @@ Eintraege nur ueber `python3 scripts/vault.py log <aktion> "<text>"`.
 ## [2026-07-04] release | v0.3.0 — 4 Seiten, 16 Claims, 3 Quellen (minor)
 ## [2026-07-05] note | Konzept fuer mehrere Tresore (Organisation/Abteilung/Projekt/privat) ergaenzt: AD-06 in KONZEPT.md, neue Referenzdatei references/mehrere-tresore.md (Namenskonvention, Bootstrap-Rezept, Grenzen), SKILL.md Regel 1 praezisiert (Attributions-/Vermischungsrisiko bei mehreren geladenen Tresoren), dead-ends.md um verworfene interne ACL ergaenzt
 ## [2026-07-05] release | v0.4.0 — 4 Seiten, 16 Claims, 3 Quellen (minor)
+## [2026-07-05] note | Prioritaetsreihenfolge zwischen Scopes ergaenzt: Organisation < Fachbereich < Projekt (jeweils Ueberschreibung fuer den eigenen Scope), Persoenlich rein additiv, nie ueberschreibend. AD-06/KONZEPT.md erweitert, neue Sektion 8 in references/mehrere-tresore.md, kurzer Verweis in references/antworten.md
+## [2026-07-05] release | v0.5.0 — 4 Seiten, 16 Claims, 3 Quellen (minor)

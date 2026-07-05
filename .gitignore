@@ -11,6 +11,9 @@ __pycache__/
 .idea/
 *.swp
 
+# Local Claude Code session/harness state
+.claude/
+
 # Local scratch: quarantine is a transient ingest staging area, never a release artifact
 wissenstresor/sources/quarantine/*
 !wissenstresor/sources/quarantine/README.md

@@ -116,6 +116,36 @@ Artefakte), auditierbar und kosten keine Tokens. Zugleich sinkt der
 Token-Verbrauch der Sessions, weil Routing und Prüfung nicht als
 Modell-Denkarbeit anfallen.
 
+### AD-06 · Mehrere Tresore: Grenze ist der Ort, nicht der Zugriff im Skill
+
+**Entscheidung:** Künftige Sensitivitätsstufen (Unternehmen, Abteilung/
+Business-Unit, Projekt, privat) trennen sich ausschließlich durch den
+Installationsort einer vollständigen Tresor-Kopie und dessen bestehende
+Zugriffsrechte (Repo-Berechtigung, Plugin-Scope, private Skill-Ordner) —
+nie durch eine Rollen- oder ACL-Funktion in `vault.py` oder im Schema.
+Jeder Scope bekommt eine eigene, vollständige Motor-plus-Content-Kopie;
+Inhalte werden zwischen Kopien nie automatisch geteilt, nur als weiche,
+textuelle Verweise (siehe `references/mehrere-tresore.md`).
+
+**Begründung:** Der Tresor hat kein Server-, Nutzer- oder Auth-Konzept —
+eine interne Zugriffskontrolle wäre eine trügerische Sicherheit, die die
+eigene „kein Server"-Grundannahme verletzt. Die Bewegung ist nicht neu,
+sondern dieselbe eine Ebene tiefer: Das Vertrauensmodell oben trennt
+Engine/Content/Assurance/Release bereits als Ordner- und Regelgrenzen,
+nicht als Feature. Dass das trägt, zeigt der Code selbst: `ROOT =
+Path(__file__).resolve().parent.parent` in `vault.py` verankert jede Kopie
+hart an ihren eigenen Ordner, und die Cross-Domain-Link-Prüfung schlägt
+bereits fail-closed fehl, sobald ein Ziel außerhalb von `ROOT` liegt — eine
+zweite Instanz kann technisch gar nicht versehentlich in eine andere
+hineinlesen.
+
+**Grenze:** Eine Person mit legitimem Zugriff auf zwei Tresore gleichzeitig
+ist unproblematisch — das Restrisiko ist Antwort-Attribution/Vermischung
+in einer Session mit mehreren geladenen Tresoren, nicht Dateizugriff
+(entschärft durch Regel 1 in `SKILL.md`), plus die Warnung, eine
+höher-sensitive Instanz nie in einen breiteren Skill-Ladeort zu
+symlinken oder zu kopieren.
+
 ## Antwort- und Befüll-Pfad (Kurzfassung)
 
 **Antworten:** ROUTER → (Mischfrage? melden, pro Domäne trennen) →
@@ -158,6 +188,10 @@ Modell) — der Linter repariert nur Metadaten und Router, nie Inhalte.
   Fehler-/Warnstufe) — Entscheidung und Ausführung bleiben Modellarbeit
   im Befüllen-Workflow, nie automatisches Zerschneiden (das wäre genau
   das Chunking, das AD-01 ablehnt).
+* Mehrere Tresore (Organisation/Abteilung/Projekt/privat) trennen sich
+  physisch durch Ordner bzw. Skill-Ladeort, nie durch eine Zugriffs-
+  kontrolle im Skill selbst — siehe AD-06 und
+  `references/mehrere-tresore.md`.
 
 ## Übernahmen aus der Quellenanalyse
 

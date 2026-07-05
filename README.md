@@ -57,7 +57,8 @@ SkillSafe/
     ├── KONZEPT.md          Architektur- und Entscheidungsdokument
     ├── scripts/vault.py   Motor: deterministische Engine (nur Stdlib)
     ├── schema/            Motor: profil.md (Datenvertrag) + types.yaml (Typ-Registry)
-    ├── references/        Motor: Workflow-Protokolle (Antworten, Befüllen, Lint)
+    ├── references/        Motor: Workflow-Protokolle (Antworten, Befüllen, Lint,
+    │                      Mehrere Tresore)
     ├── knowledge/          Treibstoff: OKF-Seiten mit Claims, nach Domäne getrennt
     ├── sources/            Treibstoff: Quellenregister, Rohablage, Quarantäne
     ├── graph/graph.json    Treibstoff: abgeleiteter Wissensgraph
@@ -106,6 +107,11 @@ Ausgelegt für kuratierte Bestände bis in den niedrigen Tausenderbereich an
 Seiten. Darüber (oder bei Bedarf an blinder externer Qualifikation,
 Signaturen, SBOM) ist der Ausbaupfad der OKSV-Vollausbau mit getrennten
 Vertrauenszonen. Details: [`wissenstresor/KONZEPT.md`](wissenstresor/KONZEPT.md).
+
+Für getrennte Wissensbereiche (Organisation, Abteilung, Projekt, privat)
+ist SkillSafe selbst das wiederverwendbare Template: eigene Tresor-Instanz
+pro Bereich statt gemeinsamer Domäne, Grenze ist der Installationsort —
+siehe [`wissenstresor/references/mehrere-tresore.md`](wissenstresor/references/mehrere-tresore.md).
 
 ## Lizenz
 

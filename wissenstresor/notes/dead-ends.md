@@ -28,3 +28,12 @@ auffindbar) uebernommen als faktensammlung-Typ MIT Claim-Grammatik statt
 Triplet-Zwang und Volltextsuche statt Embedding (Determinismus). Bi-temporale
 Gueltigkeit (valid_from/valid_until) nicht uebernommen — stand/status/
 Supersession decken den Bedarf; bei Bedarf Ausbaupfad.
+
+## [2026-07-05] Interne Mandanten-/Rollentrennung (ACL) fuer mehrere Tresore im selben Skill — verworfen
+Statt eines Rollen-/Rechte-Features in vault.py oder Schema, um Organisation-,
+Abteilungs-, Projekt- und Privat-Wissen in einem gemeinsamen Tresor zu trennen:
+verworfen, weil der Tresor kein Server-/Auth-Konzept hat und eine interne
+Zugriffskontrolle nur truegerische Sicherheit waere. Ersatz: eigene,
+vollstaendige Tresor-Kopie pro Sensitivitaetsstufe, Grenze ist der
+Installationsort/Skill-Ladeort (Repo-Rechte, privater Skill-Ordner), nie ein
+Feature im Skill. Details: KONZEPT.md AD-06, references/mehrere-tresore.md.

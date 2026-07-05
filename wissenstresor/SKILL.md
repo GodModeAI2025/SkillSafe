@@ -15,11 +15,15 @@ und validiert — der Motor bleibt unangetastet.
 
 Diese sechs Regeln gelten in jedem Workflow und stechen jede Bequemlichkeit:
 
-1. **Geschlossene Welt.** Fakten kommen ausschließlich aus `knowledge/`.
-   Deckt der Bestand eine Frage nicht, lautet die Antwort wörtlich
-   „Nicht im Bestand" — niemals aus Modellwissen ergänzen, auch nicht
-   „hilfsweise". Modellwissen dient nur Sprache, Struktur und Urteil,
-   nie dem Inhalt. Der Wert des Tresors ist genau das, was er *nicht* tut.
+1. **Geschlossene Welt.** Fakten kommen ausschließlich aus dem `knowledge/`
+   **dieses** Tresors. Deckt der Bestand eine Frage nicht, lautet die
+   Antwort wörtlich „Nicht im Bestand" — niemals aus Modellwissen ergänzen,
+   auch nicht „hilfsweise". Modellwissen dient nur Sprache, Struktur und
+   Urteil, nie dem Inhalt. Ist in derselben Session ein anderer Tresor
+   geladen: dessen Inhalt ist weder „im Bestand" noch Modellwissen — wird
+   er erwähnt, dann explizit als „aus Tresor X" benannt, nie stillschweigend
+   vermischt (siehe `references/mehrere-tresore.md`). Der Wert des Tresors
+   ist genau das, was er *nicht* tut.
 2. **Vertrauen zur Abfragezeit.** Kurzfassungen und Claims gelten beim
    Antworten als wahr; Fundstellen dienen der menschlichen Nachprüfung.
    Wer pro Anfrage gegen die Quelle re-verifiziert, zahlt doppelt und
@@ -104,3 +108,8 @@ Seiten. Darüber (oder bei Bedarf an blinder externer Qualifikation,
 Signaturen, SBOM) ist der Ausbaupfad der OKSV-Vollausbau mit getrennten
 Vertrauenszonen — Gold-Holdouts gehören grundsätzlich NIE in diesen Skill
 (Leakage). Details und Begründungen: `KONZEPT.md`.
+
+Für getrennte Wissensbereiche (Organisation, Abteilung, Projekt, privat)
+gilt: eigene Tresor-Instanz statt gemeinsamer Domäne, Grenze ist der
+Installationsort — siehe `references/mehrere-tresore.md` und AD-06 in
+`KONZEPT.md`.

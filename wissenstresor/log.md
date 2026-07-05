@@ -15,3 +15,5 @@ Eintraege nur ueber `python3 scripts/vault.py log <aktion> "<text>"`.
 ## [2026-07-04] release | v0.2.1 — 4 Seiten, 16 Claims, 3 Quellen (patch)
 ## [2026-07-04] note | Engine erweitert: doctor meldet Split-Kandidaten ueber Claims-/Zeilenschwelle (vault.py); befuellen.md/KONZEPT.md um Anweisung fuer Nicht-Text-Quellen (PDF/Bild/OCR, fail-closed bei unsicherer Erkennung) ergaenzt
 ## [2026-07-04] release | v0.3.0 — 4 Seiten, 16 Claims, 3 Quellen (minor)
+## [2026-07-05] note | Konzept fuer mehrere Tresore (Organisation/Abteilung/Projekt/privat) ergaenzt: AD-06 in KONZEPT.md, neue Referenzdatei references/mehrere-tresore.md (Namenskonvention, Bootstrap-Rezept, Grenzen), SKILL.md Regel 1 praezisiert (Attributions-/Vermischungsrisiko bei mehreren geladenen Tresoren), dead-ends.md um verworfene interne ACL ergaenzt
+## [2026-07-05] release | v0.4.0 — 4 Seiten, 16 Claims, 3 Quellen (minor)

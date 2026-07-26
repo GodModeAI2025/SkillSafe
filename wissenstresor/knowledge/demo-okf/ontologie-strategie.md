@@ -8,6 +8,7 @@ version: 1.0.0
 stand: 2026-07-04
 sources: [S-0003]
 tags: [ontologie, typen, pole+o, facts, knowledge-graph, registry]
+concepts: [B-0003, B-0004]
 relations:
   - praezisiert -> demo-okf/llm-wiki-muster.md
 ---

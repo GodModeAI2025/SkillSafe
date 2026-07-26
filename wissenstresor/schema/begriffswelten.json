@@ -1,0 +1,73 @@
+{
+  "schema": "skillsafe.begriffswelten/v1",
+  "worlds": [
+    {
+      "id": "BW-0001",
+      "name": "Wissensarchitektur",
+      "description": "Kontrollierte Suchbegriffe für portable, evidenzgebundene Wissensspeicher."
+    }
+  ],
+  "concepts": [
+    {
+      "id": "B-0001",
+      "world": "BW-0001",
+      "preferred": "Open Knowledge Format",
+      "aliases": [
+        "OKF",
+        "offenes Wissensformat"
+      ],
+      "broader": [
+        "B-0002"
+      ],
+      "related": [
+        "B-0003"
+      ],
+      "definition_claim": "C-0001"
+    },
+    {
+      "id": "B-0002",
+      "world": "BW-0001",
+      "preferred": "Wissenstresor",
+      "aliases": [
+        "SkillSafe",
+        "Knowledge Vault",
+        "LLM-Wiki"
+      ],
+      "broader": [],
+      "related": [
+        "B-0003",
+        "B-0004"
+      ],
+      "definition_claim": "C-0005"
+    },
+    {
+      "id": "B-0003",
+      "world": "BW-0001",
+      "preferred": "Wissensgraph",
+      "aliases": [
+        "Knowledge Graph"
+      ],
+      "broader": [],
+      "related": [
+        "B-0001",
+        "B-0004"
+      ],
+      "definition_claim": "C-0002"
+    },
+    {
+      "id": "B-0004",
+      "world": "BW-0001",
+      "preferred": "Ontologie",
+      "aliases": [
+        "Begriffswelt",
+        "kontrolliertes Vokabular"
+      ],
+      "broader": [],
+      "related": [
+        "B-0002",
+        "B-0003"
+      ],
+      "definition_claim": "C-0201"
+    }
+  ]
+}

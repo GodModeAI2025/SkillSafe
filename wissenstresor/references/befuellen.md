@@ -18,7 +18,11 @@ liefert Hash, nächste freie S-ID und die fertige Registerzeile. Datei nach
 `sources/raw/S-nnnn__<name>` verschieben (bei „nur Verweis"-Rechten:
 Pointer-Record mit URL und Abrufdatum anlegen und DEN ablegen), Zeile in
 `sources/REGISTER.md` eintragen, Titel/Stand/Trust/Rechte ausfüllen.
-Ab jetzt ist die Ablage unveränderlich — der Validator rechnet den Hash nach.
+Die Ablage muss eine echte reguläre Datei direkt unter `sources/raw/` sein,
+mit der S-ID beginnen und darf weder Symlink noch Traversalpfad sein. Ab
+jetzt ist sie unveränderlich — der Validator rechnet den Hash nach. Vor
+`validate`/`release` die geprüfte Quarantäne-Datei entfernen; jeder
+verbliebene Eintrag sperrt den Release fail-closed.
 
 **2. Typ bestimmen.** Welcher Typ aus `schema/types.yaml` beschreibt den
 Inhalt? Die `kriterien`-Zeilen der Registry sind der Maßstab.
@@ -54,17 +58,11 @@ präzise Fundstelle (Abschnitt/Seite/Absatz) und ehrliche Markierung —
 Claim-IDs fortlaufend und tresorweit eindeutig (Kollisionen fängt der
 Validator). Zahlen, Namen, Daten exakt übernehmen.
 
-**Nicht-Text-Quellen (PDF, Bild, Scan).** Der Tresor kennt kein
-gesondertes OCR-Werkzeug und keinen Vektorindex dafür — das Modell liest
-den Inhalt (inkl. Bilderkennung/OCR) beim Extrahieren direkt, genau wie
-bei Text. `Fundstelle` referenziert dabei so präzise wie bei Text möglich
-(z. B. „S. 3, Tabelle unten links" statt nur „Anhang"). Ist die Erkennung
-unsicher — schlechte Scanqualität, mehrdeutige Handschrift, nicht
-eindeutig lesbare Zahl oder Name — gilt Regel 4 (fail closed): nicht
-raten, Passage als unklar markieren, Mensch bestätigt vor Claim-Anlage.
-Sehr umfangreiche PDFs werden abschnittsweise gelesen und die Claims
-fortlaufend ergänzt; das ist kein Sonderweg, sondern dieselbe Kompressions-
-und Fundstellen-Pflicht wie bei jeder anderen Quelle.
+**Nicht-Text-Quellen (PDF, Bild, Scan).** Hier nicht direkt Claims aus
+flüchtigem Modell-OCR anlegen. Stattdessen das vollständige, strengere
+Protokoll in `references/multimodal.md` durchlaufen: Original registrieren,
+lokale Regionen als `S-nnnn__media.json` erfassen, Injection-Funde markieren,
+Sicht-/Qualitätsprüfung abschließen und Claims exakt an `R-nnnn` binden.
 
 **5. Seite anlegen oder erweitern.** Heuristik: Beschreibt der Inhalt eine
 **eigenständige Entität, auf die andere Seiten verlinken würden** → neue
@@ -94,9 +92,12 @@ anlegen, Claims umziehen (IDs bleiben), `log update` schreiben. Außerdem:
 * Kurzfassung zuletzt schreiben: 3–6 dichte Sätze, jede Kernaussage durch
   einen Claim gedeckt.
 
-**6. Router und Schlagworte pflegen.** Neue Begriffe (inkl. gängiger
-Synonyme) in den Domänen-Abschnitt von `ROUTER.md` aufnehmen — der Router
-verfehlt sonst Synonyme, und Plan B muss es ausbaden.
+**6. Begriffe und Router pflegen.** Passende IDs aus
+`schema/begriffswelten.json` im optionalen `concepts`-Feld der Seite
+eintragen. Neue Vorzugsbegriffe, Synonyme oder Hierarchien ausschließlich
+über `references/begriffswelten.md` aufnehmen; Aliase sind Discovery-
+Metadaten, keine Fakten. Den Domänen-Abschnitt von `ROUTER.md` weiterhin
+für manuelle Navigation aktuell halten.
 
 **7. Script-Kette (fest, in dieser Reihenfolge):**
 
@@ -106,9 +107,12 @@ python3 scripts/vault.py log ingest "S-nnnn <titel>: <was aufgenommen wurde>"
 python3 scripts/vault.py release minor   # Gate + index + graph + VERSION + Manifest
 ```
 
-`release` führt die Kette atomar aus (validate-Gate → index → graph →
-Version anheben → Release-Log → Manifest) und bricht fail-closed ab,
-wenn irgendetwas rot ist. Stufe: `minor` bei neuem Wissen, `patch` bei
+`release` bereitet die ganze Kette unter exklusivem Lock vor und ersetzt
+Index, Graph, Version und Log erst nach bestandenem Gate; das Manifest
+kommt als Commit-Marker zuletzt. Bei behandelten Schreibfehlern wird der
+vorherige Byte-Stand zurückgerollt. Ein Stromausfall über mehrere Dateien
+ist nicht gemeinsam atomar; `checksum --verify` und `doctor` erkennen einen
+Mischstand danach fail-closed. Stufe: `minor` bei neuem Wissen, `patch` bei
 Korrekturen, `major` bei Profil-/Strukturänderungen.
 
 Validierungsfehler werden inhaltlich behoben — niemals durch Aufweichen von

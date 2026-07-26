@@ -1,57 +1,173 @@
-# Profil oksv-lite/1.0 — Datenvertrag des Wissenstresors
+# Profil oksv-lite/1.1 — Datenvertrag des Wissenstresors
 
 OKF v0.1 verlangt nur `type`. Dieses Profil ist bewusst strenger, bleibt aber
-OKF-kompatibel: alles Zusaetzliche liegt in Frontmatter-Feldern und einer
-festen Claim-Grammatik. Der Validator (`scripts/vault.py validate`) erzwingt
-jedes Feld dieses Vertrags — nichts davon ist Konvention, alles ist Pruefung.
+OKF-kompatibel: alles Zusätzliche liegt in flachem Frontmatter, Claims oder
+separaten JSON-Registries. `scripts/vault.py validate` erzwingt den Vertrag
+fail-closed; unbekannte Felder und JSON-Schlüssel sind Fehler.
 
-## Frontmatter (Pflichtfelder jeder Wissensseite)
+## Frontmatter
+
+Pflichtfelder jeder Wissensseite:
 
 | Feld | Werte | Zweck |
 |---|---|---|
-| `type` | Eintrag aus `schema/types.yaml` | Fail-closed: unbekannter Typ stoppt Ingest (Type-Onboarding) |
-| `title` | Freitext | Anzeige in INDEX und Graph |
-| `domain` | = Ordnername unter `knowledge/` | Quellentrennung ist baulich, nicht stilistisch |
-| `status` | `aktiv` / `veraltet` / `in-pruefung` | Supersession sichtbar machen |
-| `confidence` | `hoch` / `mittel` / `niedrig` | Belastbarkeit; steuert Formulierung der Antwort |
-| `version` | SemVer `x.y.z` | Aenderungsklassen nachvollziehbar |
-| `stand` | `JJJJ-MM-TT` | Jede Antwort nennt den Stand |
-| `sources` | Liste von `S-nnnn` | Nur registrierte Quellen; Register prueft Hash der Ablage |
-| `tags` | Liste | Suche und Router-Pflege |
-| `relations` | Liste `typ -> domaene/seite.md` | Typisierte Graph-Kanten; einziger erlaubter Weg ueber Domaenengrenzen |
+| `type` | Eintrag aus `schema/types.yaml` | Unbekannter Typ stoppt den Ingest |
+| `title` | Text | Anzeige und lexikalisches Ranking |
+| `domain` | Ordnername unter `knowledge/` | Quellentrennung ist baulich |
+| `status` | `aktiv` / `veraltet` / `in-pruefung` | Geltung sichtbar machen |
+| `confidence` | `hoch` / `mittel` / `niedrig` | Belastbarkeit der Antwort |
+| `version` | SemVer `x.y.z` | Änderungsklasse nachvollziehbar |
+| `stand` | `JJJJ-MM-TT` | Zeitstand jeder Antwort |
+| `sources` | Liste von `S-nnnn` | Nur registrierte, gehashte Quellen |
+| `tags` | nicht leere Textliste | Lexikalische Suche und Router-Pflege |
 
-Frontmatter nutzt eine flache Profil-Untermenge von YAML (Skalar, Inline-Liste,
-Bindestrich-Liste). Kein Nesting — damit genuegt genau ein einfacher,
-deterministischer Parser, und jede Datei bleibt in jedem Editor trivial lesbar.
+Optionale Felder:
 
-## Claim-Grammatik (belegpflichtige Aussagen)
+| Feld | Werte | Zweck |
+|---|---|---|
+| `relations` | Liste `typ -> domäne/seite.md` | Typisierte Seitenkanten |
+| `concepts` | Liste `B-nnnn` | Verknüpfung zur kontrollierten Begriffswelt |
 
+Frontmatter nutzt nur Skalar, Inline-Liste und Bindestrich-Liste. Kein
+Nesting. Listenfelder müssen tatsächlich als Liste geschrieben werden.
+
+## Claim-Grammatik
+
+```text
+- **C-nnnn** [S-nnnn | Fundstelle | Wortlaut|Beobachtung|Auslegung] Aussagetext.
 ```
-- **C-nnnn** [S-nnnn | Fundstelle | Wortlaut|Auslegung] Aussagetext.
+
+* `C-nnnn` ist tresorweit eindeutig.
+* `S-nnnn` steht im Register und im `sources`-Feld der Seite.
+* `Wortlaut` gibt Text oder geprüftes OCR nah an der Quelle wieder.
+* `Beobachtung` ist ein unmittelbar sichtbarer Befund und nur für eine
+  registrierte Bild-/PDF-Repräsentation erlaubt.
+* `Auslegung` ist eine ausdrücklich markierte Schlussfolgerung.
+* Bei einer Bild-/PDF-Quelle enthält die Fundstelle genau eine existierende
+  `R-nnnn`, etwa `R-0042: Seite 3, Diagramm links`. Verdächtige Regionen
+  dürfen nicht referenziert werden.
+* Offensichtliche Instruktionssignaturen sind weder im Aussagetext noch in
+  der Fundstelle freigabefähig. Sie bleiben als markierte Quelldaten in der
+  Medienrepräsentation oder Quarantäne, erscheinen aber nie als Claim.
+
+## Begriffswelten (`schema/begriffswelten.json`)
+
+Die Registry hat Schema `skillsafe.begriffswelten/v1` und exakt drei
+Top-Level-Felder:
+
+```json
+{
+  "schema": "skillsafe.begriffswelten/v1",
+  "worlds": [
+    {
+      "id": "BW-0001",
+      "name": "Wissensarchitektur",
+      "description": "Kontrollierte Suchbegriffe."
+    }
+  ],
+  "concepts": [
+    {
+      "id": "B-0001",
+      "world": "BW-0001",
+      "preferred": "Open Knowledge Format",
+      "aliases": ["OKF"],
+      "broader": [],
+      "related": [],
+      "definition_claim": "C-0001"
+    }
+  ]
+}
 ```
 
-* `C-nnnn` — tresorweit eindeutige Claim-ID (Validator prueft Kollisionen).
-* `S-nnnn` — Quelle; muss im Register UND im `sources:`-Feld der Seite stehen.
-* `Fundstelle` — so praezise wie moeglich: Abschnitt, Seite, Absatz.
-* `Wortlaut` — die Aussage gibt den Quellinhalt wieder (Paraphrase nah am Text).
-* `Auslegung` — eigene Einordnung/Schlussfolgerung. Wird in Antworten immer
-  als solche markiert und nie mit dem Wortlaut der Quelle verwechselt.
+IDs, Referenzen und Suchbegriffe sind eindeutig. `broader` bleibt innerhalb
+einer Welt und azyklisch; `related` verlässt die Welt ebenfalls nicht.
+Alias-Kollisionen innerhalb einer Welt sind Fehler. Jede Begriffsdefinition
+verweist auf einen existierenden Claim, dessen Seite den Begriff in
+`concepts` führt. Vorzugsbegriffe, Aliase und Hierarchie erweitern nur die
+Discovery — sie sind nie selbst Antwort-Evidenz.
 
-## Abschnitte einer Wissensseite
+## Medienrepräsentationen (`sources/derived/`)
 
-1. `## Kurzfassung` — 3–6 dichte Saetze. Das ist die Schicht, der zur
-   Abfragezeit vertraut wird (Kompressionsregel). Jede Kernaussage der
-   Kurzfassung muss durch einen Claim gedeckt sein (prueft der Lint).
-2. `## Claims` — die belegten Einzelaussagen in obiger Grammatik.
-3. `## Kontext und Grenzen` — optional: Geltungsbereich, offene Punkte.
+Originale bleiben unverändert und gehasht unter `sources/raw/`. Für jede
+registrierte PNG-, JPEG-, GIF-, WebP-, TIFF- oder PDF-Quelle ist genau eine
+Datei `sources/derived/S-nnnn__media.json` erforderlich:
 
-## Quellenregister (`sources/REGISTER.md`)
+```json
+{
+  "schema": "skillsafe.media/v1",
+  "source_id": "S-0042",
+  "source_sha256": "<Hash aus REGISTER>",
+  "media_type": "image/png",
+  "language": "de",
+  "extractor": {
+    "kind": "human",
+    "name": "lokale Sichtprüfung",
+    "version": "1"
+  },
+  "verified": true,
+  "alt_text": "Kurze zugängliche Beschreibung.",
+  "regions": [
+    {
+      "id": "R-0042",
+      "kind": "diagram",
+      "locator": "Diagramm links",
+      "text": "Geprüfte lokale Repräsentation.",
+      "confidence": 0.95,
+      "bbox": [0.0, 0.0, 0.5, 1.0],
+      "suspicious_instruction": false
+    }
+  ]
+}
+```
 
-Spalten: `| ID | Titel | Stand/Version | SHA-256 | Trust | Rechte | Ablage |`
+`bbox` ist entweder `null` oder normalisiert als `[x,y,breite,höhe]` in
+`0..1`. `kind` ist `text`, `diagram`, `table`, `photo`, `chart` oder
+`other`; `extractor.kind` ist `human`, `model`, `ocr` oder `hybrid`.
+`verified` muss vor einem Release `true` sein. SVG ist wegen aktiver Inhalte
+nicht als Bildquelle erlaubt und muss lokal in ein erlaubtes Rasterformat
+umgewandelt werden.
 
-* **Trust:** `T1` amtlich/primaer · `T2` Hersteller/Sekundaerquelle · `T3` Web/unbestaetigt.
-* **SHA-256** ist der Hash der Datei unter *Ablage*; der Validator rechnet nach.
-  Aendert sich die Ablage nach Registrierung, schlaegt validate fehl —
-  das ist die Pruefsummenlogik: eine neue Version invalidiert alte Hashes.
-* **Rechte:** Was darf gespeichert werden? Fuer externe Web-Quellen gilt im
-  Zweifel: nur Pointer-Record (URL, Abrufdatum), kein Volltext.
+Regions-`text`, Regions-`locator` und `alt_text` bleiben untrusted
+Ingest-Daten. `query` gibt sie nie als Evidenz aus, sondern nur den
+kuratierten Claim mit dessen geprüfter Fundstelle sowie Region-ID, Typ und
+Konfidenz. Eine markierte Prompt-Injection darf manifestiert und untersucht,
+aber nicht von einem Claim verwendet werden.
+
+## Maschinenabfrage
+
+`query` gibt genau ein JSON-Dokument mit Schema `skillsafe.query/v1` aus.
+Vor dem Retrieval müssen Validierung, Index, Graph, Quarantäne und Manifest
+grün sein; der Manifest-Digest wird vor und nach dem Snapshot verglichen.
+Mögliche Zustände sind:
+
+* `candidates_found` — mindestens ein kuratierter Claim ist
+  Retrieval-Kandidat; semantische Voll- oder Teildeckung wird anschließend
+  anhand der Claims beurteilt, nicht vom Ranking behauptet;
+* `no_candidates` — das deterministische Ranking fand keinen Kandidaten,
+  Evidenz bleibt leer und `semantic_coverage` bleibt `not_assessed`;
+  `fallback.page_paths` nennt den Umfang einer nötigen semantischen
+  Vollprüfung;
+* `ambiguous` — Alias ist über Begriffswelten mehrdeutig;
+* `invalid_query`, `invalid_vault`, `vault_busy`, `snapshot_changed` —
+  fail-closed, immer ohne Evidenz.
+
+Das Ranking `hybrid-local/v1` verwendet ausschließlich Ganzzahlen:
+kontrollierte Begriffe/Aliase, lexikalische Token-Treffer und höchstens einen
+Graph-Hop. `retrieval_complete` bedeutet nur, dass dieser Ranking-Scan alle
+validierten Claims gesehen hat; es ist kein semantischer Vollständigkeits-
+beweis. Keine Embeddings, kein Netzwerk, kein Cache im Skill.
+
+## Quellenregister und Pfadgrenzen
+
+`sources/REGISTER.md` hat sieben Spalten:
+`ID | Titel | Stand/Version | SHA-256 | Trust | Rechte | Ablage`.
+Trust ist `T1`, `T2` oder `T3`; Rechte müssen eindeutig benannt sein. Die
+Ablage ist genau eine reguläre Datei direkt unter `sources/raw/`, deren Name
+mit der S-ID beginnt. Absolute Pfade, `..`, Backslashes, Unterordner,
+Mehrfachregistrierungen, Symlinks, Junctions/Reparse-Points und Hardlinks
+sind verboten.
+
+Jede Seitenrelation zeigt exakt auf eine validierte Markdown-Seite
+`domäne/seite.md`. Lokale Markdown-Links bleiben innerhalb derselben Domäne.
+Referenzlinks werden wie Inline-Links geprüft; rohe HTML-Links liegen
+außerhalb der unterstützten Untermenge.

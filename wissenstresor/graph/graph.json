@@ -18,6 +18,9 @@
   ],
   "knoten": [
     {
+      "begriffe": [
+        "B-0002"
+      ],
       "claims": [
         "C-0290",
         "C-0291"
@@ -31,6 +34,9 @@
       "typ": "faktensammlung"
     },
     {
+      "begriffe": [
+        "B-0002"
+      ],
       "claims": [
         "C-0101",
         "C-0102",
@@ -46,6 +52,11 @@
       "typ": "konzept"
     },
     {
+      "begriffe": [
+        "B-0001",
+        "B-0002",
+        "B-0003"
+      ],
       "claims": [
         "C-0001",
         "C-0002",
@@ -56,12 +67,16 @@
       "domaene": "demo-okf",
       "id": "knowledge/demo-okf/okf.md",
       "konfidenz": "hoch",
-      "stand": "2026-07-04",
+      "stand": "2026-07-26",
       "status": "aktiv",
       "titel": "Open Knowledge Format (OKF)",
       "typ": "konzept"
     },
     {
+      "begriffe": [
+        "B-0003",
+        "B-0004"
+      ],
       "claims": [
         "C-0201",
         "C-0202",
@@ -78,5 +93,5 @@
       "typ": "konzept"
     }
   ],
-  "profil": "oksv-lite/1.0"
+  "profil": "oksv-lite/1.1"
 }

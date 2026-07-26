@@ -8,6 +8,7 @@ version: 1.0.0
 stand: 2026-07-04
 sources: [S-0002]
 tags: [llm-wiki, karpathy, ingest, lint, kompression, map-first]
+concepts: [B-0002]
 relations:
   - basiert_auf -> demo-okf/okf.md
 ---

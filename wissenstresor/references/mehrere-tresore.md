@@ -50,26 +50,31 @@ nur anzunehmen.
 ## 4. Bootstrap-Rezept (neue Instanz anlegen)
 
 1. Ganzen `wissenstresor/`-Ordner an den neuen Ort kopieren, Ordner nach
-   Konvention aus Abschnitt 3 umbenennen.
+   Konvention aus Abschnitt 3 umbenennen und für die folgenden Befehle in
+   genau diesen Skill-Ordner wechseln.
 2. In `SKILL.md`: `name:` und `description:` an den neuen Scope anpassen.
    Die Beschreibung muss den Scope-Typ explizit als eines von
    Organisation/Fachbereich/Projekt/Persönlich benennen (z. B.
    „Scope: Fachbereich") — das ist die Grundlage für die
    Prioritätsreihenfolge in Abschnitt 8 und macht den Tresor in einer
    Session mit mehreren Instanzen unterscheidbar.
-3. Demo-Inhalt entfernen: `knowledge/demo-okf/` löschen,
-   `sources/raw/` und `sources/quarantine/` leeren.
+3. Demo-Inhalt entfernen: `knowledge/demo-okf/` löschen und `sources/raw/`
+   leeren. Unter `sources/derived/` alle `S-nnnn__media.json` entfernen,
+   aber `README.md` behalten. Unter `sources/quarantine/` ebenfalls nur
+   Payloads entfernen und die vertrauenswürdige `README.md` behalten.
 4. `sources/REGISTER.md` auf die Kopfzeile zurücksetzen (keine Einträge).
-5. `ROUTER.md` von Hand auf die Kopfzeile zurücksetzen — der Router ist
+5. `schema/begriffswelten.json` auf eine valide leere Registry zurücksetzen:
+   `{"schema":"skillsafe.begriffswelten/v1","worlds":[],"concepts":[]}`.
+   Demo-Begriffe dürfen ohne ihre Definition-Claims nicht stehen bleiben.
+6. `ROUTER.md` von Hand auf die Kopfzeile zurücksetzen — der Router ist
    kuratiert, nicht generiert, `vault.py` schreibt ihn nie.
-6. `python3 scripts/vault.py index` und `python3 scripts/vault.py graph`
-   laufen lassen, damit `INDEX.md`/`graph/graph.json` zum leeren Bestand
-   passen — beide nie von Hand editieren (`INDEX.md` sagt das selbst).
-7. `VERSION` auf `0.0.0` zurücksetzen.
+7. `log.md` auf seine Überschrift zurücksetzen; die Demo-Historie gehört
+   nicht in den neuen Scope. `VERSION` auf `0.0.0` setzen.
 8. `python3 scripts/vault.py log note "abgeleitet vom SkillSafe-Motor
    v<X>, Scope: <scope>, <Datum>"` — Herkunft der Kopie im Log dokumentiert.
 9. `python3 scripts/vault.py release major` — ergibt v1.0.0, exakt wie
-   beim ursprünglichen Bootstrap dieses Tresors (siehe `log.md`).
+   beim ursprünglichen Bootstrap dieses Tresors und erzeugt Index, Graph
+   und Manifest atomar vorbereitet neu.
 10. `python3 scripts/vault.py doctor` — muss 🟢 sein, bevor Inhalt
     einzieht. Vorsicht: auf einem komplett leeren Bestand vorher kurz
     prüfen, dass `doctor`/`validate` sich sinnvoll verhalten (keine
@@ -78,9 +83,12 @@ nur anzunehmen.
 ## 5. Was unverändert bleibt
 
 `scripts/vault.py`, `schema/profil.md`, `schema/types.yaml` (nur die
-Basistypen — keine demo-spezifischen Präzisierungen übernehmen) und alle
+Basistypen — keine demo-spezifischen Präzisierungen übernehmen),
+`sources/derived/README.md`, `sources/quarantine/README.md` und alle
 `references/*.md` sind der wiederverwendbare Motor und werden wörtlich
-kopiert, nicht neu geschrieben.
+kopiert, nicht neu geschrieben. `schema/begriffswelten.json` bleibt als
+Schema-Datei erhalten, wird beim Bootstrap aber wie oben beschrieben
+inhaltlich geleert.
 
 ## 6. Querverweise zwischen Tresoren
 

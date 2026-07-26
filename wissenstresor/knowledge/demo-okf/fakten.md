@@ -8,6 +8,7 @@ version: 1.0.0
 stand: 2026-07-04
 sources: [S-0003]
 tags: [fakten, sammelbecken, atomare-aussagen]
+concepts: [B-0002]
 ---
 
 # Faktensammlung demo-okf

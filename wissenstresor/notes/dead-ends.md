@@ -8,7 +8,9 @@ Nachbarschaftssuche im Einbettungsraum ist eine Blackbox ("Warum diese
 Quelle?" nicht beantwortbar), erzeugt Infrastruktur (Store, Modell,
 Re-Indexierung, Tuning) und schickt je nach Setup Inhalte an externe
 Schnittstellen. Ersatz: ROUTER (kuratiert) + INDEX (generiert) +
-erschoepfende Volltextsuche (Plan B). Details: KONZEPT.md, Frage 1.
+manifestgebundenes Hybrid-Retrieval aus kontrollierten Begriffen,
+lexikalischen Claim-Treffern und genau einem Graph-Hop; erschöpfende
+Volltextsuche bleibt manueller Audit-Plan. Details: KONZEPT.md AD-01.
 
 ## [2026-07-04] Claims in separaten Ledger-Dateien — verworfen
 Getrennte Ledger (wie im OKSV-Vollausbau) erhoehen im puren Skill nur die

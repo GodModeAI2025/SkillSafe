@@ -1,4 +1,4 @@
-# Typ-Registry des Wissenstresors (Profil oksv-lite/1.0)
+# Typ-Registry des Wissenstresors (Profil oksv-lite/1.1)
 # ------------------------------------------------------
 # Dies ist die EINZIGE Quelle erlaubter Datentypen. Der Validator lehnt
 # jede Seite mit unbekanntem 'type' ab (fail-closed). Neue Typen entstehen

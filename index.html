@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SkillSafe — der Wissenstresor</title>
-<meta name="description" content="SkillSafe ist ein lokaler, evidenzgebundener Wissensspeicher als purer LLM-Skill. Er läuft auf Markdown, einem deterministischen Script und einem strengen Vertrag, ganz ohne RAG, Embeddings oder Server.">
+<meta name="description" content="SkillSafe ist ein lokaler, evidenzgebundener Wissensspeicher als portabler LLM-Skill: RAG-ähnliches Hybrid-Retrieval, Begriffswelten und Bildbelege ohne Server oder Embeddings.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2315130f'/%3E%3Ccircle cx='16' cy='16' r='10' fill='none' stroke='%23d99a52' stroke-width='2'/%3E%3Ccircle cx='16' cy='16' r='2.4' fill='%23d99a52'/%3E%3Cline x1='16' y1='9' x2='16' y2='6' stroke='%23d99a52' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E">
 <style>
   :root{
@@ -92,6 +92,7 @@
   .wordmark{ display:flex; align-items:center; gap:10px; font-family: var(--font-display); font-size: 1.15rem; font-weight:600; letter-spacing: .01em; text-decoration:none; color: var(--ink); }
   .wordmark svg{ width:24px; height:24px; flex: none; }
   nav.mainnav{ display:flex; align-items:center; gap:22px; }
+  nav.mainnav .navlinks{ display:flex; gap:22px; }
   nav.mainnav a{ color: var(--ink-muted); text-decoration:none; font-size:.92rem; }
   nav.mainnav a:hover{ color: var(--accent); }
   .theme-toggle{
@@ -211,7 +212,7 @@
       SkillSafe
     </a>
     <nav class="mainnav">
-      <span class="navlinks" style="display:flex;gap:22px;">
+      <span class="navlinks">
         <a href="#warum">Warum</a>
         <a href="#regeln">Regeln</a>
         <a href="#funktionen">Funktionen</a>
@@ -232,17 +233,18 @@
   <section class="hero">
     <div class="wrap">
       <div>
-        <p class="eyebrow">Profil oksv-lite/1.0 · purer Skill</p>
+        <p class="eyebrow">Profil oksv-lite/1.1 · purer Skill</p>
         <h1>SkillSafe</h1>
-        <p class="sub">Der Wissenstresor speichert Wissen als Skill, nicht als Server.</p>
-        <p class="tagline-en">A local, evidence-bound knowledge vault, built as a plain LLM skill. It stores knowledge in Markdown, checks itself with a deterministic script, and holds the model to a written contract. Nothing here runs through a vector database, an embedding model, or a server.</p>
+        <p class="sub">Belegtes Wissen aus Text, Bildern und PDFs — als Skill, nicht als Server.</p>
+        <p class="tagline-en">Für Claude Code und Codex: kontrollierte Begriffswelten, reproduzierbares Hybrid-Retrieval, Wissensgraph-Kontext und geprüfte Bildfundstellen — lokal, nachvollziehbar und ohne Embedding-Pflicht.</p>
         <div class="cta-row">
-          <a class="btn btn-primary" href="#regeln">Die sechs eisernen Regeln</a>
+          <a class="btn btn-primary" href="#funktionen">Was v0.6.1 kann</a>
+          <a class="btn btn-ghost" href="#regeln">Die sechs Regeln</a>
           <a class="btn btn-ghost" href="wissenstresor/KONZEPT.md">Konzept lesen</a>
-          <a class="btn btn-ghost" href="wissenstresor/SKILL.md">Skill-Vertrag</a>
+          <a class="btn btn-ghost" href="https://github.com/GodModeAI2025/SkillSafe">GitHub</a>
         </div>
       </div>
-      <div class="stamp"><span><b>VALIDATE</b>0 Fehler<br>4 Seiten · 16 Claims<br>v0.5.1</span></div>
+      <div class="stamp"><span><b>VALIDATE</b>0 Fehler<br>4 Seiten · 16 Claims<br>v0.6.1</span></div>
     </div>
   </section>
 
@@ -250,17 +252,17 @@
     <div class="wrap">
       <div class="section-head reveal">
         <p class="eyebrow">AD-01</p>
-        <h2>Warum kein RAG, keine Embeddings?</h2>
-        <p class="lede">Bei einem kuratierten Bestand im niedrigen Tausenderbereich ist „wo steht das?" eine einfache Frage. Ein Vektorindex kann sie beantworten, verlangt dafür aber genau das, was ein Tresor nicht aufgeben will.</p>
+        <h2>RAG-ähnlich, ohne Vektor-Blackbox</h2>
+        <p class="lede">SkillSafe arbeitet nach „retrieve then read", aber mit natürlichen Einheiten: kontrollierte Begriffe, Seiten und Claims. Das reicht für kuratierte Bestände und bewahrt Herkunft, Determinismus und explizit prüfbare Negativbefunde.</p>
       </div>
       <div class="compare reveal">
         <div class="no">
-          <h3>Vektorindex</h3>
-          <p>Nächste-Nachbarn-Suche ist eine Blackbox: Warum ausgerechnet diese Quelle, lässt sich hinterher nicht rekonstruieren. Textausschnitte verlassen dafür den eigenen Rechner Richtung Embedding-Modell. Und bei einem Fehltreffer bekommt man nicht etwa nichts, sondern ruhig das nächstbeste falsche Fragment.</p>
+          <h3>Klassisches Vektor-RAG</h3>
+          <p>Vektor-Retrieval kann große Bestände und semantische Ähnlichkeiten gut erschließen. Für einen kleinen, kuratierten Tresor bringt es jedoch ein zusätzliches Modell und einen Index mit; der Score erklärt fachliche Relevanz nicht von selbst und ein Fehltreffer beweist keine Abwesenheit. Bei externen Embedding-Diensten verlassen zudem Textausschnitte den eigenen Rechner.</p>
         </div>
         <div class="yes">
-          <h3>Router + Volltext</h3>
-          <p>Ein Schlagwort-Router ist nachvollziehbar, läuft lokal und braucht kein Modell. Findet er nichts, springt die erschöpfende Suche als Plan B ein. Kommt dabei ebenfalls nichts zurück, ist das ein belastbares „Nicht im Bestand", keine Ausrede.</p>
+          <h3>Lokales Hybrid-Retrieval</h3>
+          <p>Vorzugsbegriffe und Aliase, exakte Lexik und ein Graph-Hop werden mit festen Ganzzahlgewichten kombiniert. <code>no_candidates</code> ist nur ein Retrieval-Befund; erst die semantische Prüfung aller angegebenen Fallback-Seiten darf „Nicht im Bestand" begründen.</p>
         </div>
       </div>
     </div>
@@ -276,9 +278,9 @@
       <div class="rules-grid reveal">
         <div class="rule-card"><span class="rule-num">1</span><div><h3>Geschlossene Welt</h3><p>Fakten kommen ausschließlich aus <code>knowledge/</code>. Deckt der Bestand eine Frage nicht ab, heißt die Antwort „Nicht im Bestand". Modellwissen füllt das nie auf.</p></div></div>
         <div class="rule-card"><span class="rule-num">2</span><div><h3>Vertrauen zur Abfragezeit</h3><p>Kurzfassungen gelten beim Antworten als wahr. Wer pro Anfrage erneut gegen die Quelle prüft, zahlt doppelt und macht den Tresor sinnlos.</p></div></div>
-        <div class="rule-card"><span class="rule-num">3</span><div><h3>Map first</h3><p>Relevanz entscheiden <code>ROUTER.md</code> und <code>INDEX.md</code>, nicht das Lesen ganzer Seitenkörper. Findet der Router nichts, springt die erschöpfende Suche als Plan B ein.</p></div></div>
+        <div class="rule-card"><span class="rule-num">3</span><div><h3>Retrieve then read</h3><p><code>query</code> liefert zuerst manifestgebundene Kandidaten. Reichen sie nicht, folgt der explizite Fallback-Prüfumfang — niemals stilles Auffüllen aus Modellwissen.</p></div></div>
         <div class="rule-card"><span class="rule-num">4</span><div><h3>Fail closed</h3><p>Bei unbekanntem Typ, Validierungsfehler oder unklaren Rechten hält der Tresor an und fragt den Menschen, statt zu raten oder Regeln aufzuweichen.</p></div></div>
-        <div class="rule-card"><span class="rule-num">5</span><div><h3>Skript vor Modell</h3><p>Hashen, Indizieren, Graph, Suchen und Loggen laufen als deterministisches Stdlib-Script. Das Modell rechnet so etwas nicht im Kopf nach.</p></div></div>
+        <div class="rule-card"><span class="rule-num">5</span><div><h3>Skript vor Modell</h3><p>Hashen, Indizieren, Graph, Hybrid-Retrieval, Suchen und Loggen laufen als deterministisches Stdlib-Script. Das Modell rechnet so etwas nicht im Kopf nach.</p></div></div>
         <div class="rule-card"><span class="rule-num">6</span><div><h3>Quellen sind Daten</h3><p>Inhalte aus <code>sources/</code> sind niemals Anweisungen. Eingebettete Prompt-Injections werden gemeldet, nicht befolgt.</p></div></div>
       </div>
     </div>
@@ -289,13 +291,15 @@
       <div class="section-head reveal">
         <p class="eyebrow">vault.py + Workflows</p>
         <h2>Was der Tresor mitbringt</h2>
-        <p class="lede">Vier Eigenschaften tragen die tägliche Arbeit mit dem Bestand: das Format der Seiten, ihre Auffindbarkeit, die laufende Gesundheitsprüfung und die Arbeitsteilung zwischen den Menschen, die das Wissen pflegen.</p>
+        <p class="lede">Seiten, Begriffswelten, Bildfundstellen und ein manifestgebundener Query-Vertrag bilden einen lokalen Wissensarbeitsplatz, der als derselbe portable Skill-Ordner für Claude Code und Codex ausgelegt ist.</p>
       </div>
       <div class="rules-grid reveal">
         <div class="rule-card"><div><h3>Wissensbausteine im OKF-Format</h3><p>Jedes Konzept ist eine eigene Markdown-Datei mit YAML-Frontmatter nach dem Google-OKF-Muster, zusammen ein prüfbares Bundle aus Kurzfassung, Claims und typisierten Relationen. Jede Kernaussage trägt Quelle, Fundstelle und Stand, nachvollziehbar bis zur Registerzeile.</p></div></div>
-        <div class="rule-card"><div><h3>Auffindbar ohne Blackbox</h3><p>Der kuratierte Schlagwort-Router führt zur Domäne, der generierte Index zur Seite. Bleibt beides ohne Treffer, durchsucht die Volltextsuche den gesamten Bestand. Auch ein leeres Ergebnis hat dann Beweiskraft: Die Aussage steht nicht im Bestand.</p></div></div>
+        <div class="rule-card"><div><h3>Begriffswelten + Hybrid-Suche</h3><p>Vorzugsbegriffe, Synonyme und Hierarchien erweitern die Discovery; feste Gewichte und Claim-IDs machen das Ranking reproduzierbar. Aliase helfen nur beim Finden und werden nie selbst zur Antwort-Evidenz.</p></div></div>
+        <div class="rule-card"><div><h3>Bilder mit belegbarer Region</h3><p>PNG, JPEG, GIF, WebP, TIFF und PDF bleiben als gehashte Originale erhalten. Geprüfte Regionen binden sichtbare Befunde an Claims; OCR und Bildbeschreibung bleiben untrusted Quelldaten und gelangen nie direkt in Antworten.</p></div></div>
         <div class="rule-card"><div><h3>Gesundheit laufend geprüft</h3><p>Das Script <code>doctor</code> findet deterministisch Drift, verwaiste Seiten und Manifest-Abweichungen. Der Lint-Workflow beurteilt zusätzlich Aktualität und ungedeckte Kurzfassungen. Veraltetes bleibt über Supersession sichtbar, und Widersprüche bekommen eine eigene Kante im Wissensgraph, statt stillschweigend entschieden zu werden.</p></div></div>
         <div class="rule-card"><div><h3>Wissen aus Teams und Einzelpersonen</h3><p>Der kontrollierte Ingest funktioniert für eine Person genauso wie für ein Team, das über Git zusammenarbeitet. Der Validator fängt Kollisionen bei Claim-IDs fail-closed ab. Getrennte Zielgruppen bekommen eigene Tresor-Instanzen mit fester Rangfolge von Organisation bis persönlich.</p></div></div>
+        <div class="rule-card"><div><h3>Ein Skill, zwei Laufzeiten</h3><p>Der reproduzierbare Builder erzeugt ein geprüftes <code>.skill</code>-Archiv mit genau einer Ordnerwurzel. Dasselbe Artefakt ist für die Skill-Verzeichnisse von Claude Code und Codex ausgelegt; Ordner-, Pfad- und Script-Portabilität sind geprüft, die angemeldete Host-Discovery bleibt ein separater Smoke-Test.</p></div></div>
       </div>
     </div>
   </section>
@@ -309,7 +313,7 @@
       </div>
       <div class="zones reveal">
         <div class="zone"><span class="zname">Engine</span><span class="zwhat"><code>SKILL.md, scripts/, schema/, references/</code></span><span class="zprotect">Ändert sich nur durch bewusste Motor-Releases.</span></div>
-        <div class="zone"><span class="zname">Content</span><span class="zwhat"><code>knowledge/, sources/, INDEX, ROUTER, graph/</code></span><span class="zprotect"><code>validate</code> erzwingt das Profil; <code>raw/</code> ist unveränderlich (Hash im Register).</span></div>
+        <div class="zone"><span class="zname">Content</span><span class="zwhat"><code>knowledge/, sources/, INDEX, ROUTER, graph/</code></span><span class="zprotect"><code>validate</code> erzwingt Claims, Begriffe und Medienregionen; <code>raw/</code> ist per Hash gebunden.</span></div>
         <div class="zone"><span class="zname">Assurance</span><span class="zwhat"><code>doctor + Lint-Workflow</code></span><span class="zprotect">Nur diagnostisch. Gold-Holdouts gehören nie in den Skill (Leakage).</span></div>
         <div class="zone"><span class="zname">Release</span><span class="zwhat"><code>VERSION, MANIFEST.sha256, log.md</code></span><span class="zprotect">Release-Gate fail-closed; ein neues Manifest invalidiert alte Prüfsummen.</span></div>
       </div>
@@ -338,23 +342,41 @@
       <div class="section-head reveal">
         <p class="eyebrow">Live am Demo-Bestand</p>
         <h2>Ein Ordner antwortet für sich selbst</h2>
-        <p class="lede">Das ist echte Ausgabe von <code>scripts/vault.py</code> gegen den mitgelieferten Demo-Bestand <code>knowledge/demo-okf/</code>. Keine erfundenen Beispieldaten, kein Mock.</p>
+        <p class="lede">Das sind gekürzte Auszüge aus echter Ausgabe von <code>scripts/vault.py</code> gegen den mitgelieferten Demo-Bestand <code>knowledge/demo-okf/</code>. Claims, IDs und Status stammen aus dem Release; beim Query sind nur zusätzliche JSON-Felder ausgelassen.</p>
       </div>
       <div class="terminal reveal">
         <p class="cmd">python3 scripts/vault.py doctor</p>
         <pre>── doctor: Gesamtdiagnose ─────────────────────────────────────
 <span class="dot-good">validate: 0 Fehler, 0 Warnungen — 4 Seiten, 16 Claims, 3 Quellen.</span>
 ── Prüfsummen ─────────────────────────────────────────────────
-<span class="dot-good">verify: 22 Dateien unverändert — Stand = Manifest.</span>
+<span class="dot-good">verify: 28 Dateien unverändert — Stand = Manifest.</span>
 ── Zusammenfassung ────────────────────────────────────────────
 <span class="dot-good">doctor: 0 Fehler, 0 Warnungen, 0 Hinweise — 4 Seiten / 16 Claims / 3 Quellen.</span></pre>
-        <p class="cmd">python3 scripts/vault.py route "Was ist OKF?"</p>
-        <pre>route: Domäne demo-okf  (Schlagworte: okf)
-       → knowledge/demo-okf/okf.md
-       → knowledge/demo-okf/llm-wiki-muster.md
-       → knowledge/demo-okf/ontologie-strategie.md
-       → knowledge/demo-okf/fakten.md
-Hinweis: Vorschlag, kein Urteil — finale Auswahl über INDEX.md.</pre>
+        <p class="cmd">python3 scripts/vault.py query "Was ist OKF?"</p>
+        <pre>{
+  "schema": "skillsafe.query/v1",
+  "state": "candidates_found",
+  "retrieval": "hybrid-local/v1",
+  "coverage": {"semantic_coverage": "not_assessed"},
+  "concepts": {"matched": [{"id": "B-0001", "preferred": "Open Knowledge Format"}]},
+  "evidence": [{"claim_id": "C-0001", "source": {"id": "S-0001"}}]
+}</pre>
+        <p class="cmd">python3 scripts/vault.py query "Urlaubsanspruch"</p>
+        <pre>{
+  "schema": "skillsafe.query/v1",
+  "state": "no_candidates",
+  "coverage": {"semantic_coverage": "not_assessed"},
+  "fallback": {
+    "exhaustive_review_required": true,
+    "page_paths": [
+      "knowledge/demo-okf/fakten.md",
+      "knowledge/demo-okf/llm-wiki-muster.md",
+      "knowledge/demo-okf/okf.md",
+      "knowledge/demo-okf/ontologie-strategie.md"
+    ]
+  },
+  "evidence": []
+}</pre>
       </div>
     </div>
   </section>
@@ -364,19 +386,19 @@ Hinweis: Vorschlag, kein Urteil — finale Auswahl über INDEX.md.</pre>
       <div class="section-head reveal">
         <p class="eyebrow">Ein Ordner, überall lauffähig</p>
         <h2>Struktur</h2>
-        <p class="lede">Alle Pfade sind relativ zum Skill-Ordner, unabhängig von Installationsort oder Betriebssystem.</p>
+        <p class="lede">Alle internen Pfade sind relativ zum Skill-Ordner und damit unabhängig vom Installationsort. Sichere Schreiboperationen benötigen POSIX-<code>dir_fd</code>; unter Windows ist dafür WSL vorgesehen.</p>
       </div>
       <div class="tree reveal">
 <pre>wissenstresor/
 ├── SKILL.md            <span class="c">Motor: Vertrag für das Modell</span>
 ├── KONZEPT.md           <span class="c">Architektur- und Entscheidungsdokument</span>
 ├── <span class="d">scripts/</span>vault.py    <span class="c">Motor: deterministische Engine, nur Stdlib</span>
-├── <span class="d">schema/</span>             <span class="c">profil.md (Datenvertrag) + types.yaml (Typ-Registry)</span>
-├── <span class="d">references/</span>         <span class="c">Antworten / Befüllen / Lint</span>
+├── <span class="d">schema/</span>             <span class="c">Profil, Typen und Begriffswelten</span>
+├── <span class="d">references/</span>         <span class="c">Antworten / Befüllen / Medien / Begriffe / Lint</span>
 ├── <span class="d">knowledge/</span>&lt;domäne&gt;/ <span class="c">Treibstoff: OKF-Seiten mit Claims</span>
-├── <span class="d">sources/</span>            <span class="c">Register, raw/ (unveränderlich), quarantine/</span>
+├── <span class="d">sources/</span>            <span class="c">Register, raw/, derived/, quarantine/</span>
 ├── <span class="d">graph/</span>graph.json    <span class="c">abgeleiteter Wissensgraph</span>
-├── INDEX.md, ROUTER.md <span class="c">Map-first-Navigation</span>
+├── INDEX.md, ROUTER.md <span class="c">Navigation und manuelles Audit</span>
 ├── log.md              <span class="c">Historie, append-only</span>
 ├── VERSION / MANIFEST.sha256  <span class="c">SemVer + Prüfsummen des Release-Stands</span>
 └── <span class="d">notes/</span>dead-ends.md  <span class="c">Verworfene Ansätze</span></pre>
@@ -389,7 +411,7 @@ Hinweis: Vorschlag, kein Urteil — finale Auswahl über INDEX.md.</pre>
       <div class="section-head reveal">
         <p class="eyebrow">sources/REGISTER.md</p>
         <h2>Herkunft ist selbst Bestand</h2>
-        <p class="lede">Die Demo-Domäne <code>demo-okf</code> dokumentiert ihre eigenen drei Quellen mit 16 Claims. Damit belegt der Tresor seine eigenen Konstruktionsentscheidungen mit seinen eigenen Mitteln.</p>
+        <p class="lede">Die Demo-Domäne <code>demo-okf</code> dokumentiert ihre drei Quellen mit 16 Claims und ordnet sie einer kontrollierten Begriffswelt zu. Damit belegt der Tresor seine Konstruktionsentscheidungen mit seinen eigenen Mitteln.</p>
       </div>
       <div class="reveal" style="overflow-x:auto;">
         <table class="sources">
@@ -408,7 +430,7 @@ Hinweis: Vorschlag, kein Urteil — finale Auswahl über INDEX.md.</pre>
 
 <footer>
   <div class="wrap-wide">
-    <span>SkillSafe · Apache License 2.0 · Motor bleibt stabil, Treibstoff ist flüchtig.</span>
+    <span>SkillSafe v0.6.1 · Apache License 2.0 · Motor bleibt stabil, Treibstoff ist flüchtig.</span>
     <span><a href="README.md">README</a> · <a href="wissenstresor/KONZEPT.md">Konzept</a> · <a href="wissenstresor/SKILL.md">Skill-Vertrag</a> · <a href="https://godmodeai2025.github.io/MarkZimmermann/" target="_blank" rel="noopener">Impressum</a></span>
   </div>
 </footer>

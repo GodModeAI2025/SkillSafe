@@ -21,3 +21,6 @@ Eintraege nur ueber `python3 scripts/vault.py log <aktion> "<text>"`.
 ## [2026-07-05] release | v0.5.0 — 4 Seiten, 16 Claims, 3 Quellen (minor)
 ## [2026-07-05] note | Praezisierung: Fachbereich und Projekt koennen jeweils sowohl ueberschreiben als auch ergaenzen, persoenlich kann nur ergaenzen (KONZEPT.md AD-06, references/mehrere-tresore.md Sektion 8). Landingpage (index.html) um Sektion 'Mehrere Tresore' ergaenzt, Nav-Link 'Tresore' hinzugefuegt
 ## [2026-07-05] release | v0.5.1 — 4 Seiten, 16 Claims, 3 Quellen (patch)
+## [2026-07-26] release | v0.5.2 — 4 Seiten, 16 Claims, 3 Quellen (patch)
+## [2026-07-26] release | v0.6.0 — 4 Seiten, 16 Claims, 3 Quellen (minor)
+## [2026-07-26] release | v0.6.1 — 4 Seiten, 16 Claims, 3 Quellen (patch)

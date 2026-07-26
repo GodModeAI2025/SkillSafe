@@ -1,9 +1,10 @@
-# Wissenstresor — Konzept (Profil oksv-lite/1.0)
+# Wissenstresor — Konzept (Profil oksv-lite/1.1)
 
 Ein lokaler, evidenzgebundener Wissensspeicher als **purer Skill**: Der
 Skill-Ordner selbst ist das Wissensartefakt. Kein Server, keine Datenbank,
-kein Vektorstore — Markdown, YAML-Frontmatter im Google-OKF-Muster, ein
-deterministisches Stdlib-Script und ein Vertrag (SKILL.md), der das Modell
+kein Vektorstore — Markdown, flaches YAML-Frontmatter im Google-OKF-Muster,
+strikte JSON-Registries für Begriffswelten und Medienfundstellen, ein
+deterministisches Stdlib-Script und ein Vertrag (`SKILL.md`), der das Modell
 auf strenge Regeln festlegt.
 
 Leitbild: **Wissen ist Treibstoff (flüchtig), der Skill ist der Motor
@@ -20,31 +21,42 @@ als Ordner- und Regelgrenzen ab:
 | Zone | Im Skill | Schutzmechanismus |
 |---|---|---|
 | Engine | SKILL.md, scripts/, schema/, references/ | ändert sich nur durch bewusste Motor-Releases |
-| Content | knowledge/, sources/, INDEX, ROUTER, graph/ | validate erzwingt Profil; raw/ unveränderlich (Hash im Register) |
+| Content | knowledge/, sources/, INDEX, ROUTER, graph/ | validate erzwingt Profil; raw/ nur reguläre registrierte Dateien; Medienregionen und Begriffs-IDs streng referenziert; Links/Aliasse verboten |
 | Assurance | doctor + Lint-Workflow (Smoke-Evals im Entwicklungs-Workspace, nicht im Paket) | nur diagnostisch; **Gold-Holdouts gehören NIE in den Skill** (Leakage) |
-| Release | VERSION, MANIFEST.sha256, log.md | release-Gate fail-closed; neues Manifest invalidiert alte Prüfsummen |
+| Release | VERSION, MANIFEST.sha256, log.md | exklusiver Lock; vorbereiteter Endstand; Rollback bei behandelten Fehlern; Manifest zuletzt |
 
 ## Architekturentscheidungen (AD)
 
-### AD-01 · Keine RAG-Tokenisierung, keine Embeddings
+### AD-01 · RAG-ähnlich arbeiten, ohne Embeddings
 
-**Entscheidung:** Es gibt keinen Vektorindex, kein Embedding-Modell, kein
-Chunking und kein Ähnlichkeits-Tuning. „Tokenisierung" findet nur im
-trivialen, deterministischen Sinn statt: Wörter normalisieren
-(Kleinschreibung, Umlaut-Faltung) für Router-Abgleich und Volltextsuche.
+**Entscheidung:** SkillSafe folgt „retrieve then read", aber nicht der
+üblichen Vektorspeicher-Implementierung. `vault.py query` prüft zuerst den
+manifestierten Release-Snapshot und rankt danach natürliche Einheiten —
+Seiten und Claims — mit festen Ganzzahlgewichten aus:
 
-**Begründung:** RAG beantwortet die Frage, wie man in Millionen
-unstrukturierter Schnipsel die relevante Stelle findet. Bei einem
-kuratierten Bestand bis in den niedrigen Tausenderbereich ist diese Frage
-trivial — Router + Index + erschöpfende Volltextsuche erledigen sie. Was
-Embeddings kosten würden: Determinismus (Nächste-Nachbarn ist eine
-Blackbox, ein Schlagwort-Router ist prüfbar), Vertraulichkeit (Schnipsel
-wandern an eine Embedding-Schnittstelle), Negativbefunde (RAG liefert
-still das nächstgelegene falsche Fragment; `search` mit null Treffern ist
-ein belastbares „steht nicht im Bestand") und Herkunft (Chunks
-zerschneiden Struktur, Abschnittsnummern, Versionskontext).
-**Grenze:** Bei Beständen ab Millionen Dokumenten kippt die Abwägung —
-dann ist ein Vektorindex sein Geld wert, außerhalb dieses Skills.
+1. exaktem Vorzugsbegriff oder Alias einer kontrollierten Begriffswelt,
+2. lexikalischen Token-/Phrasentreffern,
+3. genau einem begrenzten Begriffs- oder Seitengraph-Hop.
+
+Erst danach liest das Modell die gelieferten Seiten und formuliert aus den
+gelieferten Claims. Es gibt keinen Vektorindex, kein Embedding-Modell, kein
+willkürliches Chunking, keinen Netzwerkaufruf und keinen Query-Cache im Skill.
+
+**Begründung:** „RAG" bezeichnet die Arbeitsfolge besser als eine konkrete
+Speichertechnik. Für einen kuratierten Bestand bis in den niedrigen
+Tausenderbereich liefern Claims, Begriffe und Graphkanten bereits starke
+retrievalfähige Einheiten. Sie behalten Fundstelle, Status, Stand und
+Quellenbezug. Feste Gewichte und stabile Tie-Breaker machen zwei Läufe
+byteidentisch. Das Ranking scannt zwar alle Claims, bewertet aber keine
+semantischen Paraphrasen: `no_candidates` löst deshalb eine vollständige
+Modellprüfung der angegebenen Fallback-Seiten aus. Erst deren Ergebnis darf
+„Nicht im Bestand" begründen. Embeddings würden hier zusätzliche Modell-
+und Datenschutzgrenzen einführen, ohne die Evidenzgrenze zu ersetzen.
+
+**Grenze:** Bei Millionen Dokumenten oder bewusst unscharfer externer Suche
+kann die Abwägung kippen. Ein Vektorindex wäre dann ein separater,
+evaluierter Vertrauensbereich außerhalb dieses portablen Skills; Claims
+blieben auch dort die einzige Antwort-Evidenz.
 
 ### AD-02 · Wissensgraph: ja — abgeleitet, typisiert, deterministisch
 
@@ -53,7 +65,9 @@ Knoten = Seiten, Kanten = typisierte `relations`-Einträge im Frontmatter
 (`formalisiert`, `basiert_auf`, `praezisiert`, `ersetzt`, `verweist_auf`,
 `widerspricht`, erweiterbar über das Type-Onboarding). `vault.py graph`
 leitet `graph/graph.json` deterministisch ab; `doctor` erkennt Drift
-zwischen Frontmatter und Graph.
+zwischen Frontmatter und Graph. Seitenknoten führen zusätzlich ihre
+validierten `B-nnnn`; die Begriffshierarchie selbst bleibt in der strikten
+Registry und wird bei der Abfrage nur einen Hop expandiert.
 
 **Begründung:** Der Graph trägt genau das, was flache Seitenkopien
 verlieren — wie Konzepte zueinander stehen. `ersetzt` macht Supersession
@@ -101,9 +115,10 @@ Tresor ist absichtlich unwissender als das Modell.
 
 **Entscheidung:** `scripts/vault.py` (nur Python-Stdlib, relative Pfade,
 läuft an jedem Installationsort) erledigt: Hashen, Registrieren,
-Validieren (Profil, Typen, Claims, Relationen, Register-Hashes),
-Indexieren, Graph ableiten, Routen, erschöpfend Suchen, Loggen, Zählen,
-Diagnostizieren, Versionieren, Manifest schreiben und prüfen. Das Modell
+Validieren (Profil, Typen, Claims, Begriffe, Medienregionen, Relationen,
+Register-Hashes), Indexieren, Graph ableiten, lokales Hybrid-Retrieval,
+Routen, erschöpfend Suchen, Loggen, Zählen, Diagnostizieren, Versionieren,
+Manifest schreiben und prüfen. Das Modell
 macht ausschließlich, was Urteil braucht: Claims aus Quelltext
 extrahieren, verdichten, Konflikte einordnen, Antworten formulieren,
 semantisch linten. Jeder Modell-Output läuft anschließend durch
@@ -167,22 +182,64 @@ in einer Session mit mehreren geladenen Tresoren, nicht Dateizugriff
 höher-sensitive Instanz nie in einen breiteren Skill-Ladeort zu
 symlinken oder zu kopieren.
 
+### AD-07 · Multimodalität als gebundene Fundstelle, nicht zweite Wahrheit
+
+**Entscheidung:** Bild- und PDF-Originale bleiben unverändert unter
+`sources/raw/`. Eine kleine JSON-Repräsentation unter `sources/derived/`
+bindet Originalhash, MIME, lokalen Extractor, Alttext und stabile
+`R-nnnn`-Regionen. `validate` prüft Schema, Dateisignatur, Hashbindung,
+Koordinaten und Region-Referenzen. Ein Claim auf eine Medienquelle nennt
+genau eine Region; sichtbare Befunde tragen die eigene Art `Beobachtung`.
+
+OCR, Transkript und Bildbeschreibung bleiben untrusted Quelldaten.
+`query` liefert sie nie aus und rankt sie nicht direkt. Erst der kuratierte
+Claim ist Antwort-Evidenz. Regionen mit eingebetteten Instruktionen werden
+als `suspicious_instruction` markiert und können von keinem Claim
+referenziert werden.
+
+**Begründung:** So kann derselbe Skill Bilder in Claude Code, Codex oder
+einer anderen Laufzeit nutzen, ohne ein bestimmtes OCR-Modell, eine API oder
+einen Server vorauszusetzen. Das Original beweist, was eingelesen wurde; die
+Region macht die Fundstelle portabel; der Claim trägt das geprüfte Wissen.
+
+### AD-08 · Distribution ist ein reproduzierbarer Ordner, kein Dienst
+
+**Entscheidung:** Der universelle Vertrag bleibt der eine Skill-Ordner mit
+relativen Pfaden, Standard-Python und plattformneutralem `SKILL.md`.
+`tools/build_skill_package.py` validiert den freigegebenen Bestand, baut
+zweimal ein sortiertes ZIP mit festen Zeiten und Modi, vergleicht die
+Hashes, prüft das Archiv und startet `doctor` aus einem fremden
+Claude-ähnlichen Projektpfad. Ergebnis ist
+`wissenstresor-<version>.skill`; entpackt wird immer derselbe Ordner, keine
+zweite Implementierung.
+
+**Begründung:** Codex und Claude Code unterscheiden sich beim Installations-
+ort, nicht beim Fachvertrag. Ein reproduzierbares Archiv schützt Struktur
+und Inhalt, während der entpackte Ordner weiterhin ohne Plattform-API,
+MCP-Server oder Setup-Abhängigkeit funktioniert.
+
 ## Antwort- und Befüll-Pfad (Kurzfassung)
 
-**Antworten:** ROUTER → (Mischfrage? melden, pro Domäne trennen) →
-INDEX der Domäne → genau die Kandidatenseiten lesen → Answer Envelope
+**Antworten:** `query` → Snapshot-/Manifest-Gate → Begriff/Alias +
+Lexik + ein Graph-Hop → genau die Kandidatenseiten lesen → Answer Envelope
 mit Claim-Belegen, ältestem Stand, niedrigster Konfidenz, Konflikt- und
-Supersession-Hinweisen → Lücken als „Nicht im Bestand". Plan B bei
-Router-Fehlschlag: `vault.py search` (erschöpfend, Negativbefund
-belastbar). Kurzfassungen und Claims gelten zur Abfragezeit als wahr —
-wer pro Anfrage gegen die Quelle re-verifiziert, zahlt doppelt und macht
-den Tresor sinnlos (Kompressionsregel).
+Supersession-Hinweisen → bei fehlenden oder unzureichenden Kandidaten die
+`fallback.page_paths` semantisch vollständig prüfen → erst danach Lücken als
+„Nicht im Bestand" ausweisen.
+Kurzfassungen und Claims gelten zur Abfragezeit als wahr — wer pro Anfrage
+gegen Rohquelle oder Medienrepräsentation re-verifiziert, zahlt doppelt und
+macht den Tresor sinnlos (Kompressionsregel).
 
 **Befüllen:** Quarantäne (Rechte, Trust, Injection-Sichtung) →
 registrieren + hashen (Script) → Typ bestimmen, ggf. Type-Onboarding →
-Claims extrahieren (Wortlaut/Auslegung, exakte Fundstellen) → Seite
-anlegen oder mergen (verdichten, nie spiegeln; Supersession statt
+bei Medien geprüfte Regionen erzeugen → Claims extrahieren
+(Wortlaut/Beobachtung/Auslegung, exakte Fundstellen) → Begriff IDs binden →
+Seite anlegen oder mergen (verdichten, nie spiegeln; Supersession statt
 Löschen) → Router pflegen → `release` (Gate + Artefakte + Manifest).
+Solange außer der echten `sources/quarantine/README.md` irgendein Eintrag
+in der Quarantäne liegt, bleiben Validierung, Manifest und Release gesperrt.
+Quarantäne-Payloads gelangen nie ins Manifest; die vertrauenswürdige README
+ist die einzige Allowlist-Datei und bleibt selbst per Prüfsumme geschützt.
 
 **Pflegen:** `doctor` (Struktur, Script) + Lint-Workflow (Semantik,
 Modell) — der Linter repariert nur Metadaten und Router, nie Inhalte.
@@ -191,28 +248,37 @@ Modell) — der Linter repariert nur Metadaten und Router, nie Inhalte.
 
 * Kuratierte Bestände bis in den niedrigen Tausenderbereich an Seiten;
   darüber Vektorindex/Volltext-Engine erwägen (→ OKSV-Vollausbau).
-* Der Schlagwort-Router verfehlt Synonyme; abgefedert durch Router-Pflege
-  im Lint, Volltext-Fallback und dokumentiertes Überstimmen durch das
-  Modell.
+* Kontrollierte Begriffswelten decken nur kuratierte Synonyme. Nicht
+  gepflegte Sprache kann weiterhin verfehlt werden; lexikalische
+  Claim-Suche liefert deshalb nur Kandidaten. `no_candidates` ist ein
+  Rückfallsignal zur vollständigen Seitenprüfung, kein Negativbefund.
 * Selbstprüfung im Skill ist nur diagnostisch. Belastbare Qualifikation
   braucht einen externen, gold-aware Prüfer gegen ein blindes System —
   Gold-Holdouts liegen deshalb grundsätzlich außerhalb dieses Skills.
 * Extraktion und Verdichtung bleiben Modellarbeit und damit
   probabilistisch; das Profil macht ihre Ergebnisse prüfbar, nicht ihre
   Entstehung deterministisch.
-* Nicht-Text-Quellen (Scan, Bild, Bild-PDF) hängen von der Lesefähigkeit
-  des Modells ab (inkl. OCR); der Tresor prüft nur das Ergebnis
-  (Claim-Grammatik, Fundstelle), nie die Bilderkennung selbst — unsichere
-  Erkennung ist fail-closed zu behandeln (Regel 4).
+* Nicht-Text-Extraktion bleibt Modell-/OCR-Arbeit. Der Tresor prüft
+  Dateisignatur, Originalhash, Repräsentationsschema und Claim-Bindung,
+  nicht die semantische Richtigkeit der Bilderkennung selbst. Diese muss
+  vor `verified: true` lokal oder menschlich geprüft werden.
 * Seitengröße hat keine harte Obergrenze. `doctor` meldet ab
   Claims-/Zeilenschwelle einen Split-Kandidaten als Hinweis (ℹ️, keine
   Fehler-/Warnstufe) — Entscheidung und Ausführung bleiben Modellarbeit
   im Befüllen-Workflow, nie automatisches Zerschneiden (das wäre genau
-  das Chunking, das AD-01 ablehnt).
+  das willkürliche Chunking, das AD-01 vermeidet).
 * Mehrere Tresore (Organisation/Abteilung/Projekt/privat) trennen sich
   physisch durch Ordner bzw. Skill-Ladeort, nie durch eine Zugriffs-
   kontrolle im Skill selbst — siehe AD-06 und
   `references/mehrere-tresore.md`.
+* Der Mehrdatei-Release ist transaktional für behandelte Fehler, aber nicht
+  stromausfall-atomar. Das Manifest wird als letzter Commit-Marker ersetzt;
+  ein Prozessabbruch außerhalb des Rollbacks erzeugt deshalb keinen
+  fälschlich grünen Stand, sondern eine erkennbare Manifestabweichung.
+  Der Marker deckt den manifestierten Bestand ab; `log.md` wird während der
+  Transaktion geprüft, bleibt als fortlaufendes Journal aber bewusst
+  außerhalb des Manifests. Mutationen werden durch einen gemeinsamen Lock
+  serialisiert, Zielverzeichnisse über geprüfte `dir_fd`s verankert.
 
 ## Übernahmen aus der Quellenanalyse
 
@@ -238,27 +304,31 @@ Diese Herkunft ist selbst Bestand: Die Demo-Domäne `demo-okf` dokumentiert
 alle drei Quellen mit 16 Claims — der Tresor belegt seine eigenen
 Konstruktionsentscheidungen mit seinen eigenen Mitteln.
 
-## Abnahmekriterien (durchgeführt am 2026-07-04)
+## Abnahmekriterien (zuletzt durchgeführt am 2026-07-26)
 
-**Positiv:** `validate` grün auf dem Demo-Bestand (4 Seiten, 16 Claims,
-3 Quellen) · `route` ordnet eine OKF-Frage deterministisch der Domäne zu
-und nennt die getroffenen Schlagworte · `index` und `graph` erzeugen die
-Artefakte; Determinismus im Doppellauf byte-identisch (diff leer) ·
-`release` läuft als atomares Gate (validate → index → graph → VERSION →
-log → Manifest) und `checksum --verify` ist danach grün · `doctor`-Ampel
-grün · `search` liefert Treffer mit Datei und Zeile.
+**Positiv:** `validate` und `doctor` grün auf 4 Seiten, 16 Claims und
+3 Quellen · `query OKF`, `query "offenes Wissensformat"` und `query C-0001`
+liefern deterministisch C-0001 · zehn identische Läufe erzeugen
+byteidentisches JSON · Bild-Fixture mit Originalhash, Repräsentation und
+Region liefert ausschließlich den gebundenen Beobachtungs-Claim ·
+`release` ersetzt Manifest zuletzt und rollt injizierte Schreibfehler an
+jeder Position zurück · zwei `.skill`-Archive sind byteidentisch, bestehen
+ZIP-Prüfung und laufen nach Installation unter `.claude/skills/` aus einem
+fremden Projekt-CWD.
 
-**Negativ (fail-closed nachgewiesen):** unbekannter Typ → Abbruch mit
-Type-Onboarding-Hinweis · verletzte Claim-Grammatik → Abbruch mit
-Dateizeile · Cross-Domain-Link im Fließtext → Abbruch mit Verweis auf die
-Relations-Pflicht · nachträglich veränderte Quelldatei → Register-Hash-
-Abweichung, Abbruch · `route` ohne Schlagwort-Treffer → Exit 1 mit
-Plan-B-Hinweis · Suche nach nicht vorhandenem Begriff → Exit 1 mit
-belastbarem Negativbefund („Nicht im Bestand").
+**Negativ (fail-closed nachgewiesen):** unbekannter Typ oder Begriff,
+Alias-Kollision und `broader`-Zyklus → Abbruch · fehlende Medienrepräsentation,
+unbekannte oder als Injection markierte Region → Abbruch · OCR-Injection-
+Canary erscheint nie in Query-Evidenz · Instruktionssignatur in Claim-Text
+oder Fundstelle → Abbruch · kein Retrieval-Treffer sowie Treffer nur im
+Router → `no_candidates`, semantische Deckung `not_assessed` und explizite
+Fallback-Seiten · Manifestdrift oder Quarantäne-Payload → `invalid_vault`
+ohne Claims · absolute/traversierende Pfade, Symlinks, Hardlinks,
+getarntes SVG und beschädigte Registries/Manifeste → Abbruch.
 
-**Funktional:** Der Antworten-Workflow wurde gegen den Demo-Bestand
-durchgespielt — gedeckte Frage („Was ist OKF?") mit vollständigem Answer
-Envelope inklusive Claim-Belegen, Stand und Konfidenz; ungedeckte Frage
-mit wörtlicher Abstention und Ingest-Angebot. Der Befüllen-Workflow hat
-beim S-0003-Ingest ein echtes Type-Onboarding durchlaufen (Typ
-`faktensammlung`, dokumentiert in `log.md`).
+**Funktional:** Der Antworten-Workflow nutzt den stabilen JSON-Vertrag und
+formuliert weiterhin ein Answer Envelope mit Claim-Belegen, Stand und
+Konfidenz; die Begriffswelt verbessert Discovery, ohne Evidenz zu erfinden.
+Der Medien-Workflow bewahrt Original, Region und Injection-Fund, ohne
+Regions-Text zur Antwortquelle zu machen. Type-Onboarding,
+Kompressionsregel und wörtliche Abstention bleiben unverändert.

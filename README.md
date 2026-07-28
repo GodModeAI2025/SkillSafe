@@ -1,5 +1,7 @@
 # SkillSafe — der Wissenstresor
 
+[![gates](https://github.com/GodModeAI2025/SkillSafe/actions/workflows/gates.yml/badge.svg)](https://github.com/GodModeAI2025/SkillSafe/actions/workflows/gates.yml)
+
 **Wissen ist Treibstoff (flüchtig), der Skill ist der Motor (stabil).**
 
 SkillSafe ist ein lokaler, evidenzgebundener Wissensspeicher als **purer

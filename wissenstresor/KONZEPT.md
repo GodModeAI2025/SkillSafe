@@ -419,7 +419,7 @@ alle vier Quellen mit 26 Claims — der Tresor belegt seine eigenen
 Konstruktionsentscheidungen mit seinen eigenen Mitteln und hält seine eigene
 Supersession im Graphen fest, statt die überholte Fassung zu löschen.
 
-## Abnahmekriterien (zuletzt durchgeführt am 2026-07-28)
+## Abnahmekriterien (zuletzt durchgeführt am 2026-07-28, Stand v0.10.0)
 
 **Positiv:** `validate` und `doctor` grün auf 5 Seiten, 26 Claims und
 4 Quellen · `query OKF`, `query "offenes Wissensformat"` und `query C-0001`
@@ -444,6 +444,15 @@ Router → `no_candidates`, semantische Deckung `not_assessed` und explizite
 Fallback-Seiten · Manifestdrift oder Quarantäne-Payload → `invalid_vault`
 ohne Claims · absolute/traversierende Pfade, Symlinks, Hardlinks,
 getarntes SVG und beschädigte Registries/Manifeste → Abbruch.
+
+**Export und Prüfangabe (seit v0.8.0/v0.9.0):** Trust-Tier wird aus
+`geprueft_von` abgeleitet, verändert nachweislich keinen Score und wird nie
+gespeichert, auch nicht im Bundle · zwei Exporte desselben Stands sind
+byteidentisch · die Ausgabe erfüllt §11 Bedingung 1 und 2 für jedes
+Konzeptdokument · ein Symlink im Zielordner trägt den Export nicht heraus,
+ein Abbruch lässt das Ziel unverändert, ein früherer Export wird ersetzt
+statt übermischt · Ziel im Tresor, in `.claude`/`.codex` oder mit fremdem
+Inhalt bricht ab · `stats` läuft auch auf einem roten Bestand ohne Traceback.
 
 **Funktional:** Der Antworten-Workflow nutzt den stabilen JSON-Vertrag und
 formuliert weiterhin ein Answer Envelope mit Claim-Belegen, Stand und

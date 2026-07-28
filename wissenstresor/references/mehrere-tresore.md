@@ -185,8 +185,8 @@ getrennt geregelt ist.
 
 In einer rein persönlichen Instanz ist ein Kürzel unbedenklich, solange diese
 Instanz nie in einen breiteren Skill-Ladeort kopiert oder symlinkt wird. Das
-ist dieselbe Grenze wie in Abschnitt 5: der Ort entscheidet, nicht ein
-Feature im Skill.
+ist dieselbe Grenze wie in AD-06: der Installationsort entscheidet, nicht
+ein Feature im Skill.
 
 `prozess:<id>` und `agent:<name>/<version>` sind unkritisch, sie bezeichnen
 Systeme. Der Validator prüft nur die Grammatik, nicht die Konvention; die

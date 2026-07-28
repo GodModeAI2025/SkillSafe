@@ -123,7 +123,12 @@ kommt als Commit-Marker zuletzt. Bei behandelten Schreibfehlern wird der
 vorherige Byte-Stand zurückgerollt. Ein Stromausfall über mehrere Dateien
 ist nicht gemeinsam atomar; `checksum --verify` und `doctor` erkennen einen
 Mischstand danach fail-closed. Stufe: `minor` bei neuem Wissen, `patch` bei
-Korrekturen, `major` bei Profil-/Strukturänderungen.
+Korrekturen, `major` bei Profil- oder Strukturänderungen. Die Regel
+unterscheidet dabei additiv von brechend: ein neues optionales Feld oder eine
+zusätzliche Prüfung macht keinen bestehenden Bestand ungültig und läuft als
+`minor` mit angehobener Profil-Nummer. `major` ist erst fällig, wenn ein
+vorhandener Bestand ohne Nacharbeit rot würde, etwa bei einem umbenannten
+Pflichtfeld oder einem geänderten Wertevorrat.
 
 Validierungsfehler werden inhaltlich behoben — niemals durch Aufweichen von
 Profil, Registry oder Grammatik.

@@ -54,8 +54,22 @@ python3 scripts/vault.py export --okf --out <zielordner> [--with-sources]
 | `relations` | Abschnitt „Beziehungen" mit bundle-relativen Links, führender Slash (§6.1) |
 | erster Satz der Kurzfassung | `description` (§4.1) |
 | `confidence`, `domain`, `version`, `stand`, `concepts` | `oksv_`-Zusatzschlüssel, nach §4.1 erlaubt |
+| Vorzugsbegriffe der `concepts` | `oksv_concept_labels` im Frontmatter, nicht im Rumpf |
 | `INDEX.md` (Tabelle) | `index.md` pro Verzeichnis als Bullet-Liste (§8), Wurzel mit `okf_version` (§12) |
 | `log.md` (grep-barer Präfix) | `log.md` datumsgruppiert, neueste zuerst (§9) |
+
+## Ersetzen statt ergänzen
+
+Der Export schreibt zuerst vollständig in ein frisches Staging-Verzeichnis
+neben dem Ziel und ersetzt das Ziel danach in einem Zug. Das hat drei Gründe.
+Das Staging enthält keine Symlinks, also kann kein vorbereiteter Link im
+Zielordner den Schreibvorgang aus dem Ziel heraustragen. Ein Abbruch
+hinterlässt keinen Halbstand, das Ziel bleibt unverändert. Und ein früherer
+Export wird ersetzt, nicht übermischt: eine Seite, die es im Bestand nicht
+mehr gibt, bleibt sonst als vollständig konformes Dokument im Bundle stehen
+und ist von echtem Inhalt nicht zu unterscheiden.
+
+Wer ein Bundle behalten will, kopiert es weg, bevor er neu exportiert.
 
 ## Was der Export bewusst nicht kann
 
@@ -72,6 +86,18 @@ python3 scripts/vault.py export --okf --out <zielordner> [--with-sources]
   wandert es hier mit.
 * **`Attested Computation`.** Bewusst abgelehnt, siehe AD-09 in
   `KONZEPT.md`.
+* **Das Trust-Tier.** Es wird nicht geschrieben. Das Profil sagt zu, dass es
+  nur abgeleitet und nie gespeichert wird, und ein Konsument leitet es nach
+  §5.3 ohnehin selbst aus `verified` ab.
+* **§11-Konformanz mit `--with-sources`.** Die kopierten Rohquellen sind
+  byteidentisch zum Original, damit ihr Hash gegen das Register prüfbar
+  bleibt. Markdown-Rohquellen tragen deshalb weiterhin ihr eigenes
+  Frontmatter mit dem Schlüssel `typ` statt `type` und sind damit keine
+  OKF-Konzeptdokumente. Ein Bundle mit `--with-sources` erfüllt §11
+  Bedingung 2 also bewusst nicht. Wer strikte Konformanz braucht, exportiert
+  ohne das Flag; wer die Evidenz braucht, nimmt die Abweichung in Kauf. Einen
+  konformen Kopf voranzustellen wäre der dritte Weg und scheidet aus, weil er
+  die Byte-Identität und damit die Hash-Prüfbarkeit zerstört.
 
 ## Nach dem Export
 

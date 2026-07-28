@@ -22,8 +22,10 @@ Kommandos:
   log <aktion> <txt> Log-Eintrag mit grep-barem Präfix anhängen
   stats              Bestandszahlen (Domänen, Typen, Claims, Kanten)
   source <datei>     Hash + nächste freie S-ID + fertige Registerzeile
+  route <frage>      Frage deterministisch auf Domäne und Seiten routen
   doctor             Gesamtdiagnose mit Ampel-Report (validate + Drift + Orphans)
   release [stufe]    Transaktionaler Release mit Lock und Rollback
+  export --okf       Bestand als OKF-v0.2-Bundle außerhalb des Tresors ausgeben
 """
 
 import argparse
@@ -32,6 +34,7 @@ import heapq
 import json
 import os
 import re
+import shutil
 import stat
 import sys
 import tempfile
@@ -153,6 +156,8 @@ ACTIVE_MEDIA_SUFFIXES = {".svg"}
 ARTEFAKT_SUFFIXE = {".md", ".json", ".yaml", ".sha256"} | set(MEDIA_TYPES)
 ARTEFAKT_DATEINAMEN = {"LICENSE", "VERSION"}
 ENGINE_SCRIPT = "scripts/vault.py"
+# OKF v0.2 §3.1 belegt diese Namen; sie duerfen keine Wissensseite sein.
+RESERVIERTE_DATEINAMEN = {"index.md", "log.md"}
 REGION_KINDS = {"text", "diagram", "table", "photo", "chart", "other"}
 EXTRACTOR_KINDS = {"human", "model", "ocr", "hybrid"}
 PROMPT_INJECTION_RE = re.compile(
@@ -219,8 +224,14 @@ def _iso_date(value):
 
 
 def _trust_tier(actor):
-    """Trust-Tier nach OKF v0.2 §5.3 ableiten, nie speichern."""
-    if not actor:
+    """Trust-Tier nach OKF v0.2 §5.3 ableiten, nie speichern.
+
+    Die isinstance-Wache ist nicht kosmetisch: cmd_stats läuft bewusst auch
+    auf einem roten Bestand, und ein Frontmatter mit Liste statt Text hätte
+    dort einen rohen Traceback erzeugt, also genau dann, wenn man die
+    Diagnose braucht.
+    """
+    if not isinstance(actor, str) or not actor:
         return TIER_UNVERIFIED
     return TIER_HUMAN if actor.startswith("mensch:") else TIER_MACHINE
 
@@ -631,26 +642,30 @@ def parse_frontmatter(text, quelle):
     """
     fehler = []
     lines = text.split("\n")
-    if not lines or lines[0].strip() != "---":
+    if not lines or lines[0].rstrip("\r") != "---":
         return {}, text, [f"{quelle}: kein Frontmatter (Datei muss mit '---' beginnen)"], 0
     fm, i, ende = {}, 1, None
     while i < len(lines):
         line = lines[i]
-        if line.strip() == "---":
+        # Der Terminator wird strikt geprüft. Ein eingerücktes '---' beendete
+        # den Block früher stillschweigend, weil strip() die Einrückung
+        # entfernt: alles danach landete im Body, und fehlten dabei nur
+        # optionale Felder, blieb validate grün und der Graph verlor Kanten.
+        if line.rstrip("\r") == "---":
             ende = i
             break
         if not line.strip() or line.lstrip().startswith("#"):
             i += 1
             continue
-        if line.startswith("  - "):
-            fehler.append(f"{quelle}: Listenzeile ohne zugehörigen Schlüssel: {line.strip()!r}")
-            i += 1
-            continue
-        if line != line.lstrip():
+        if line != line.lstrip() and not line.startswith("  - "):
             fehler.append(
                 f"{quelle}:{i + 1}: Einrückung außerhalb der Profil-Untermenge; "
                 f"verschachteltes Frontmatter ist nicht erlaubt: "
                 f"{line.strip()!r}")
+            i += 1
+            continue
+        if line.startswith("  - "):
+            fehler.append(f"{quelle}: Listenzeile ohne zugehörigen Schlüssel: {line.strip()!r}")
             i += 1
             continue
         if ":" not in line:
@@ -852,9 +867,16 @@ def parse_concepts():
                 or not WORLD_ID_RE.fullmatch(world)
                 or world not in worlds):
             errors.append(f"{field}.world: unbekannte Begriffswelt {world!r}")
-        _plain_text(
+        if _plain_text(
             item.get("preferred"), f"{field}.preferred", errors, maximum=160
-        )
+        ):
+            # Begriffslabels wandern in Query-Ausgabe und Export. Sie waren
+            # bisher schwächer geprüft als Claim-Text, obwohl sie denselben Weg
+            # nach außen nehmen.
+            if PROMPT_INJECTION_RE.search(item["preferred"]):
+                errors.append(
+                    f"{field}.preferred: enthält eine offensichtliche "
+                    f"Instruktionssignatur")
         definition_claim = item.get("definition_claim")
         if (not isinstance(definition_claim, str)
                 or not CID_RE.fullmatch(definition_claim)):
@@ -873,7 +895,11 @@ def parse_concepts():
             for number, value in enumerate(values, 1):
                 value_field = f"{field}.{list_name}[{number}]"
                 if list_name == "aliases":
-                    _plain_text(value, value_field, errors, maximum=160)
+                    if (_plain_text(value, value_field, errors, maximum=160)
+                            and PROMPT_INJECTION_RE.search(value)):
+                        errors.append(
+                            f"{value_field}: enthält eine offensichtliche "
+                            f"Instruktionssignatur")
                 elif not isinstance(value, str) or not CONCEPT_ID_RE.fullmatch(value):
                     errors.append(f"{value_field}: erwartet B-nnnn")
         concepts[cid] = item
@@ -1273,6 +1299,11 @@ def lade_seiten(register, typen, reltypen, concepts=None, media=None):
         if typ and typ not in typen:
             fehler.append(f"{rp}: Typ {typ!r} nicht in schema/types.yaml — "
                           f"Type-Onboarding durchführen, bevor eingelesen wird (fail-closed)")
+        if p.name.lower() in RESERVIERTE_DATEINAMEN:
+            fehler.append(
+                f"{rp}: {p.name} ist ein reservierter Dateiname (OKF v0.2 §3.1) "
+                f"und darf keine Wissensseite sein; beim Export würde der "
+                f"generierte Index sie überschreiben")
         if p.parent.parent != KNOWLEDGE:
             fehler.append(f"{rp}: Seiten liegen genau eine Ebene tief: knowledge/<domäne>/<seite>.md")
         elif fm.get("domain") != p.parent.name:
@@ -1336,6 +1367,11 @@ def lade_seiten(register, typen, reltypen, concepts=None, media=None):
             for tag in tags:
                 if not isinstance(tag, str) or not _retrieval_norm(tag):
                     fehler.append(f"{rp}: ungültiger oder leerer Tag {tag!r}")
+                elif any(zeichen in tag for zeichen in ",[]"):
+                    fehler.append(
+                        f"{rp}: Tag {tag!r} enthält ',' '[' oder ']'; in der "
+                        f"Inline-Listenform ist das nicht darstellbar und "
+                        f"zerlegt den Wert")
         concept_ids = fm.get("concepts", [])
         if not isinstance(concept_ids, list):
             concept_ids = []
@@ -3087,8 +3123,32 @@ def _okf_description(body):
     text = " ".join(zeilen)
     if not text:
         return None
-    kopf, punkt, _ = text.partition(". ")
-    return (kopf + ".") if punkt else text
+    return _erster_satz(text)
+
+
+# Abkürzungen, nach denen ein Punkt kein Satzende ist. Ohne diese Liste
+# zerlegte 'Das Profil nutzt z. B. flache Listen. Danach folgt mehr.' zu
+# 'Das Profil nutzt z.' — und diese Beschreibung landet gleich zweimal im
+# Bundle, im Frontmatter und im Domänen-Index.
+SATZ_ABKUERZUNGEN = {
+    "z", "b", "u", "a", "d", "h", "vgl", "bzw", "ca", "etc", "ff", "abs",
+    "nr", "bspw", "ggf", "evtl", "inkl", "exkl", "max", "min", "sog", "usw",
+    "s", "vs", "dr", "prof", "ebd", "bzgl", "o",
+}
+SATZENDE_RE = re.compile(r"([.!?])\s")
+
+
+def _erster_satz(text, maximum=400):
+    """Ersten echten Satz zurückgeben, Abkürzungen und Zahlen respektierend."""
+    for treffer in SATZENDE_RE.finditer(text):
+        kopf = text[:treffer.start()]
+        letztes = re.split(r"[\s(]", kopf)[-1].strip("„»‚'\"")
+        if letztes.lower() in SATZ_ABKUERZUNGEN or len(letztes) == 1:
+            continue
+        if letztes.isdigit() or re.fullmatch(r"[§]?\d+", letztes):
+            continue
+        return kopf + treffer.group(1)
+    return text if len(text) <= maximum else text[:maximum].rstrip() + " …"
 
 
 def _okf_sources(fm, register, mit_quellen):
@@ -3113,7 +3173,7 @@ def _okf_sources(fm, register, mit_quellen):
     return zeilen
 
 
-def _okf_frontmatter(fm, body, register, mit_quellen):
+def _okf_frontmatter(fm, body, register, concepts, mit_quellen):
     zeilen = ["---", f"type: {_yaml_scalar(fm.get('type', ''))}"]
     if fm.get("title"):
         zeilen.append(f"title: {_yaml_scalar(fm['title'])}")
@@ -3144,12 +3204,28 @@ def _okf_frontmatter(fm, body, register, mit_quellen):
             zeilen.append(f"oksv_{feld}: {_yaml_scalar(fm[feld])}")
     if fm.get("concepts"):
         zeilen.append("oksv_concepts: [" + ", ".join(fm["concepts"]) + "]")
-    zeilen.append(f"oksv_trust_tier: {_trust_tier(fm.get('geprueft_von'))}")
+        labels = [
+            concepts[b]["preferred"] for b in fm["concepts"] if b in concepts
+        ]
+        if labels:
+            # Als Frontmatter-Liste, nicht als HTML-Kommentar im Rumpf: ein
+            # Label mit '-->' hätte den Kommentar geschlossen und alles
+            # dahinter zu sichtbarem Bundle-Inhalt gemacht. preferred wird
+            # schwächer geprüft als Claim-Text, deshalb bekommt es hier keinen
+            # Weg in den Rumpf.
+            zeilen.append(
+                "oksv_concept_labels: ["
+                + ", ".join(_yaml_scalar(label) for label in labels) + "]"
+            )
+    # Das Trust-Tier wird bewusst NICHT geschrieben. KONZEPT.md sagt zu, dass
+    # es nur abgeleitet und nie gespeichert wird; ein Konsument leitet es nach
+    # §5.3 selbst aus verified ab. Es hier auszugeben wäre genau die
+    # Speicherung, die das Profil ausschließt.
     zeilen.append("---")
     return zeilen
 
 
-def _okf_body(seite, register, concepts):
+def _okf_body(seite, register):
     """Body verbatim, plus Fußnoten nach §5.1 und Beziehungen als Links."""
     ausgabe = []
     for line in seite["body"].split("\n"):
@@ -3162,7 +3238,7 @@ def _okf_body(seite, register, concepts):
         for relation in seite["relationen"]:
             ziel = relation["ziel"][len("knowledge/"):]
             name = Path(ziel).stem
-            text += f"\n- {relation['typ']}: [{name}](/{ziel})"
+            text += f"\n- {relation['typ']}: [{_markdown_text(name)}](/{ziel})"
         text += "\n"
 
     verwendet = sorted({claim["quelle"] for claim in seite["claims"]})
@@ -3174,14 +3250,13 @@ def _okf_body(seite, register, concepts):
             titel = register.get(sid, {}).get("titel") or sid
             text += f"[^{sid}]: {titel}\n"
 
-    begriffe = sorted(seite["fm"].get("concepts", []))
-    if begriffe:
-        labels = ", ".join(
-            concepts[b]["preferred"] for b in begriffe if b in concepts
-        )
-        if labels:
-            text += f"\n<!-- kontrollierte Begriffe: {labels} -->\n"
     return text.rstrip("\n") + "\n"
+
+
+def _markdown_text(value):
+    """Linktext so ausgeben, dass eine Klammer den Link nicht zerlegt."""
+    return (str(value).replace("\\", "\\\\")
+            .replace("[", "\\[").replace("]", "\\]"))
 
 
 def _okf_index_root(domaenen, quelle_beschreibung):
@@ -3198,7 +3273,7 @@ def _okf_index_root(domaenen, quelle_beschreibung):
         "",
     ]
     for domain in sorted(domaenen):
-        zeilen.append(f"* [{domain}]({domain}/) - Wissensdomäne des Tresors.")
+        zeilen.append(f"* [{_markdown_text(domain)}]({domain}/) - Wissensdomäne des Tresors.")
     return "\n".join(zeilen) + "\n"
 
 
@@ -3209,7 +3284,7 @@ def _okf_index_domain(domain, seiten):
         name = Path(rp).name
         titel = fm.get("title") or Path(rp).stem
         beschreibung = _okf_description(seiten[rp]["body"]) or "Wissensseite."
-        zeilen.append(f"* [{titel}]({name}) - {beschreibung}")
+        zeilen.append(f"* [{_markdown_text(titel)}]({name}) - {beschreibung}")
     return "\n".join(zeilen) + "\n"
 
 
@@ -3218,7 +3293,11 @@ def _okf_log():
     if not _safe_regular_file(LOG):
         return None
     gruppen = {}
-    for line in read(LOG).split("\n"):
+    try:
+        log_text = read(LOG)
+    except (OSError, UnicodeError):
+        return None
+    for line in log_text.split("\n"):
         treffer = re.match(r"^## \[(\d{4}-\d{2}-\d{2})\] ([a-z]+) \| (.+)$", line)
         if not treffer:
             continue
@@ -3324,7 +3403,10 @@ def cmd_export(ziel, mit_quellen=False):
         print(f"🔴 export: ABBRUCH — {problem}.")
         return 1
 
-    version = read(VERSION).strip() if _safe_regular_file(VERSION) else "?"
+    try:
+        version = read(VERSION).strip() if _safe_regular_file(VERSION) else "?"
+    except (OSError, UnicodeError):
+        version = "?"
     herkunft = (
         f"Export aus dem Wissenstresor (Profil {PROFIL}, Bestand v{version}). "
         f"Dies ist eine Momentaufnahme in OKF {OKF_VERSION}, kein Tresor: sie "
@@ -3340,8 +3422,9 @@ def cmd_export(ziel, mit_quellen=False):
     for rp, seite in sorted(seiten.items()):
         domain = seite["fm"].get("domain", "unbekannt")
         name = Path(rp).name
-        kopf = _okf_frontmatter(seite["fm"], seite["body"], register, mit_quellen)
-        rumpf = _okf_body(seite, register, concepts)
+        kopf = _okf_frontmatter(
+            seite["fm"], seite["body"], register, concepts, mit_quellen)
+        rumpf = _okf_body(seite, register)
         dateien[f"{domain}/{name}"] = "\n".join(kopf) + "\n" + rumpf
         domaenen.setdefault(domain, {})[rp] = seite
 
@@ -3362,26 +3445,67 @@ def cmd_export(ziel, mit_quellen=False):
                 return 1
             kopien.append((eintrag["ablage"], quelle))
 
+    # Erst vollständig in ein frisches Staging schreiben, dann das Ziel in
+    # einem Zug ersetzen. Das löst drei Dinge auf einmal: das Staging enthält
+    # keine Symlinks, also kann kein vorbereiteter Link im Zielordner den
+    # Schreibvorgang aus dem Ziel heraustragen; ein Abbruch hinterlässt keinen
+    # Halbstand; und ein früherer Export wird ersetzt statt übermischt, sodass
+    # keine verwaisten Dokumente aus einem alten Bestand liegen bleiben.
     try:
-        ziel_pfad.mkdir(parents=True, exist_ok=True)
+        ziel_pfad.parent.mkdir(parents=True, exist_ok=True)
+        staging = Path(tempfile.mkdtemp(
+            prefix=f".{ziel_pfad.name}.okf-staging-", dir=str(ziel_pfad.parent)
+        ))
+    except OSError as exc:
+        print(f"🔴 export: ABBRUCH — Staging nicht anlegbar: {exc}")
+        return 1
+
+    verdraengt = None
+    try:
         for rel_pfad in sorted(dateien):
-            datei = ziel_pfad / rel_pfad
+            datei = staging / rel_pfad
             datei.parent.mkdir(parents=True, exist_ok=True)
             datei.write_text(dateien[rel_pfad], encoding="utf-8")
         for rel_pfad, quelle in kopien:
-            datei = ziel_pfad / rel_pfad
+            datei = staging / rel_pfad
             datei.parent.mkdir(parents=True, exist_ok=True)
             datei.write_bytes(quelle.read_bytes())
-    except OSError as exc:
-        print(f"🔴 export: ABBRUCH — Schreiben fehlgeschlagen: {exc}")
+        if ziel_pfad.exists():
+            verdraengt = Path(tempfile.mkdtemp(
+                prefix=f".{ziel_pfad.name}.okf-alt-", dir=str(ziel_pfad.parent)
+            ))
+            os.rmdir(str(verdraengt))
+            os.rename(str(ziel_pfad), str(verdraengt))
+        try:
+            os.rename(str(staging), str(ziel_pfad))
+        except OSError:
+            if verdraengt is not None and not ziel_pfad.exists():
+                os.rename(str(verdraengt), str(ziel_pfad))
+                verdraengt = None
+            raise
+    except (OSError, UnicodeError) as exc:
+        shutil.rmtree(str(staging), ignore_errors=True)
+        if verdraengt is not None and verdraengt.exists():
+            shutil.rmtree(str(verdraengt), ignore_errors=True)
+        print(f"🔴 export: ABBRUCH — Schreiben fehlgeschlagen, Ziel "
+              f"unverändert: {exc}")
         return 1
+    if verdraengt is not None:
+        shutil.rmtree(str(verdraengt), ignore_errors=True)
 
     print(f"🟢 export: {len(dateien)} Dokumente"
           + (f" + {len(kopien)} Rohquellen" if kopien else "")
           + f" nach {ziel_pfad} geschrieben (OKF {OKF_VERSION}).")
+    print("   Der Zielordner wurde vollständig ersetzt, nicht ergänzt: ein "
+          "Export ist eine Momentaufnahme, kein gepflegter Bestand.")
     print("   Einbahnstraße: der Tresor liest kein fremdes OKF zurück. "
           "Rückweg ist der reguläre Ingest.")
-    if not mit_quellen:
+    if mit_quellen:
+        print("   Die kopierten Rohquellen sind byteidentisch und deshalb "
+              "keine OKF-Konzeptdokumente; mit --with-sources erfüllt das "
+              "Bundle §11 Bedingung 2 bewusst nicht (siehe "
+              "references/export-okf.md).")
+    else:
         print("   Ohne --with-sources bleiben Rohquellen im Tresor; "
               "Rechte klärt ein Mensch, nicht das Script.")
     return 0

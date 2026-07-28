@@ -100,8 +100,49 @@ R1  0.6.1 → 0.6.2   patch   Parser fail-closed, Paket-Allowlist        ERLEDIG
 R2  0.6.2 → 0.7.0   minor   Bestand lernt v0.2 + gesamte Doku          ERLEDIGT
 R3  0.7.0 → 0.8.0   minor   geprueft_von / geprueft_am, Profil oksv-lite/1.2 ERLEDIGT
 R4  0.8.0 → 0.9.0   minor   export --okf                                ERLEDIGT
-R5  später          minor   gueltig_bis + --asof, nur bei Anlass
+R5  0.9.0 → 0.10.0  minor   Härtung nach externem Audit                 ERLEDIGT
+R6  später          minor   gueltig_bis + --asof, nur bei Anlass
 ```
+
+### R5 · Härtung nach externem Audit (minor, 0.10.0)
+
+Ein unabhängiges Audit über vier Achsen (Doku, Code, Planabgleich,
+Bundle-Konformanz) hat auf die Frage „fertig?" mit „nicht ganz" geantwortet.
+Zwei bestätigte `hoch`-Befunde steckten in Code aus dieser Migration:
+
+* **Ein eingerücktes `---` beendete das Frontmatter still.** Die
+  R1-Härtung saß hinter dem Terminator-Test, und `strip()` entfernt die
+  Einrückung. Ein `  ---` vor `relations:` ließ `validate` grün, während der
+  Graph die `ersetzt`-Kante verlor. Dieselbe Klasse stiller
+  Strukturkorruption, die R1 für erledigt erklärt hatte. Der Terminator ist
+  jetzt strikt, die Einrückungsprüfung liegt davor.
+* **Der Export folgte Symlinks im Zielordner.** Die Zielwurzel war gehärtet,
+  die Schreibschleife nicht. Ein vorbereiteter Link in einem als früherer
+  Export anerkannten Bundle ließ den Export eine beliebige Fremddatei
+  überschreiben und dabei grün melden. Der Export schreibt jetzt in ein
+  frisches Staging und ersetzt das Ziel in einem Zug. Das löst zugleich zwei
+  weitere Befunde: kein Halbstand bei Abbruch, und ein Re-Export lässt keine
+  verwaisten Dokumente eines alten Bestands stehen.
+
+Dazu neun `mittel`-Befunde: `oksv_trust_tier` im Bundle widersprach der
+eigenen Zusage „nie gespeichert" und ist entfernt; eine Wissensseite namens
+`index.md` wurde vom generierten Index überschrieben, reservierte Namen sind
+jetzt abgelehnt; `_okf_description` zerlegte deutsche Abkürzungen
+(`z. B.` wurde zu `z.`); `stats` stürzte auf einem roten Bestand mit
+`AttributeError` ab; nicht abgefangene Dekodierfehler in Export und Log;
+Begriffslabels konnten aus dem HTML-Kommentar ausbrechen und laufen jetzt
+durch die Injection-Prüfung; Linktexte werden escaped; Tags mit `,`, `[`
+oder `]` sind abgelehnt; der zugesagte AD-09-Negativtest existiert.
+
+Ergebnis: 68 Tests (vorher 58), `validate`, `doctor`, `checksum --verify`
+grün, Bundle mit echtem YAML-Parser gegen §11 geprüft, zwei Exporte
+byteidentisch, Paket-SHA-256
+`7136aa6833c5a338671831d6ba070ec4ab597c4a8112a4e9701012ca409215be`.
+
+Bewusst nicht behoben, sondern dokumentiert: mit `--with-sources` erfüllt das
+Bundle §11 Bedingung 2 nicht, weil die kopierten Rohquellen byteidentisch
+bleiben müssen, damit ihr Hash gegen das Register prüfbar ist. Ein konformer
+Kopf würde genau diese Prüfbarkeit zerstören.
 
 R1 bis R2 sind ein zusammenhängendes Arbeitspaket. R3 und R4 sind
 eigenständig und können beliebig lange warten, ohne dass der Bestand

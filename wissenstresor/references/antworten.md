@@ -58,7 +58,7 @@ Protokoll für den jeweils maßgeblichen Tresor durchlaufen — eine
 [Antwortkern — knapp, aus Kurzfassungen und Claims]
 
 Belege:
-- C-0301 (S-0004, §5.1, Wortlaut) — Stand 2026-07-28
+- C-0301 (S-0004, §3, §4, §4.1 und §11, Wortlaut) — Stand 2026-07-28
 - C-0310 (S-0004, §5 und §13.2, Auslegung) — eigene Einordnung
 
 Stand: <ältester 'stand' der genutzten Seiten>; Konfidenz: <niedrigste genutzte>

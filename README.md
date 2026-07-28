@@ -18,7 +18,7 @@ geschützte `dir_fd`-Operationen fail-closed ab.
 📖 **Konzept & Architekturentscheidungen:** [`wissenstresor/KONZEPT.md`](wissenstresor/KONZEPT.md)
 🌐 **Landingpage:** [`index.html`](index.html) (GitHub-Pages-fähig, Source = repo root)
 
-**Aktueller Release: v0.9.0** (Profil `oksv-lite/1.2`) mit Begriffswelten,
+**Aktueller Release: v0.10.0** (Profil `oksv-lite/1.2`) mit Begriffswelten,
 deterministischem Hybrid-Retrieval, geprüften Bild-/PDF-Regionen und einem
 reproduzierbaren `.skill`-Paket für Claude Code und Codex. Der
 Frontmatter-Parser lehnt Verschachtelung fail-closed ab statt sie still
@@ -35,9 +35,9 @@ Seit v0.9.0 gibt `export --okf` den freigegebenen Bestand als
 OKF-v0.2-Bundle nach außen, ohne dass sich am internen Datenvertrag etwas
 ändert.
 
-Abnahme: 58 Tests bestanden · 31 manifestierte Dateien · 33 sichere
+Abnahme: 68 Tests bestanden · 31 manifestierte Dateien · 33 sichere
 Paketeinträge · SHA-256
-`de812f72e07654a773c46a9c493cd8298955cc6d9744b88bf8a42e677a6006d3`.
+`7136aa6833c5a338671831d6ba070ec4ab597c4a8112a4e9701012ca409215be`.
 
 ## RAG-ähnlich, aber lokal und überprüfbar
 

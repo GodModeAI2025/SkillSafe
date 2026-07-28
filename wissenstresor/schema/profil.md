@@ -98,6 +98,17 @@ Fehlermeldung. Wer verschachtelte Angaben braucht, legt sie als strikte
 JSON-Registry unter `sources/derived/` ab, nach dem Muster von
 `skillsafe.media/v1`, und weicht nicht den Parser auf.
 
+## Dateinamen und Tag-Zeichen
+
+`index.md` und `log.md` sind nach OKF v0.2 §3.1 reservierte Namen und dürfen
+keine Wissensseite sein. Eine Seite mit diesem Namen würde beim Export vom
+generierten Verzeichnisindex überschrieben und lautlos aus dem Bundle
+verschwinden; `validate` lehnt sie deshalb ab.
+
+Tags dürfen kein `,`, `[` oder `]` enthalten. In der Inline-Listenform ist so
+ein Wert nicht darstellbar, und beim Export würde er den Tag zerlegen oder das
+YAML brechen.
+
 ## Dateiarten im Tresor
 
 Der Tresor liefert Wissen aus, keinen ausführbaren Inhalt. `validate` lässt

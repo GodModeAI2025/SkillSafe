@@ -97,7 +97,7 @@ Ein fehlgeschlagener `release` hinterlässt keinen Rückstand: der
 
 ```
 R1  0.6.1 → 0.6.2   patch   Parser fail-closed, Paket-Allowlist        ERLEDIGT
-R2  0.6.2 → 0.7.0   minor   Bestand lernt v0.2 + gesamte Doku
+R2  0.6.2 → 0.7.0   minor   Bestand lernt v0.2 + gesamte Doku          ERLEDIGT
 R3  0.7.0 → 0.8.0   minor   geprueft_von / geprueft_am, Profil oksv-lite/1.2
 R4  0.8.0 → 0.9.0   minor   export --okf
 R5  später          minor   gueltig_bis + --asof, nur bei Anlass
@@ -195,11 +195,35 @@ Negativtests, also nicht mehr 43. Zahl aus der letzten `pytest`-Zeile
 
 ---
 
-## 5. R2 · Der Bestand lernt v0.2 (minor, 0.7.0)
+## 5. R2 · Der Bestand lernt v0.2 (minor, 0.7.0) — ERLEDIGT
 
-Zielwerte, in einer Simulation gemessen: **5 Seiten, 26 Claims, 4 Quellen,
-4 Kanten, 9 Begriffe, 30 manifestierte Dateien, 32 Paketeinträge, Status
-aktiv=4 / veraltet=1.**
+Umgesetzt am 2026-07-28. Die in der Simulation vorhergesagten Zielwerte sind
+exakt eingetreten: **5 Seiten, 26 Claims, 4 Quellen, 4 Kanten, 9 Begriffe,
+30 manifestierte Dateien, 32 Paketeinträge, Status aktiv=4 / veraltet=1.**
+`validate`, `doctor` und `checksum --verify` grün, 48 Tests bestanden,
+Paket-SHA-256
+`47d1b5da3db7afa417e38e8a2576fd31d849c93a287a7b00385562dfe63726bf`.
+Drei Läufe von `query "Was ist OKF?"` sind byteidentisch.
+
+Alle zehn Zwangsbedingungen haben getragen. Zwei Beobachtungen aus der
+Umsetzung:
+
+* Der Supersessions-Effekt ist stärker als in der Simulation, weil
+  `okf-v02.md` bewusst nur B-0001 aus der alten Begriffsmenge führt und
+  damit `concept_base` 100 statt 190 erreicht. `query "Was ist OKF?"` liefert
+  C-0001 mit 210 vor C-0301 mit 120, jeder Treffer der alten Seite mit
+  Signal `page_status:veraltet`. Bei `query "LLM-Wiki-Muster"` steht C-0004
+  der überholten Seite mit 330 vor C-0101 der eigentlich einschlägigen Seite
+  mit 240. Beides ist in `references/antworten.md` als Regel hinterlegt.
+* Die Fixture-Kollision (Z3) wurde durch Umstellung der Test-ID auf `B-0900`
+  gelöst, mit Kommentar im Test. Damit ist die Fehlerklasse abgeräumt und
+  nicht nur um fünf IDs verschoben.
+
+Zusätzlich zum Plan korrigiert: `index.html` zeigte im `doctor`-Block eine
+`validate`-Zeile, die der echte `doctor` nie ausgibt, weil er
+`cmd_validate(still=True)` aufruft. Der Block ist jetzt in zwei Kommandos
+mit je echter Ausgabe geteilt, und der einleitende Satz sagt, dass auch
+Evidenz-Einträge gekürzt sind.
 
 ### 5.1 Zehn Zwangsbedingungen
 

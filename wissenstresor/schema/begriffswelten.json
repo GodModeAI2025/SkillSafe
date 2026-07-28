@@ -22,7 +22,7 @@
       "related": [
         "B-0003"
       ],
-      "definition_claim": "C-0001"
+      "definition_claim": "C-0301"
     },
     {
       "id": "B-0002",
@@ -68,6 +68,80 @@
         "B-0003"
       ],
       "definition_claim": "C-0201"
+    },
+    {
+      "id": "B-0005",
+      "world": "BW-0001",
+      "preferred": "Attested Computation",
+      "aliases": [
+        "Attestierte Berechnung",
+        "sanktionierte Berechnung",
+        "Attestierung"
+      ],
+      "broader": [],
+      "related": [
+        "B-0001",
+        "B-0006"
+      ],
+      "definition_claim": "C-0307"
+    },
+    {
+      "id": "B-0006",
+      "world": "BW-0001",
+      "preferred": "Trust-Tier",
+      "aliases": [
+        "Vertrauensstufe"
+      ],
+      "broader": [],
+      "related": [
+        "B-0007",
+        "B-0009"
+      ],
+      "definition_claim": "C-0305"
+    },
+    {
+      "id": "B-0007",
+      "world": "BW-0001",
+      "preferred": "Provenienz",
+      "aliases": [
+        "Provenance",
+        "Herkunftsnachweis"
+      ],
+      "broader": [],
+      "related": [
+        "B-0001",
+        "B-0008"
+      ],
+      "definition_claim": "C-0302"
+    },
+    {
+      "id": "B-0008",
+      "world": "BW-0001",
+      "preferred": "Credibility Signal",
+      "aliases": [
+        "Glaubwuerdigkeitssignal",
+        "Quellensignal"
+      ],
+      "broader": [
+        "B-0007"
+      ],
+      "related": [
+        "B-0006"
+      ],
+      "definition_claim": "C-0303"
+    },
+    {
+      "id": "B-0009",
+      "world": "BW-0001",
+      "preferred": "Staleness",
+      "aliases": [
+        "Veraltungsdatum"
+      ],
+      "broader": [],
+      "related": [
+        "B-0006"
+      ],
+      "definition_claim": "C-0306"
     }
   ]
 }

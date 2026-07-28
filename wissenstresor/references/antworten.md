@@ -58,8 +58,8 @@ Protokoll für den jeweils maßgeblichen Tresor durchlaufen — eine
 [Antwortkern — knapp, aus Kurzfassungen und Claims]
 
 Belege:
-- C-0001 (S-0001, Abschnitt "How it works", Wortlaut) — Stand 2026-07-04
-- C-0005 (S-0001, Gesamtdokument, Auslegung) — eigene Einordnung
+- C-0301 (S-0004, §5.1, Wortlaut) — Stand 2026-07-28
+- C-0310 (S-0004, §5 und §13.2, Auslegung) — eigene Einordnung
 
 Stand: <ältester 'stand' der genutzten Seiten>; Konfidenz: <niedrigste genutzte>
 [Nur falls zutreffend:]
@@ -79,12 +79,29 @@ Regeln im Envelope:
   beide Stände mit Quelle und Datum nennen, keinen stillschweigend wählen.
 * Konfidenz `niedrig` oder Trust `T3` der Quelle → vorsichtig formulieren
   („laut S-0002, unbestätigte Webquelle …").
+* Die beiden Vertrauensangaben nicht vermischen: `confidence` steht pro Seite
+  und sagt, wie belastbar die Aussage ist; Trust `T1`/`T2`/`T3` steht pro
+  Quelle im Register und sagt, wie nah sie am Original liegt. Eine
+  hoch-konfidente Aussage aus einer T3-Quelle ist möglich und umgekehrt. Das
+  `verified` in `sources/derived/*__media.json` ist keine dritte Angabe
+  dieser Art, es betrifft nur die Sichtprüfung einer Bildextraktion.
+* Ein Treffer auf einer Seite mit `status: veraltet` ist kein Fehler des
+  Rankings. Die Gewichte bewerten Geltung nicht, sie hängen nur das Signal
+  `page_status:veraltet` an; über die Begriffserweiterung kann eine überholte
+  Seite deshalb sogar vor der aktuellen stehen. Dann die `ersetzt`-Kante im
+  Graph auflösen, die aktuelle Fassung als maßgeblich benennen und die
+  überholte ausdrücklich mitnennen. Nie die überholte Fassung
+  kommentarlos ausgeben und nie die überholte kommentarlos weglassen.
 
 ## Beispiele
 
-**Gedeckte Frage** — „Was ist OKF?" → `query "Was ist OKF?"` liefert
-`candidates_found`, B-0001 und `okf.md`; nach Claim-Prüfung ist die
-Definition gedeckt → Kern aus Kurzfassung, Belege C-0001, C-0002, C-0004.
+**Gedeckte Frage mit Supersession** — „Was ist OKF?" → `query "Was ist OKF?"`
+liefert `candidates_found`, B-0001 sowie `okf.md` **und** `okf-v02.md`.
+`okf.md` trägt `status: veraltet` und wird von `okf-v02.md` über
+`ersetzt` abgelöst. Antwort also aus der Kurzfassung von `okf-v02.md`, Belege
+C-0301 folgende, und ein Satz dazu, dass die Fassung v0.1 als überholt im
+Bestand bleibt (C-0001 folgende, `okf.md`). Beide Fassungen benennen, eine
+als maßgeblich.
 
 **Nur das Subjekt gefunden** — „Wie groß ist OKF?" → `query` liefert
 OKF-Claims als Kandidaten, aber keiner nennt eine Größe → „Nicht im Bestand:

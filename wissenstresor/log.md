@@ -26,3 +26,5 @@ Eintraege nur ueber `python3 scripts/vault.py log <aktion> "<text>"`.
 ## [2026-07-26] release | v0.6.1 — 4 Seiten, 16 Claims, 3 Quellen (patch)
 ## [2026-07-28] note | Parser lehnt verschachteltes Frontmatter fail-closed ab (Blockform hob Unterschluessel still ins Top-Level); validate und Paketbau fuehren unabhaengig eine Allowlist erlaubter Dateiarten mit Verbot ausfuehrbarer Inhalte
 ## [2026-07-28] release | v0.6.2 — 4 Seiten, 16 Claims, 3 Quellen (patch)
+## [2026-07-28] ingest | S-0004 OKF-Spezifikation v0.2 (Volltext, Apache-2.0, T1): neue Seite demo-okf/okf-v02.md mit C-0301..C-0310, Begriffe B-0005..B-0009, definition_claim von B-0001 auf C-0301, okf.md auf veraltet mit ersetzt-Relation, ROUTER erweitert; AD-09 (keine ausfuehrbaren Verweise) und Abschnitt 'Verhaeltnis zu OKF v0.2' in KONZEPT.md, Kompatibilitaetsaussage in schema/profil.md geschaerft
+## [2026-07-28] release | v0.7.0 — 5 Seiten, 26 Claims, 4 Quellen (minor)

@@ -2,7 +2,8 @@
 
 Ein lokaler, evidenzgebundener Wissensspeicher als **purer Skill**: Der
 Skill-Ordner selbst ist das Wissensartefakt. Kein Server, keine Datenbank,
-kein Vektorstore — Markdown, flaches YAML-Frontmatter im Google-OKF-Muster,
+kein Vektorstore — Markdown, flaches YAML-Frontmatter im Muster von Google
+OKF (v0.1 wie v0.2; Verhältnis siehe unten),
 strikte JSON-Registries für Begriffswelten und Medienfundstellen, ein
 deterministisches Stdlib-Script und ein Vertrag (`SKILL.md`), der das Modell
 auf strenge Regeln festlegt.
@@ -20,10 +21,16 @@ als Ordner- und Regelgrenzen ab:
 
 | Zone | Im Skill | Schutzmechanismus |
 |---|---|---|
-| Engine | SKILL.md, scripts/, schema/, references/ | ändert sich nur durch bewusste Motor-Releases |
+| Engine | SKILL.md, scripts/, schema/, references/ | ändert sich nur durch bewusste Motor-Releases; genau ein ausführbares Script (AD-09) |
 | Content | knowledge/, sources/, INDEX, ROUTER, graph/ | validate erzwingt Profil; raw/ nur reguläre registrierte Dateien; Medienregionen und Begriffs-IDs streng referenziert; Links/Aliasse verboten |
 | Assurance | doctor + Lint-Workflow (Smoke-Evals im Entwicklungs-Workspace, nicht im Paket) | nur diagnostisch; **Gold-Holdouts gehören NIE in den Skill** (Leakage) |
 | Release | VERSION, MANIFEST.sha256, log.md | exklusiver Lock; vorbereiteter Endstand; Rollback bei behandelten Fehlern; Manifest zuletzt |
+
+Eine Randnotiz zur Zonenzuordnung: `schema/begriffswelten.json` liegt
+physisch in der Engine-Zone, ist aber kuratierter Inhalt und wird im
+Befüllen-Workflow mit dem Bestand gepflegt (`references/befuellen.md`,
+Schritt 6). Eine Änderung nur an dieser Registry ist deshalb ein
+Inhalts-Release (`minor`), keine Motoränderung.
 
 ## Architekturentscheidungen (AD)
 
@@ -80,8 +87,8 @@ Quellentrennung bleibt baulich.
 
 **Entscheidung:** `schema/types.yaml` ist die einzige Quelle erlaubter
 Typen; der Validator lehnt jede Seite mit unregistriertem `type` ab
-(fail-closed — bewusst strenger als OKF v0.1, das unbekannte Typen
-toleriert). Trifft der Ingest auf einen neuen Datentyp, hält der Skill an
+(fail-closed — bewusst strenger als OKF, das in v0.1 wie in v0.2 von
+Konsumenten Toleranz gegenüber unbekannten Typen verlangt, §11). Trifft der Ingest auf einen neuen Datentyp, hält der Skill an
 und stellt dem Menschen genau fünf Fragen: Was ist das? Erkennungs-
 kriterien? Besonderheiten (inkl. Kritikalität, z. B. rechtsverbindlich,
 personenbezogen, versionssensitiv)? Zusatz-Pflichtangaben für Claims?
@@ -218,6 +225,77 @@ ort, nicht beim Fachvertrag. Ein reproduzierbares Archiv schützt Struktur
 und Inhalt, während der entpackte Ordner weiterhin ohne Plattform-API,
 MCP-Server oder Setup-Abhängigkeit funktioniert.
 
+### AD-09 · Keine ausführbaren Verweise im Tresor
+
+**Entscheidung:** Kein Tresorinhalt benennt einen Ausführungspfad, und aus
+dem Tresor heraus wird genau ein Script ausgeführt: `scripts/vault.py`.
+`validate` und `tools/build_skill_package.py` erzwingen das unabhängig
+voneinander über eine Allowlist erlaubter Dateiarten; ein zweites Script,
+ein Archiv, ein Binary oder ein gesetztes Ausführungsbit bricht fail-closed
+ab. Der OKF-v0.2-Typ `Attested Computation` (§10) mit `executor` und
+`attester` wird deshalb **nicht** übernommen.
+
+**Begründung:** §10 verlangt, dass eine Content-Seite auf ausführbaren Code
+oder Laufanweisungen zeigt. Code kennt der Tresor bisher nur in der
+Engine-Zone, die sich ausschließlich durch bewusste Motor-Releases ändert.
+Fünf Punkte tragen die Ablehnung je einzeln:
+
+1. **Injection eskaliert.** Regel 6 hält Quellen als Daten, und die
+   Injection-Prüfung greift heute an Claim-Text und Fundstelle. Darf Content
+   einen Ausführungspfad benennen, wird aus „falsche Antwort" ein
+   „Codeausführung". Der Weg läuft über kuratierten Content, und Kuratierung
+   bleibt probabilistisch (siehe Bewusste Grenzen).
+2. **Pfadhärtung.** Zwei der drei in §6.2 erlaubten Pfadformen fallen an
+   `_safe_relative_path` durch: absolute URLs und bundle-relative Pfade mit
+   führendem `/`, ebenso `..`. Nur ein relativer Pfad unterhalb `ROOT` wäre
+   vereinbar.
+3. **Nesting.** §10.2 braucht verschachteltes Frontmatter, das der
+   Ein-Parser-Entwurf ausschließt. Der Verzicht ist eine Sicherheits- und
+   keine Bequemlichkeitsentscheidung. Braucht eine Angabe wirklich Struktur,
+   ist die zulässige Ablage eine strikte JSON-Registry unter
+   `sources/derived/` nach dem Muster von `skillsafe.media/v1`.
+4. **Kein Vertrauensanker.** Das Manifest ist selbstbezeugt. Der Tresor kann
+   Integrität von Code nur relativ zu sich selbst behaupten, nicht gegenüber
+   einem Empfänger, der das `.skill` entpackt.
+5. **Asymmetrie.** Der Aufwand fällt vollständig im Tresor an, der Ertrag
+   nicht: Receipt und Verdict entstehen laut §10.5 und §10.6 ausdrücklich
+   außerhalb des Bundles und erreichen es nie. Receipt-Format und
+   Attester-ABI sind in §12 zudem noch als offen markiert.
+
+**Geprüfte Restmenge:** Eine rein deskriptive Variante wäre denkbar, also
+ein Typ, der eine sanktionierte Berechnung nur dokumentiert, ohne
+`executor`, ohne `attester` und ohne Pfad auf Code. Sie ginge über das
+reguläre Type-Onboarding und bräuchte keine Parseränderung. Sie ist geprüft
+und bewusst zurückgestellt, nicht übersehen. Sollte sie kommen, muss
+`besonderheiten` ausdrücklich festhalten, dass die Seite nie eine Ausführung
+auslöst, und `pflicht_extra` den Sanktionierungsgeber samt Stand als Claim
+verlangen.
+
+**Grenze:** Ausführbare Artefakte mit belastbarer Herkunft gehören in den
+OKSV-Vollausbau mit getrennten Vertrauenszonen und Signaturen, nicht in
+einen portablen Ordner ohne Vertrauensanker.
+
+## Verhältnis zu OKF v0.2
+
+OKF v0.2 (2026-07-24) macht Provenienz, Vertrauen, Lebenszyklus und
+Attestierung zu Feldern erster Klasse. Der Bestand dokumentiert die
+Spezifikation selbst in `knowledge/demo-okf/okf-v02.md` (S-0004,
+C-0301 bis C-0310). Für das Profil gilt:
+
+| v0.2 | Profil | Verhältnis |
+|---|---|---|
+| `sources` mit Glaubwürdigkeitssignalen (§5.1) | Claim-Grammatik plus gehashtes `sources/REGISTER.md` | Profil ist strenger: erzwungene Evidenzart, Prüfsumme, geklärte Rechte. Die Fußnotenattribution aus §5.1 leistet die Claim-ID bereits |
+| Trust-Tiers aus `verified` (§5.3) | `confidence` plus Register-Trust plus geschlossene Welt | v0.2 berät, das Profil erzwingt. Ein Aktor fehlt hier noch |
+| `status` (§5.4) | `status` plus typisierte `ersetzt`-Kante | Der Status sagt, dass etwas nicht mehr gilt; die Kante sagt, was stattdessen gilt. v0.2 kennt nur ungetypte Links und kann das nicht ausdrücken |
+| `stale_after` (§5.5) | `stand` | Echte Lücke: `stand` ist deskriptiv, kein Verfallsdatum |
+| Attestierung (§10) | `MANIFEST.sha256`, Register-Hashes, reproduzierbares Paket | Verschiedene Ebenen: hier ruhende Bytes, dort ein einzelner Rechenlauf. Ablehnung siehe AD-09 |
+
+Die Wertetabelle für einen künftigen Export lautet `aktiv` zu `stable`,
+`veraltet` zu `deprecated`, `in-pruefung` zu `draft`. Sie ist die einzige
+Stelle exakter semantischer Deckung zwischen beiden Welten. Solange kein
+Export existiert, behauptet der Tresor keine Abbildung; die Namenskollisionen
+stehen in `schema/profil.md`.
+
 ## Antwort- und Befüll-Pfad (Kurzfassung)
 
 **Antworten:** `query` → Snapshot-/Manifest-Gate → Begriff/Alias +
@@ -267,6 +345,10 @@ Modell) — der Linter repariert nur Metadaten und Router, nie Inhalte.
   Fehler-/Warnstufe) — Entscheidung und Ausführung bleiben Modellarbeit
   im Befüllen-Workflow, nie automatisches Zerschneiden (das wäre genau
   das willkürliche Chunking, das AD-01 vermeidet).
+* Der Tresor führt keine sanktionierten Berechnungen aus und attestiert
+  keine. Er kann sie höchstens dokumentieren. Wer einen Zahlenwert gegen
+  einen Rechenlauf prüfen will, braucht eine Ausführungsschicht, und die
+  hätte der Tresor nur um den Preis ausführbarer Inhalte (AD-09).
 * Mehrere Tresore (Organisation/Abteilung/Projekt/privat) trennen sich
   physisch durch Ordner bzw. Skill-Ladeort, nie durch eine Zugriffs-
   kontrolle im Skill selbst — siehe AD-06 und
@@ -300,14 +382,28 @@ Basis in `schema/types.yaml`, additive Erweiterung nur bei echtem Clash
 generischer Fallback-Typ `faktensammlung` für atomare Aussagen mit
 Beförderungsregel ab etwa drei verwandten Claims (C-0203/C-0205) — dieser
 Typ wurde im Bau tatsächlich per Onboarding registriert, nicht von Hand.
+Die Namen `index.md` und `log.md` sind aus der Spezifikation übernommen, ihre
+dortigen Strukturen (§8, §9) aber bewusst nicht: `INDEX.md` ist eine Tabelle,
+weil sie eine menschliche Audit-Map ist, und `log.md` trägt den grep-baren
+Präfix. Beide liegen ohnehin oberhalb der Bundle-Wurzel `knowledge/` und
+damit außerhalb des Geltungsbereichs von §8 und §9. Die Übernahme der Namen
+ist also eine Herkunftsnotiz und keine Konformitätsaussage.
+
+Aus der Spezifikation v0.2 (S-0004) stammt kein Feld, aber eine Präzisierung
+des eigenen Standpunkts: die Vertrauenssignale, die v0.2 einführt, sind hier
+teils schon strenger gelöst, teils bewusst abgelehnt (AD-09), und in einem
+Punkt fehlt sie tatsächlich (Verfallsdatum). Das steht oben unter
+„Verhältnis zu OKF v0.2".
+
 Diese Herkunft ist selbst Bestand: Die Demo-Domäne `demo-okf` dokumentiert
-alle drei Quellen mit 16 Claims — der Tresor belegt seine eigenen
-Konstruktionsentscheidungen mit seinen eigenen Mitteln.
+alle vier Quellen mit 26 Claims — der Tresor belegt seine eigenen
+Konstruktionsentscheidungen mit seinen eigenen Mitteln und hält seine eigene
+Supersession im Graphen fest, statt die überholte Fassung zu löschen.
 
-## Abnahmekriterien (zuletzt durchgeführt am 2026-07-26)
+## Abnahmekriterien (zuletzt durchgeführt am 2026-07-28)
 
-**Positiv:** `validate` und `doctor` grün auf 4 Seiten, 16 Claims und
-3 Quellen · `query OKF`, `query "offenes Wissensformat"` und `query C-0001`
+**Positiv:** `validate` und `doctor` grün auf 5 Seiten, 26 Claims und
+4 Quellen · `query OKF`, `query "offenes Wissensformat"` und `query C-0001`
 liefern deterministisch C-0001 · zehn identische Läufe erzeugen
 byteidentisches JSON · Bild-Fixture mit Originalhash, Repräsentation und
 Region liefert ausschließlich den gebundenen Beobachtungs-Claim ·
@@ -320,7 +416,11 @@ fremden Projekt-CWD.
 Alias-Kollision und `broader`-Zyklus → Abbruch · fehlende Medienrepräsentation,
 unbekannte oder als Injection markierte Region → Abbruch · OCR-Injection-
 Canary erscheint nie in Query-Evidenz · Instruktionssignatur in Claim-Text
-oder Fundstelle → Abbruch · kein Retrieval-Treffer sowie Treffer nur im
+oder Fundstelle → Abbruch · verschachteltes Frontmatter in jeder Form
+(Blockform, Map-Liste, Tabulator) → Abbruch, und Unterschlüssel gelangen
+nie ins Frontmatter-Dictionary · fremde Dateiart, zweites Script oder
+gesetztes Ausführungsbit im Tresorbaum → Abbruch in `validate` und im
+Paketbau · kein Retrieval-Treffer sowie Treffer nur im
 Router → `no_candidates`, semantische Deckung `not_assessed` und explizite
 Fallback-Seiten · Manifestdrift oder Quarantäne-Payload → `invalid_vault`
 ohne Claims · absolute/traversierende Pfade, Symlinks, Hardlinks,

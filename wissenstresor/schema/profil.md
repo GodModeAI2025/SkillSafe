@@ -1,9 +1,36 @@
 # Profil oksv-lite/1.1 — Datenvertrag des Wissenstresors
 
-OKF v0.1 verlangt nur `type`. Dieses Profil ist bewusst strenger, bleibt aber
-OKF-kompatibel: alles Zusätzliche liegt in flachem Frontmatter, Claims oder
-separaten JSON-Registries. `scripts/vault.py validate` erzwingt den Vertrag
-fail-closed; unbekannte Felder und JSON-Schlüssel sind Fehler.
+Dieses Profil schreibt Seiten, die als OKF-Konzeptdokumente lesbar sind: jede
+Seite unter `knowledge/` trägt parsebares YAML-Frontmatter mit nicht leerem
+`type` und erfüllt damit die Bedingungen 1 und 2 aus §11 der
+OKF-Spezifikation, in v0.1 wie in v0.2. Alles Weitere ist ein eigener
+Vertrag; es liegt in flachem Frontmatter, in Claims oder in separaten
+JSON-Registries. `scripts/vault.py validate` erzwingt ihn fail-closed;
+unbekannte Felder und JSON-Schlüssel sind Fehler.
+
+Die Kompatibilität ist damit einseitig, und das ist gewollt. SkillSafe ist
+ein strenger OKF-**Produzent** für den eigenen Bestand und kein allgemeiner
+OKF-**Consumer**: die Toleranzpflichten aus §11 gelten für fremde Bundles,
+nicht für diesen Bestand, und ein fremdes Bundle läuft hier ohne
+Konvertierung nicht. Fremdes OKF-Wissen kommt denselben Weg wie jede andere
+Quelle, also über Quarantäne, lokalen Abzug, Registrierung und
+Claim-Extraktion. Das ist keine Lücke, sondern die Kernaussage des Tresors.
+
+Drei Feldnamen sind mit OKF v0.2 namensgleich und anders belegt, was jede
+pauschale Aussage über „OKF-Kompatibilität" ohne Zielversion unpräzise macht:
+
+| Feld | hier | OKF v0.2 |
+|---|---|---|
+| `sources` | flache Liste registrierter `S-nnnn` | Liste von Einträgen mit Pflichtangabe `resource` (§5.1) |
+| `status` | `aktiv` / `veraltet` / `in-pruefung` | `draft` / `stable` / `deprecated` (§5.4) |
+| `confidence` | Belastbarkeit der Aussage | kein Gegenstück; §5.2 trennt Erzeugung von Bestätigung |
+
+Die OKF-Bundle-Wurzel dieses Tresors ist `knowledge/`, nicht der
+Skill-Ordner. `INDEX.md` und `log.md` liegen eine Ebene darüber und damit
+außerhalb des Bundles; §8 und §9 greifen für sie deshalb nicht, und die
+Tabellenform von `INDEX.md` wie der grep-bare Log-Präfix bleiben. Ebenso ist
+`references/` hier der Ordner der Workflow-Protokolle und nicht das
+`references/` aus §6.3, das gespiegeltes Fremdmaterial aufnimmt.
 
 ## Frontmatter
 
@@ -146,6 +173,12 @@ Datei `sources/derived/S-nnnn__media.json` erforderlich:
 `verified` muss vor einem Release `true` sein. SVG ist wegen aktiver Inhalte
 nicht als Bildquelle erlaubt und muss lokal in ein erlaubtes Rasterformat
 umgewandelt werden.
+
+Das `verified` dieser Medienregistry ist nicht das `verified` aus OKF v0.2
+§5.2. Hier ist es ein Boolean und beantwortet „wurde diese Extraktion sicht-
+und qualitätsgeprüft"; dort ist es eine Liste von Bestätigungsereignissen
+und beantwortet „wer hat den Inhalt gegen seine Quellen bestätigt". Gleiches
+Wort, verschiedene Namensräume, verschiedene Bedeutung.
 
 Regions-`text`, Regions-`locator` und `alt_text` bleiben untrusted
 Ingest-Daten. `query` gibt sie nie als Evidenz aus, sondern nur den

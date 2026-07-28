@@ -6,6 +6,11 @@
       "von": "knowledge/demo-okf/llm-wiki-muster.md"
     },
     {
+      "nach": "knowledge/demo-okf/okf.md",
+      "typ": "ersetzt",
+      "von": "knowledge/demo-okf/okf-v02.md"
+    },
+    {
       "nach": "knowledge/demo-okf/llm-wiki-muster.md",
       "typ": "formalisiert",
       "von": "knowledge/demo-okf/okf.md"
@@ -54,6 +59,35 @@
     {
       "begriffe": [
         "B-0001",
+        "B-0005",
+        "B-0006",
+        "B-0007",
+        "B-0008",
+        "B-0009"
+      ],
+      "claims": [
+        "C-0301",
+        "C-0302",
+        "C-0303",
+        "C-0304",
+        "C-0305",
+        "C-0306",
+        "C-0307",
+        "C-0308",
+        "C-0309",
+        "C-0310"
+      ],
+      "domaene": "demo-okf",
+      "id": "knowledge/demo-okf/okf-v02.md",
+      "konfidenz": "hoch",
+      "stand": "2026-07-28",
+      "status": "aktiv",
+      "titel": "Open Knowledge Format v0.2",
+      "typ": "konzept"
+    },
+    {
+      "begriffe": [
+        "B-0001",
         "B-0002",
         "B-0003"
       ],
@@ -67,8 +101,8 @@
       "domaene": "demo-okf",
       "id": "knowledge/demo-okf/okf.md",
       "konfidenz": "hoch",
-      "stand": "2026-07-26",
-      "status": "aktiv",
+      "stand": "2026-07-28",
+      "status": "veraltet",
       "titel": "Open Knowledge Format (OKF)",
       "typ": "konzept"
     },

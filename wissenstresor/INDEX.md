@@ -9,5 +9,6 @@
 |---|---|---|---|---|---|
 | [fakten.md](knowledge/demo-okf/fakten.md) | faktensammlung | aktiv | mittel | 2026-07-04 | Faktensammlung demo-okf |
 | [llm-wiki-muster.md](knowledge/demo-okf/llm-wiki-muster.md) | konzept | aktiv | mittel | 2026-07-04 | LLM-Wiki-Muster (Karpathy) und Praxisregeln |
-| [okf.md](knowledge/demo-okf/okf.md) | konzept | aktiv | hoch | 2026-07-26 | Open Knowledge Format (OKF) |
+| [okf-v02.md](knowledge/demo-okf/okf-v02.md) | konzept | aktiv | hoch | 2026-07-28 | Open Knowledge Format v0.2 |
+| [okf.md](knowledge/demo-okf/okf.md) | konzept | veraltet | hoch | 2026-07-28 | Open Knowledge Format (OKF) |
 | [ontologie-strategie.md](knowledge/demo-okf/ontologie-strategie.md) | konzept | aktiv | mittel | 2026-07-04 | Ontologie-Strategie — kleine fixe Basis, Clash-getriebene Erweiterung |

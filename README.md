@@ -18,17 +18,18 @@ geschützte `dir_fd`-Operationen fail-closed ab.
 📖 **Konzept & Architekturentscheidungen:** [`wissenstresor/KONZEPT.md`](wissenstresor/KONZEPT.md)
 🌐 **Landingpage:** [`index.html`](index.html) (GitHub-Pages-fähig, Source = repo root)
 
-**Aktueller Release: v0.6.2** mit Begriffswelten, deterministischem
+**Aktueller Release: v0.7.0** mit Begriffswelten, deterministischem
 Hybrid-Retrieval, geprüften Bild-/PDF-Regionen und einem reproduzierbaren
-`.skill`-Paket für Claude Code und Codex. Seit v0.6.2 lehnt der
-Frontmatter-Parser Verschachtelung fail-closed ab statt sie still
-umzubauen, und Validierung wie Paketbau führen unabhängig voneinander eine
-Allowlist erlaubter Dateiarten: kein zweites Script, kein Archiv, kein
-gesetztes Ausführungsbit.
+`.skill`-Paket für Claude Code und Codex. Der Frontmatter-Parser lehnt
+Verschachtelung fail-closed ab statt sie still umzubauen, und Validierung wie
+Paketbau führen unabhängig voneinander eine Allowlist erlaubter Dateiarten:
+kein zweites Script, kein Archiv, kein gesetztes Ausführungsbit. Der
+Demo-Bestand hat mit v0.7.0 die OKF-Spezifikation v0.2 aufgenommen und dabei
+seine eigene Supersession belegt, statt die überholte Fassung zu löschen.
 
-Abnahme: 48 Tests bestanden · 28 manifestierte Dateien · 30 sichere
+Abnahme: 48 Tests bestanden · 30 manifestierte Dateien · 32 sichere
 Paketeinträge · SHA-256
-`ac7c877baab9534f1d92ff6080c5c500f2ff0a98a406b441a7e0fc1d4189c15f`.
+`47d1b5da3db7afa417e38e8a2576fd31d849c93a287a7b00385562dfe63726bf`.
 
 ## RAG-ähnlich, aber lokal und überprüfbar
 
@@ -76,7 +77,7 @@ SkillSafe/
     ├── scripts/vault.py   Motor: deterministische Engine (nur Stdlib)
     ├── schema/            Motor: Profil, Typen und Begriffswelten
     ├── references/        Motor: Antwort-, Ingest-, Medien-, Begriffs- und Lint-Workflows
-    ├── knowledge/          Treibstoff: OKF-Seiten mit Claims, nach Domäne getrennt
+    ├── knowledge/          Treibstoff: Wissensseiten im OKF-Muster (Profil oksv-lite), nach Domäne getrennt
     ├── sources/            Treibstoff: Register, raw/, derived/, Quarantäne
     ├── graph/graph.json    Treibstoff: abgeleiteter Wissensgraph
     ├── INDEX.md, ROUTER.md Treibstoff: Navigation und manuelles Audit
@@ -96,6 +97,9 @@ python3 scripts/vault.py doctor
 
 # Manifestgebunden und RAG-ähnlich abfragen (JSON)
 python3 scripts/vault.py query "Was ist OKF?"
+
+# Zwei Versionsstände: die überholte Fassung kommt mit Signal, nicht versteckt
+python3 scripts/vault.py query "OKF v0.2"
 
 # Ein Alias aus der Begriffswelt führt zum selben belegten Konzept
 python3 scripts/vault.py query "offenes Wissensformat"
@@ -152,10 +156,18 @@ sich. Commit und Push sind kein Teil des Builds.
 ## Demo-Bestand
 
 Der mitgelieferte Demo-Bestand `knowledge/demo-okf/` dokumentiert die
-Herkunft des Tresors mit seinen eigenen Mitteln: 4 Seiten, 16 Claims,
-3 Quellen (Google-OKF-Ankündigung, Karpathys `llm-wiki`-Gist, ein
-Ontologie-Artikel von Iusztin), 1 Begriffswelt und 4 beleggebundene
-Begriffe — validiert, indiziert, verlinkt.
+Herkunft des Tresors mit seinen eigenen Mitteln: 5 Seiten, 26 Claims,
+4 Quellen (Google-OKF-Ankündigung, Karpathys `llm-wiki`-Gist, ein
+Ontologie-Artikel von Iusztin, der Volltext der OKF-Spezifikation v0.2),
+1 Begriffswelt und 9 beleggebundene Begriffe — validiert, indiziert,
+verlinkt.
+
+Er belegt dabei seinen eigenen Supersessions-Pfad. Die Seite zu OKF v0.1
+trägt seit Aufnahme der v0.2-Spezifikation `status: veraltet` und wird über
+eine typisierte `ersetzt`-Kante von der Nachfolgeseite abgelöst. Das Ranking
+versteckt die überholte Fassung nicht, es markiert sie mit dem Signal
+`page_status:veraltet`; welche Fassung gilt, entscheidet der
+Antworten-Workflow anhand der Kante und benennt beide.
 
 Aktueller Stand: 🟢 `validate` 0 Fehler, 0 Warnungen · `doctor` grün ·
 `checksum --verify` grün.

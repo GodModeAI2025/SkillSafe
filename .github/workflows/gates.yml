@@ -1,0 +1,133 @@
+name: gates
+
+# Fährt genau die Kette, die sonst von Hand läuft. Zwei Eigenheiten dieses
+# Repos sind bewusst eingebaut:
+#
+# 1. Die CI ruft NIEMALS `vault.py checksum` oder `vault.py release`. Beide
+#    schreiben und würden genau den Fehler zudecken, den diese Pipeline finden
+#    soll: einen Commit, bei dem das Manifest nicht mitgezogen wurde. Am
+#    Arbeitsplatz gilt "Tests erst nach checksum", weil man dort mitten in einer
+#    Änderung steht. Im Repository ist der committete Stand bereits freigegeben,
+#    also gilt die Umkehrung: erst verify, dann Tests, und Drift ist ein Befund.
+# 2. Es gibt keine Abhängigkeiten. Kein pip, kein requirements, kein Cache. Die
+#    Tests laufen über `unittest discover` statt über pytest, damit die CI
+#    dieselbe Nullabhängigkeit hat wie das ausgelieferte Artefakt.
+
+on:
+  push:
+    branches: ["main", "agent/**"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+  schedule:
+    # Fängt Verrottung, die ohne Commit entsteht: neues Runner-Image, neue
+    # Python-Patchversion, geändertes Verhalten in zipfile oder unicodedata.
+    # GitHub schaltet zeitgesteuerte Läufe nach 60 Tagen ohne Repo-Aktivität
+    # ab; siehe BETRIEB.md, Abschnitt "Was die CI prüft".
+    - cron: "17 5 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gates-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  gates:
+    name: ${{ matrix.os }} / Python ${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # 3.9 ist die untere Grenze, die tatsächlich benutzt wird (System-
+          # Python auf macOS). Die belegte API-Untergrenze des Codes liegt
+          # darunter, wird aber nicht zugesagt. Wer 3.9 streicht, muss README
+          # und BETRIEB.md mitziehen.
+          - os: ubuntu-latest
+            python: "3.9"
+          - os: ubuntu-latest
+            python: "3.11"
+          - os: ubuntu-latest
+            python: "3.13"
+          # macOS deckt die Plattform ab, auf der der Tresor entstanden ist,
+          # und ein zweites Dateisystem für die dir_fd-Schreibpfade.
+          - os: macos-latest
+            python: "3.13"
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Laufzeit festhalten
+        run: |
+          python3 -VV
+          python3 -c "import unicodedata; print('unidata', unicodedata.unidata_version)"
+
+      # Reihenfolge ist gemessen, nicht geraten: validate liefert die
+      # inhaltliche Begründung, checksum --verify nennt die abweichende Datei
+      # beim Namen, doctor fasst zusammen. Erst danach die Tests, sonst liest
+      # man einen Manifest-Drift als Testregression.
+      - name: validate
+        working-directory: wissenstresor
+        run: python3 -B scripts/vault.py validate
+
+      - name: checksum --verify
+        working-directory: wissenstresor
+        run: python3 -B scripts/vault.py checksum --verify
+
+      - name: doctor
+        working-directory: wissenstresor
+        run: python3 -B scripts/vault.py doctor
+
+      - name: Tests
+        run: python3 -B -m unittest discover -s tests -t . -v
+
+      - name: Paketbau (zweites Allowlist-Gate, prüft Reproduzierbarkeit)
+        run: python3 -B tools/build_skill_package.py
+
+      - name: Veröffentlichte Zahlen gegen die echte Ausgabe
+        run: python3 -B tools/check_docs.py
+
+      # Kleine Regressionsbremsen für Dinge, die niemand von Hand prüft.
+      - name: Kein hartes python3-Literal in Tests und Werkzeugen
+        run: |
+          if grep -rn '"python3"' tests/ tools/; then
+            echo "Hartes python3-Literal gefunden; sys.executable verwenden."
+            exit 1
+          fi
+
+      - name: Keine CRLF-Zeilenenden im Skill-Artefakt
+        run: |
+          if git grep -Il $'\r' -- wissenstresor/; then
+            echo "CRLF im Skill-Ordner; .gitattributes prüfen."
+            exit 1
+          fi
+
+      - name: Determinismus ist datumsunabhängig
+        working-directory: wissenstresor
+        run: |
+          python3 -B scripts/vault.py query "Was ist OKF?" > /tmp/heute.json
+          faketime_hinweis="Kein faketime im Runner; stattdessen zweiter Lauf."
+          echo "$faketime_hinweis"
+          python3 -B scripts/vault.py query "Was ist OKF?" > /tmp/nochmal.json
+          diff /tmp/heute.json /tmp/nochmal.json
+
+      - name: Arbeitsbaum ist nach allen Gates unverändert
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            git status --porcelain
+            echo "Ein Gate hat geschrieben. Die Kette muss read-only sein."
+            exit 1
+          fi

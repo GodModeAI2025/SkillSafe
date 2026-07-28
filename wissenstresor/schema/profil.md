@@ -1,9 +1,36 @@
-# Profil oksv-lite/1.1 — Datenvertrag des Wissenstresors
+# Profil oksv-lite/1.2 — Datenvertrag des Wissenstresors
 
-OKF v0.1 verlangt nur `type`. Dieses Profil ist bewusst strenger, bleibt aber
-OKF-kompatibel: alles Zusätzliche liegt in flachem Frontmatter, Claims oder
-separaten JSON-Registries. `scripts/vault.py validate` erzwingt den Vertrag
-fail-closed; unbekannte Felder und JSON-Schlüssel sind Fehler.
+Dieses Profil schreibt Seiten, die als OKF-Konzeptdokumente lesbar sind: jede
+Seite unter `knowledge/` trägt parsebares YAML-Frontmatter mit nicht leerem
+`type` und erfüllt damit die Bedingungen 1 und 2 aus §11 der
+OKF-Spezifikation, in v0.1 wie in v0.2. Alles Weitere ist ein eigener
+Vertrag; es liegt in flachem Frontmatter, in Claims oder in separaten
+JSON-Registries. `scripts/vault.py validate` erzwingt ihn fail-closed;
+unbekannte Felder und JSON-Schlüssel sind Fehler.
+
+Die Kompatibilität ist damit einseitig, und das ist gewollt. SkillSafe ist
+ein strenger OKF-**Produzent** für den eigenen Bestand und kein allgemeiner
+OKF-**Consumer**: die Toleranzpflichten aus §11 gelten für fremde Bundles,
+nicht für diesen Bestand, und ein fremdes Bundle läuft hier ohne
+Konvertierung nicht. Fremdes OKF-Wissen kommt denselben Weg wie jede andere
+Quelle, also über Quarantäne, lokalen Abzug, Registrierung und
+Claim-Extraktion. Das ist keine Lücke, sondern die Kernaussage des Tresors.
+
+Drei Feldnamen sind mit OKF v0.2 namensgleich und anders belegt, was jede
+pauschale Aussage über „OKF-Kompatibilität" ohne Zielversion unpräzise macht:
+
+| Feld | hier | OKF v0.2 |
+|---|---|---|
+| `sources` | flache Liste registrierter `S-nnnn` | Liste von Einträgen mit Pflichtangabe `resource` (§5.1) |
+| `status` | `aktiv` / `veraltet` / `in-pruefung` | `draft` / `stable` / `deprecated` (§5.4) |
+| `confidence` | Belastbarkeit der Aussage | kein Gegenstück; §5.2 trennt Erzeugung von Bestätigung |
+
+Die OKF-Bundle-Wurzel dieses Tresors ist `knowledge/`, nicht der
+Skill-Ordner. `INDEX.md` und `log.md` liegen eine Ebene darüber und damit
+außerhalb des Bundles; §8 und §9 greifen für sie deshalb nicht, und die
+Tabellenform von `INDEX.md` wie der grep-bare Log-Präfix bleiben. Ebenso ist
+`references/` hier der Ordner der Workflow-Protokolle und nicht das
+`references/` aus §6.3, das gespiegeltes Fremdmaterial aufnimmt.
 
 ## Frontmatter
 
@@ -27,9 +54,71 @@ Optionale Felder:
 |---|---|---|
 | `relations` | Liste `typ -> domäne/seite.md` | Typisierte Seitenkanten |
 | `concepts` | Liste `B-nnnn` | Verknüpfung zur kontrollierten Begriffswelt |
+| `geprueft_von` | `mensch:<id>`, `prozess:<id>` oder `agent:<name>/<version>` | Wer den Inhalt gegen die Quellen gegengeprüft hat |
+| `geprueft_am` | `JJJJ-MM-TT` | Wann diese Prüfung stattgefunden hat |
+
+Die Prüfangabe tritt als Paar auf oder gar nicht: ein Prüfer ohne Datum ist
+nicht nachvollziehbar, ein Datum ohne Prüfer nicht zurechenbar. Liegt
+`geprueft_am` vor `stand`, ist das kein Fehler, sondern eine Warnung: die
+Prüfung darf älter sein als die letzte inhaltliche Änderung, sie deckt den
+aktuellen Inhalt dann nur nicht mehr. Fehlt die Angabe ganz, ist das der
+Normalfall und keine Auffälligkeit.
+
+### Drei Vertrauensangaben, die nicht dasselbe messen
+
+| Angabe | Ort | Frage |
+|---|---|---|
+| `confidence` | Seiten-Frontmatter | Wie belastbar ist die Aussage? |
+| Trust `T1`/`T2`/`T3` | `sources/REGISTER.md` | Wie nah liegt die Quelle am Original? |
+| Trust-Tier | abgeleitet aus `geprueft_von` | Hat ein Mensch das gegengeprüft? |
+
+Alle drei können unabhängig voneinander jeden Wert haben. Eine
+hoch-konfidente Aussage aus einer T3-Quelle ist möglich, ebenso eine
+menschlich geprüfte Seite mit niedriger Konfidenz. Das Trust-Tier folgt
+OKF v0.2 §5.3 und heißt deshalb `unverified`, `machine-confirmed` oder
+`human-reviewed`; `mensch:` ergibt `human-reviewed`, jeder andere Aktor
+`machine-confirmed`, keine Angabe `unverified`.
+
+Das Tier wird **ausschließlich abgeleitet und niemals gespeichert**, und es
+geht **niemals in das Ranking** ein. Sonst würde aus einem reproduzierbaren
+Score ein Vertrauensurteil, und die Begründung von AD-01 fällt. Im
+Query-Envelope erscheint es als Ausgabefeld, und nur die unterste Stufe
+erzeugt zusätzlich das Signal `trust_tier:unverified`, analog zu
+`source_trust:T3`.
 
 Frontmatter nutzt nur Skalar, Inline-Liste und Bindestrich-Liste. Kein
 Nesting. Listenfelder müssen tatsächlich als Liste geschrieben werden.
+
+Verschachtelung wird abgelehnt, nicht toleriert: jede eingerückte Zeile, die
+keine Listenzeile `  - wert` ist, ist ein Validierungsfehler. Das gilt auch
+für die YAML-Blockform `schlüssel:` mit eingerückten Unterschlüsseln
+darunter. Ohne diese Regel zog die Blockform ihre Unterschlüssel still ins
+Top-Level und machte den Wert zur leeren Liste, also Strukturkorruption ohne
+Fehlermeldung. Wer verschachtelte Angaben braucht, legt sie als strikte
+JSON-Registry unter `sources/derived/` ab, nach dem Muster von
+`skillsafe.media/v1`, und weicht nicht den Parser auf.
+
+## Dateinamen und Tag-Zeichen
+
+`index.md` und `log.md` sind nach OKF v0.2 §3.1 reservierte Namen und dürfen
+keine Wissensseite sein. Eine Seite mit diesem Namen würde beim Export vom
+generierten Verzeichnisindex überschrieben und lautlos aus dem Bundle
+verschwinden; `validate` lehnt sie deshalb ab.
+
+Tags dürfen kein `,`, `[` oder `]` enthalten. In der Inline-Listenform ist so
+ein Wert nicht darstellbar, und beim Export würde er den Tag zerlegen oder das
+YAML brechen.
+
+## Dateiarten im Tresor
+
+Der Tresor liefert Wissen aus, keinen ausführbaren Inhalt. `validate` lässt
+im Baum nur zu: `.md`, `.json`, `.yaml`, `.sha256`, die registrierten
+Medienformate aus dem Register, die endungslosen Dateien `LICENSE` und
+`VERSION` sowie genau ein Python-Script, `scripts/vault.py`. Ein zweites
+Script, ein Archiv, ein Binary oder ein gesetztes Ausführungsbit bricht
+fail-closed ab. `tools/build_skill_package.py` führt dieselbe Allowlist
+unabhängig ein zweites Mal, damit der Paketbau nicht von dem Script abhängt,
+das er verpackt.
 
 ## Claim-Grammatik
 
@@ -126,6 +215,12 @@ Datei `sources/derived/S-nnnn__media.json` erforderlich:
 `verified` muss vor einem Release `true` sein. SVG ist wegen aktiver Inhalte
 nicht als Bildquelle erlaubt und muss lokal in ein erlaubtes Rasterformat
 umgewandelt werden.
+
+Das `verified` dieser Medienregistry ist nicht das `verified` aus OKF v0.2
+§5.2. Hier ist es ein Boolean und beantwortet „wurde diese Extraktion sicht-
+und qualitätsgeprüft"; dort ist es eine Liste von Bestätigungsereignissen
+und beantwortet „wer hat den Inhalt gegen seine Quellen bestätigt". Gleiches
+Wort, verschiedene Namensräume, verschiedene Bedeutung.
 
 Regions-`text`, Regions-`locator` und `alt_text` bleiben untrusted
 Ingest-Daten. `query` gibt sie nie als Evidenz aus, sondern nur den

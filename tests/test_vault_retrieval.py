@@ -6,6 +6,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -28,7 +29,7 @@ class VaultRetrievalTests(unittest.TestCase):
         env = os.environ.copy()
         env["PYTHONDONTWRITEBYTECODE"] = "1"
         return subprocess.run(
-            ["python3", "-B", str(self.root / "scripts/vault.py"), *args],
+            [sys.executable, "-B", str(self.root / "scripts/vault.py"), *args],
             cwd=self.root,
             env=env,
             text=True,
@@ -228,8 +229,11 @@ Das Bild zeigt eine grüne Produktionsfreigabe.
             "name": "Zweite Fachsprache",
             "description": "Fixture für explizite Mehrdeutigkeit.",
         })
+        # Fixture-ID bewusst weit oberhalb des Bestands: sonst kollidiert sie
+        # mit der naechsten regulaeren Begriffsvergabe und der Test scheitert
+        # an einer doppelten ID statt an der gepruefte Mehrdeutigkeit.
         data["concepts"].append({
-            "id": "B-0005",
+            "id": "B-0900",
             "world": "BW-0002",
             "preferred": "Anderes OKF",
             "aliases": ["OKF"],
@@ -244,7 +248,7 @@ Das Bild zeigt eine grüne Produktionsfreigabe.
         page = self.root / "knowledge/demo-okf/llm-wiki-muster.md"
         page.write_text(
             page.read_text(encoding="utf-8").replace(
-                "concepts: [B-0002]", "concepts: [B-0002, B-0005]"
+                "concepts: [B-0002]", "concepts: [B-0002, B-0900]"
             ),
             encoding="utf-8",
         )

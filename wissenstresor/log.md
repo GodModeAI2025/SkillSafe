@@ -24,3 +24,15 @@ Eintraege nur ueber `python3 scripts/vault.py log <aktion> "<text>"`.
 ## [2026-07-26] release | v0.5.2 — 4 Seiten, 16 Claims, 3 Quellen (patch)
 ## [2026-07-26] release | v0.6.0 — 4 Seiten, 16 Claims, 3 Quellen (minor)
 ## [2026-07-26] release | v0.6.1 — 4 Seiten, 16 Claims, 3 Quellen (patch)
+## [2026-07-28] note | Parser lehnt verschachteltes Frontmatter fail-closed ab (Blockform hob Unterschluessel still ins Top-Level); validate und Paketbau fuehren unabhaengig eine Allowlist erlaubter Dateiarten mit Verbot ausfuehrbarer Inhalte
+## [2026-07-28] release | v0.6.2 — 4 Seiten, 16 Claims, 3 Quellen (patch)
+## [2026-07-28] ingest | S-0004 OKF-Spezifikation v0.2 (Volltext, Apache-2.0, T1): neue Seite demo-okf/okf-v02.md mit C-0301..C-0310, Begriffe B-0005..B-0009, definition_claim von B-0001 auf C-0301, okf.md auf veraltet mit ersetzt-Relation, ROUTER erweitert; AD-09 (keine ausfuehrbaren Verweise) und Abschnitt 'Verhaeltnis zu OKF v0.2' in KONZEPT.md, Kompatibilitaetsaussage in schema/profil.md geschaerft
+## [2026-07-28] release | v0.7.0 — 5 Seiten, 26 Claims, 4 Quellen (minor)
+## [2026-07-28] note | Profil oksv-lite/1.2: optionale Pruefangabe geprueft_von/geprueft_am (Paar, Aktorgrammatik mensch/prozess/agent, Kalendertag), Trust-Tier nach OKF v0.2 §5.3 abgeleitet und nie gespeichert, nie im Score; Envelope und stats um Tier erweitert, doctor-Hinweis nur wenn der Bestand das Feld nutzt
+## [2026-07-28] release | v0.8.0 — 5 Seiten, 26 Claims, 4 Quellen (minor)
+## [2026-07-28] note | Neues Kommando export --okf: freigegebener Bestand als OKF-v0.2-Bundle ausserhalb des Tresors, byteidentisch, status/Aktor/Fussnoten/Relationen/index/log uebersetzt; Ziel fail-closed gegen Skill-Ladeorte, Tresorinneres und Fremdinhalt, Rohquellen nur mit --with-sources; neue Referenzdatei references/export-okf.md, Exportgrenze in AD-06
+## [2026-07-28] release | v0.9.0 — 5 Seiten, 26 Claims, 4 Quellen (minor)
+## [2026-07-28] note | Haertungsrelease nach externem Audit: eingeruecktes '---' beendete das Frontmatter still (Terminator jetzt strikt); Export schreibt ueber Staging und ersetzt das Ziel atomar (Symlink im Zielordner trug den Export heraus, Halbstand und verwaiste Dokumente bei Re-Export); Trust-Tier wird nicht mehr ins Bundle geschrieben (Widerspruch zur Zusage 'nie gespeichert'); reservierte Dateinamen index.md/log.md und Tag-Zeichen ,[] abgelehnt; Begriffslabels injection-geprueft und als Frontmatter statt HTML-Kommentar exportiert; Linktexte escaped; _trust_tier typfest; Dekodierfehler in Export und Log abgefangen; Satzende-Erkennung respektiert deutsche Abkuerzungen
+## [2026-07-28] release | v0.10.0 — 5 Seiten, 26 Claims, 4 Quellen (minor)
+## [2026-07-28] note | Betriebsreife: Ausgabe auf Nicht-UTF-8-Konsolen gehaertet (cp1252 brach mit UnicodeEncodeError ab), Bootstrap-Workflow in die Tabelle aufgenommen
+## [2026-07-28] release | v0.10.1 — 5 Seiten, 26 Claims, 4 Quellen (patch)

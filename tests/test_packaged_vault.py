@@ -2,10 +2,12 @@
 """Abnahme des tatsächlich ausgelieferten, nicht neu manifestierten Skills."""
 
 import hashlib
+import importlib.util
 import json
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 import zipfile
@@ -20,7 +22,7 @@ PACKAGE_BUILDER = REPOSITORY / "tools/build_skill_package.py"
 class PackagedVaultTests(unittest.TestCase):
     def test_checked_in_skill_and_claude_style_install_are_green(self):
         direct = subprocess.run(
-            ["python3", "-B", str(SOURCE_SKILL / "scripts/vault.py"), "doctor"],
+            [sys.executable, "-B", str(SOURCE_SKILL / "scripts/vault.py"), "doctor"],
             cwd=SOURCE_SKILL,
             text=True,
             stdout=subprocess.PIPE,
@@ -70,7 +72,7 @@ class PackagedVaultTests(unittest.TestCase):
             for target in (first, second):
                 built = subprocess.run(
                     [
-                        "python3", "-B", str(PACKAGE_BUILDER),
+                        sys.executable, "-B", str(PACKAGE_BUILDER),
                         "--skill", str(SOURCE_SKILL),
                         "--output", str(target),
                     ],
@@ -112,7 +114,7 @@ class PackagedVaultTests(unittest.TestCase):
             )
             query = subprocess.run(
                 [
-                    "python3", "-B", str(installed / "scripts/vault.py"),
+                    sys.executable, "-B", str(installed / "scripts/vault.py"),
                     "query", "OKF",
                 ],
                 cwd=project,
@@ -127,6 +129,33 @@ class PackagedVaultTests(unittest.TestCase):
             self.assertEqual(payload["state"], "candidates_found")
             self.assertEqual(payload["evidence"][0]["claim_id"], "C-0001")
             self.assertFalse((project / "TRAP_RAN").exists())
+
+
+    def test_package_allowlist_is_an_independent_second_gate(self):
+        """Der Paketbau prüft Dateiarten selbst, ohne das verpackte Script."""
+        spec = importlib.util.spec_from_file_location(
+            "skillsafe_builder", PACKAGE_BUILDER
+        )
+        builder = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(builder)
+        with tempfile.TemporaryDirectory(prefix="skillsafe-allowlist-") as temp:
+            skill = Path(temp) / "wissenstresor"
+            shutil.copytree(SOURCE_SKILL, skill)
+            self.assertTrue(builder.collect_files(skill))
+
+            attester = skill / "references/attesters/revenue.py"
+            attester.parent.mkdir(parents=True)
+            attester.write_text("print('attester')\n", encoding="utf-8")
+            with self.assertRaises(ValueError) as fremd:
+                builder.collect_files(skill)
+            self.assertIn("gehört nicht ins Paket", str(fremd.exception))
+            attester.unlink()
+            attester.parent.rmdir()
+
+            os.chmod(skill / "SKILL.md", 0o755)
+            with self.assertRaises(ValueError) as ausfuehrbar:
+                builder.collect_files(skill)
+            self.assertIn("ausführbare Datei", str(ausfuehrbar.exception))
 
 
 if __name__ == "__main__":

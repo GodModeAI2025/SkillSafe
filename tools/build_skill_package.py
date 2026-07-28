@@ -18,6 +18,18 @@ REPOSITORY = Path(__file__).resolve().parents[1]
 DEFAULT_SKILL = REPOSITORY / "wissenstresor"
 FIXED_ZIP_TIME = (1980, 1, 1, 0, 0, 0)
 
+# Erlaubte Dateiarten im Paket. Spiegelbild von ARTEFAKT_SUFFIXE,
+# ARTEFAKT_DATEINAMEN und ENGINE_SCRIPT in wissenstresor/scripts/vault.py,
+# bewusst doppelt geführt: der Paketbau darf nicht von dem Script abhängen,
+# das er gerade verpackt. Zwei unabhängige Gates statt eines geteilten.
+# .svg bleibt draußen (aktive Inhalte), .py nur als das eine Engine-Script.
+ALLOWED_SUFFIXES = frozenset({
+    ".md", ".json", ".yaml", ".sha256",
+    ".png", ".jpg", ".jpeg", ".gif", ".webp", ".tif", ".tiff", ".pdf",
+})
+ALLOWED_EXTENSIONLESS = frozenset({"LICENSE", "VERSION"})
+ENGINE_SCRIPT = "scripts/vault.py"
+
 
 def sha256(path):
     digest = hashlib.sha256()
@@ -90,6 +102,20 @@ def collect_files(skill):
             if inode in seen_inodes:
                 raise ValueError(f"mehrfach verlinkte Datei: {relative}")
             seen_inodes.add(inode)
+            suffix = path.suffix.lower()
+            if relative != ENGINE_SCRIPT:
+                if suffix and suffix not in ALLOWED_SUFFIXES:
+                    raise ValueError(
+                        f"Dateiart {suffix} gehört nicht ins Paket: {relative}"
+                    )
+                if not suffix and name not in ALLOWED_EXTENSIONLESS:
+                    raise ValueError(
+                        f"Datei ohne Endung gehört nicht ins Paket: {relative}"
+                    )
+            if status.st_mode & 0o111:
+                raise ValueError(
+                    f"ausführbare Datei gehört nicht ins Paket: {relative}"
+                )
             files.append((relative, path))
     files.sort(key=lambda item: item[0])
     if not files or files[0][0] == "":
@@ -182,7 +208,7 @@ def verify_archive(archive_path, root_name, files):
 
 def run_doctor(skill, cwd):
     result = subprocess.run(
-        ["python3", "-B", str(skill / "scripts/vault.py"), "doctor"],
+        [sys.executable, "-B", str(skill / "scripts/vault.py"), "doctor"],
         cwd=cwd,
         env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
         text=True,

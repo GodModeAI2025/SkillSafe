@@ -39,3 +39,38 @@ Zugriffskontrolle nur truegerische Sicherheit waere. Ersatz: eigene,
 vollstaendige Tresor-Kopie pro Sensitivitaetsstufe, Grenze ist der
 Installationsort/Skill-Ladeort (Repo-Rechte, privater Skill-Ordner), nie ein
 Feature im Skill. Details: KONZEPT.md AD-06, references/mehrere-tresore.md.
+
+## [2026-07-28] OKF-v0.2-Typ "Attested Computation" mit executor/attester — verworfen
+§10 der Spezifikation v0.2 laesst eine Content-Seite auf ausfuehrbaren Code
+oder Laufanweisungen zeigen (executor.resource, attester.resource). Verworfen,
+weil damit die Content-Zone einen Ausfuehrungspfad benennen darf, waehrend Code
+bisher nur in der Engine-Zone existiert: indirekte Prompt Injection eskaliert
+von "falsche Antwort" zu "Codeausfuehrung", zwei der drei §6.2-Pfadformen
+fallen ohnehin an der Pfadhaertung durch, §10.2 braucht verschachteltes
+Frontmatter, das Manifest ist selbstbezeugt und kann Codeintegritaet gegenueber
+einem Empfaenger nicht behaupten, und der Ertrag (Receipt, Verdict) entsteht
+laut §10.5/§10.6 ausserhalb des Bundles. Ersatz: keiner, die Faehigkeit fehlt
+bewusst. Der Bestand dokumentiert den Typ als Wissen (C-0307, C-0308) und
+fuehrt ihn nicht. Geprueft und zurueckgestellt, nicht uebersehen: eine rein
+deskriptive Variante ohne executor/attester und ohne Codepfad waere ueber das
+regulaere Type-Onboarding moeglich. Details: KONZEPT.md AD-09.
+
+## [2026-07-28] LinkedIn-Ankuendigung zu OKF v0.2 als eigene Quelle — verworfen
+Ein zweiter Registereintrag fuer den Ankuendigungstext haette nichts getragen,
+was die Spezifikation selbst nicht sagt; S-0004 ist der Volltext der Norm. Der
+Lint-Workflow meldet claimlose Registereintraege zu Recht als tote Quelle, und
+die Kompressionsregel verlangt Verdichtung statt Spiegelung. Aufnahme waere nur
+gerechtfertigt, wenn der Text eine Aussage traegt, die die Spec nicht deckt
+(etwa zur Verbreitung); dann als T3-Pointer mit ein bis zwei Claims in
+knowledge/demo-okf/fakten.md, nicht auf der Konzeptseite.
+
+## [2026-07-28] Praezisierung zum verworfenen bi-temporalen Gueltigkeitsfenster
+Der Eintrag vom 2026-07-04 verwarf valid_from/valid_until aus dem
+Ontologie-Artikel, weil stand/status/Supersession den Bedarf decken. Das gilt
+weiter fuer ein Gueltigkeits-INTERVALL. OKF v0.2 §5.5 fuehrt mit stale_after
+etwas anderes ein: ein einzelnes absolutes Verfallsdatum, das eine Aussage
+ohne Bestandsaenderung unbelastbar werden laesst. Das ist eine echte Luecke des
+Profils und ausdruecklich NICHT durch den alten Eintrag mitverworfen. Eine
+Uebernahme als optionales Feld gueltig_bis bleibt offen; sie braucht dann ein
+Bezugsdatum als Eingabe (kein impliziter Vergleich gegen "heute"), weil die
+Query-Ausgabe sonst tagesabhaengig wird und die Determinismus-Zusage bricht.

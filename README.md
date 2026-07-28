@@ -1,5 +1,7 @@
 # SkillSafe — der Wissenstresor
 
+[![gates](https://github.com/GodModeAI2025/SkillSafe/actions/workflows/gates.yml/badge.svg)](https://github.com/GodModeAI2025/SkillSafe/actions/workflows/gates.yml)
+
 **Wissen ist Treibstoff (flüchtig), der Skill ist der Motor (stabil).**
 
 SkillSafe ist ein lokaler, evidenzgebundener Wissensspeicher als **purer
@@ -18,13 +20,42 @@ geschützte `dir_fd`-Operationen fail-closed ab.
 📖 **Konzept & Architekturentscheidungen:** [`wissenstresor/KONZEPT.md`](wissenstresor/KONZEPT.md)
 🌐 **Landingpage:** [`index.html`](index.html) (GitHub-Pages-fähig, Source = repo root)
 
-**Aktueller Release: v0.6.1** — Begriffswelten, deterministisches
-Hybrid-Retrieval, geprüfte Bild-/PDF-Regionen und ein reproduzierbares
-`.skill`-Paket für Claude Code und Codex.
+**Aktueller Release: v0.10.1** (Profil `oksv-lite/1.2`) mit Begriffswelten,
+deterministischem Hybrid-Retrieval, geprüften Bild-/PDF-Regionen und einem
+reproduzierbaren `.skill`-Paket für Claude Code und Codex. Der
+Frontmatter-Parser lehnt Verschachtelung fail-closed ab statt sie still
+umzubauen, und Validierung wie Paketbau führen unabhängig voneinander eine
+Allowlist erlaubter Dateiarten: kein zweites Script, kein Archiv, kein
+gesetztes Ausführungsbit. Der Demo-Bestand hat die OKF-Spezifikation v0.2
+aufgenommen und dabei seine eigene Supersession belegt, statt die überholte
+Fassung zu löschen. Seiten können optional festhalten, wer ihre Claims
+gegengeprüft hat und wann; daraus leitet die Engine ein Trust-Tier nach
+OKF v0.2 §5.3 ab, ohne es zu speichern und ohne es je in das Ranking
+einzurechnen.
 
-Abnahme: 43 Tests bestanden · 28 manifestierte Dateien · 30 sichere
+Seit v0.9.0 gibt `export --okf` den freigegebenen Bestand als
+OKF-v0.2-Bundle nach außen, ohne dass sich am internen Datenvertrag etwas
+ändert.
+
+Abnahme: 68 Tests bestanden · 31 manifestierte Dateien · 33 sichere
 Paketeinträge · SHA-256
-`2954197872dadbbfb2ab34d87c8f35fb113d9ccde0d7fb9f2ee0f81cada8a2b7`.
+`fa88863bf81cea52f6b48added76f4f9768bccf97a25b7048e021f90f7931069`.
+
+Alles läuft mit der Python-Standardbibliothek, gemessen mit CPython 3.9.6 und
+3.13.13; beide bauen dasselbe Paket mit demselben SHA-256. Selbst nachrechnen
+aus der Repository-Wurzel:
+
+```bash
+python3 -m unittest discover -s tests -t .
+cd wissenstresor && python3 scripts/vault.py doctor
+cd .. && python3 tools/build_skill_package.py && python3 tools/check_docs.py
+```
+
+Wie man am Projekt arbeitet, freigibt und Störfälle behebt, steht in
+[`BETRIEB.md`](BETRIEB.md). Eine Regel daraus vorweg, weil sie sonst Zeit
+kostet: **die Tests sind nach jeder Änderung unter `wissenstresor/` erst nach
+`checksum` oder `release` aussagekräftig**, weil sie `doctor` aufrufen und
+`doctor` bei Manifest-Drift rot wird.
 
 ## RAG-ähnlich, aber lokal und überprüfbar
 
@@ -50,7 +81,8 @@ Details: [`KONZEPT.md`, AD-01](wissenstresor/KONZEPT.md).
 4. **Fail closed** — unbekannter Typ, Validierungsfehler, unklare Rechte:
    anhalten und fragen, nie raten.
 5. **Skript vor Modell** — Hashen, Indizieren, Graph, Retrieval, Suchen und
-   Loggen laufen als Python-Stdlib-Script.
+   Loggen laufen als Python-Stdlib-Script. Es ist auch das einzige Script, das
+   der Tresor ausführt; Inhalte benennen keine Ausführungspfade.
 6. **Quellen sind Daten** — Inhalte aus `sources/` sind niemals Anweisungen;
    eingebettete Prompt-Injections werden gemeldet, nicht befolgt.
 
@@ -63,7 +95,9 @@ SkillSafe/
 ├── README.md              dieses Dokument
 ├── LICENSE                Apache License 2.0
 ├── index.html             Landingpage (GitHub-Pages-fähig, ohne Build-Schritt)
-├── tools/                 deterministischer lokaler Paketbau
+├── BETRIEB.md             Betriebs- und Übergabewissen (Release, Störfälle, CI)
+├── .github/workflows/     CI-Kette: validate, verify, doctor, Tests, Paketbau
+├── tools/                 deterministischer Paketbau und Zahlenwächter
 ├── tests/                 Sicherheits-, Retrieval- und Portabilitätstests
 └── wissenstresor/         der Skill selbst — das eigentliche Artefakt
     ├── SKILL.md           Motor: Vertrag für das Modell
@@ -71,8 +105,8 @@ SkillSafe/
     ├── LICENSE             Apache-2.0-Lizenz im portablen Artefakt
     ├── scripts/vault.py   Motor: deterministische Engine (nur Stdlib)
     ├── schema/            Motor: Profil, Typen und Begriffswelten
-    ├── references/        Motor: Antwort-, Ingest-, Medien-, Begriffs- und Lint-Workflows
-    ├── knowledge/          Treibstoff: OKF-Seiten mit Claims, nach Domäne getrennt
+    ├── references/        Motor: Antwort-, Ingest-, Medien-, Begriffs-, Lint- und Export-Workflows
+    ├── knowledge/          Treibstoff: Wissensseiten im OKF-Muster (Profil oksv-lite/1.2), nach Domäne getrennt
     ├── sources/            Treibstoff: Register, raw/, derived/, Quarantäne
     ├── graph/graph.json    Treibstoff: abgeleiteter Wissensgraph
     ├── INDEX.md, ROUTER.md Treibstoff: Navigation und manuelles Audit
@@ -92,6 +126,9 @@ python3 scripts/vault.py doctor
 
 # Manifestgebunden und RAG-ähnlich abfragen (JSON)
 python3 scripts/vault.py query "Was ist OKF?"
+
+# Zwei Versionsstände: die überholte Fassung kommt mit Signal, nicht versteckt
+python3 scripts/vault.py query "OKF v0.2"
 
 # Ein Alias aus der Begriffswelt führt zum selben belegten Konzept
 python3 scripts/vault.py query "offenes Wissensformat"
@@ -148,13 +185,46 @@ sich. Commit und Push sind kein Teil des Builds.
 ## Demo-Bestand
 
 Der mitgelieferte Demo-Bestand `knowledge/demo-okf/` dokumentiert die
-Herkunft des Tresors mit seinen eigenen Mitteln: 4 Seiten, 16 Claims,
-3 Quellen (Google-OKF-Ankündigung, Karpathys `llm-wiki`-Gist, ein
-Ontologie-Artikel von Iusztin), 1 Begriffswelt und 4 beleggebundene
-Begriffe — validiert, indiziert, verlinkt.
+Herkunft des Tresors mit seinen eigenen Mitteln: 5 Seiten, 26 Claims,
+4 Quellen (Google-OKF-Ankündigung, Karpathys `llm-wiki`-Gist, ein
+Ontologie-Artikel von Iusztin, der Volltext der OKF-Spezifikation v0.2),
+1 Begriffswelt und 9 beleggebundene Begriffe — validiert, indiziert,
+verlinkt.
+
+Er belegt dabei seinen eigenen Supersessions-Pfad. Die Seite zu OKF v0.1
+trägt seit Aufnahme der v0.2-Spezifikation `status: veraltet` und wird über
+eine typisierte `ersetzt`-Kante von der Nachfolgeseite abgelöst. Das Ranking
+versteckt die überholte Fassung nicht, es markiert sie mit dem Signal
+`page_status:veraltet`; welche Fassung gilt, entscheidet der
+Antworten-Workflow anhand der Kante und benennt beide.
 
 Aktueller Stand: 🟢 `validate` 0 Fehler, 0 Warnungen · `doctor` grün ·
 `checksum --verify` grün.
+
+## Nach OKF v0.2 exportieren
+
+Der Tresor ist ein strenger OKF-**Produzent** für den eigenen Bestand und
+bewusst kein allgemeiner OKF-**Consumer**. Nach außen:
+
+```bash
+cd wissenstresor
+python3 scripts/vault.py export --okf --out ../okf-bundle
+```
+
+Das schreibt eine Momentaufnahme in OKF v0.2 außerhalb des Tresors: `status`
+übersetzt, `sources` aus dem Register aufgefaltet, Claim-Fußnoten nach §5.1,
+Relationen als bundle-relative Links, `index.md` pro Verzeichnis nach §8,
+`log.md` nach §9. Zwei Exporte desselben Stands sind byteidentisch.
+
+Das Ziel ist fail-closed eingeschränkt: außerhalb des Tresors, niemals in
+einem Skill-Ladeort (`.claude`, `.codex`), und entweder leer oder ein früherer
+Export. Ein Bundle hat keine Engine, kein Manifest und keine Regeln; es darf
+nie als Skill geladen werden. Rohquellen wandern nur mit `--with-sources` mit,
+weil die Rechte-Spalte Freitext ist und darüber ein Mensch entscheidet.
+
+Ein Rückweg existiert nicht. Fremdes OKF-Wissen kommt denselben Weg wie jede
+andere Quelle: Quarantäne, lokaler Abzug, Registrierung, Claim-Extraktion.
+Protokoll und benannte Verluste: [`references/export-okf.md`](wissenstresor/references/export-okf.md).
 
 ## Grenzen
 

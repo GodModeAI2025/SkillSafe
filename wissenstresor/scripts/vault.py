@@ -113,6 +113,14 @@ MEDIA_TYPES = {
     ".pdf": "application/pdf",
 }
 ACTIVE_MEDIA_SUFFIXES = {".svg"}
+# Erlaubte Dateiarten im Tresorbaum: Wissen ist Text, Registry oder
+# registriertes Medium, die Engine ist genau EIN Python-Script. Alles andere
+# (Archive, Binaries, Shellskripte, ein zweites Script) bricht fail-closed ab,
+# und kein Tresorinhalt darf ausführbar sein. Aktive Bildformate bleiben über
+# ACTIVE_MEDIA_SUFFIXES draußen.
+ARTEFAKT_SUFFIXE = {".md", ".json", ".yaml", ".sha256"} | set(MEDIA_TYPES)
+ARTEFAKT_DATEINAMEN = {"LICENSE", "VERSION"}
+ENGINE_SCRIPT = "scripts/vault.py"
 REGION_KINDS = {"text", "diagram", "table", "photo", "chart", "other"}
 EXTRACTOR_KINDS = {"human", "model", "ocr", "hybrid"}
 PROMPT_INJECTION_RE = re.compile(
@@ -507,6 +515,40 @@ def _skill_hardlinks():
     return sorted(ergebnis, key=lambda p: rel(p))
 
 
+def _skill_fremdartefakte():
+    """Dateiarten, die nicht in ein portables Wissensartefakt gehören.
+
+    Rückgabe: Liste (Pfad, Grund). Geprüft wird nur, was das Manifest
+    ohnehin abdeckt; Quarantäne-Payloads, Lock und Cache haben eigene
+    Prüfungen. Ein gesetztes Ausführungsbit ist immer ein Fehler: der Tresor
+    liefert Wissen aus, keinen ausführbaren Inhalt.
+    """
+    ergebnis = []
+    for p in _walk_tree_no_links(ROOT):
+        if _is_path_alias(p) or not _tracked_path(p):
+            continue
+        try:
+            status = os.lstat(str(p))
+        except OSError:
+            continue
+        if not stat.S_ISREG(status.st_mode):
+            continue
+        suffix = p.suffix.lower()
+        if rel(p) == ENGINE_SCRIPT:
+            erlaubt, benennung = True, "Engine-Script"
+        elif suffix:
+            erlaubt = suffix in ARTEFAKT_SUFFIXE
+            benennung = f"Endung {suffix}"
+        else:
+            erlaubt = p.name in ARTEFAKT_DATEINAMEN
+            benennung = "Datei ohne Endung"
+        if not erlaubt:
+            ergebnis.append((p, f"{benennung} ist im Tresor nicht vorgesehen"))
+        elif status.st_mode & 0o111:
+            ergebnis.append((p, "Ausführungsbit ist gesetzt"))
+    return sorted(ergebnis, key=lambda eintrag: rel(eintrag[0]))
+
+
 def iter_pages():
     if not _safe_directory(KNOWLEDGE):
         return []
@@ -523,8 +565,13 @@ def parse_frontmatter(text, quelle):
     """Flaches Frontmatter der Profil-Untermenge parsen.
 
     Erlaubt: 'key: skalar', 'key: [a, b]' und mehrzeilige Listen
-    ('key:' gefolgt von '  - wert'). Nichts Verschachteltes — bewusst,
+    ('key:' gefolgt von '  - wert'). Nichts Verschachteltes, bewusst,
     damit genau EIN einfacher, prüfbarer Parser genügt.
+
+    Verschachtelung wird fail-closed abgelehnt und nicht toleriert. Ohne diese
+    Prüfung zog die Blockform ('key:' gefolgt von '  unter: wert') ihre
+    Unterschlüssel still ins Top-Level-Dictionary und machte den Wert zur
+    leeren Liste. Das war Strukturkorruption ohne Fehlermeldung.
     Rückgabe: (dict, body, fehlerliste, body_offset in Dateizeilen)
     """
     fehler = []
@@ -542,6 +589,13 @@ def parse_frontmatter(text, quelle):
             continue
         if line.startswith("  - "):
             fehler.append(f"{quelle}: Listenzeile ohne zugehörigen Schlüssel: {line.strip()!r}")
+            i += 1
+            continue
+        if line != line.lstrip():
+            fehler.append(
+                f"{quelle}:{i + 1}: Einrückung außerhalb der Profil-Untermenge; "
+                f"verschachteltes Frontmatter ist nicht erlaubt: "
+                f"{line.strip()!r}")
             i += 1
             continue
         if ":" not in line:
@@ -1364,6 +1418,9 @@ def cmd_validate(still=False):
         for p in _skill_hardlinks():
             fehler.append(f"{rel(p)}: mehrfach hart verlinkte Datei im Tresor verboten "
                           f"— Inhalt könnte außerhalb der Ordnergrenze verändert werden")
+        for p, grund in _skill_fremdartefakte():
+            fehler.append(f"{rel(p)}: {grund} — der Tresor liefert Wissen aus, "
+                          f"keinen ausführbaren Inhalt")
     except OSError as exc:
         fehler.append(f"Tresorbaum kann nicht vollständig geprüft werden — {exc}")
     for p in _quarantine_payloads():

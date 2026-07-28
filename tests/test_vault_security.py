@@ -171,6 +171,55 @@ class VaultSecurityTests(unittest.TestCase):
                     result.stdout,
                 )
 
+    def test_nested_frontmatter_is_rejected_and_never_flattened(self):
+        """Blockform-Nesting hob Unterschlüssel früher still ins Top-Level."""
+        module = self.load_vault(self.root, "nesting")
+        faelle = (
+            ("blockform", "generated:\n  by: agent/1\n  at: 2026-06-20T22:53:05Z"),
+            ("map-liste", "quellen:\n  - id: a\n    resource: https://example.invalid/x"),
+            ("tabulator", "generated:\n\tby: agent/1"),
+        )
+        for name, block in faelle:
+            with self.subTest(fall=name):
+                fm, _, fehler, _ = module.parse_frontmatter(
+                    f"---\ntype: konzept\n{block}\n---\n\nRumpf\n", "fixture.md"
+                )
+                self.assertTrue(
+                    any("Einrückung außerhalb der Profil-Untermenge" in eintrag
+                        for eintrag in fehler),
+                    fehler,
+                )
+                for gestreut in ("by", "at", "resource"):
+                    self.assertNotIn(gestreut, fm)
+
+    def test_nested_frontmatter_fails_validate(self):
+        self.replace_text(
+            "knowledge/demo-okf/okf.md",
+            "type: konzept",
+            "type: konzept\ngenerated:\n  by: reference_agent/x",
+        )
+        self.assert_validate_fails("Einrückung außerhalb der Profil-Untermenge")
+
+    def test_foreign_file_types_in_vault_are_rejected(self):
+        """Der Tresor liefert Wissen aus; auch ein zweites Script bleibt draußen."""
+        for relative, payload in (
+            ("scripts/run-on-bq.sh", b"#!/bin/sh\necho x\n"),
+            ("knowledge/payload.zip", b"PK\x03\x04"),
+            ("references/attesters/revenue.py", b"print('attester')\n"),
+        ):
+            with self.subTest(relative=relative):
+                root = self.new_vault()
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(payload)
+                result = self.run_cli("validate", root=root)
+                self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertIn("keinen ausführbaren Inhalt", result.stdout)
+
+    def test_executable_bit_in_vault_is_rejected(self):
+        os.chmod(self.root / "knowledge/demo-okf/okf.md", 0o755)
+        self.assert_validate_fails("Ausführungsbit ist gesetzt")
+
     def test_route_rejects_traversing_router_entry(self):
         self.replace_text(
             "ROUTER.md",

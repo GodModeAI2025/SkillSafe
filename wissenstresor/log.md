@@ -24,3 +24,5 @@ Eintraege nur ueber `python3 scripts/vault.py log <aktion> "<text>"`.
 ## [2026-07-26] release | v0.5.2 — 4 Seiten, 16 Claims, 3 Quellen (patch)
 ## [2026-07-26] release | v0.6.0 — 4 Seiten, 16 Claims, 3 Quellen (minor)
 ## [2026-07-26] release | v0.6.1 — 4 Seiten, 16 Claims, 3 Quellen (patch)
+## [2026-07-28] note | Parser lehnt verschachteltes Frontmatter fail-closed ab (Blockform hob Unterschluessel still ins Top-Level); validate und Paketbau fuehren unabhaengig eine Allowlist erlaubter Dateiarten mit Verbot ausfuehrbarer Inhalte
+## [2026-07-28] release | v0.6.2 — 4 Seiten, 16 Claims, 3 Quellen (patch)

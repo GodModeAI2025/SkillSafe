@@ -31,6 +31,26 @@ Optionale Felder:
 Frontmatter nutzt nur Skalar, Inline-Liste und Bindestrich-Liste. Kein
 Nesting. Listenfelder müssen tatsächlich als Liste geschrieben werden.
 
+Verschachtelung wird abgelehnt, nicht toleriert: jede eingerückte Zeile, die
+keine Listenzeile `  - wert` ist, ist ein Validierungsfehler. Das gilt auch
+für die YAML-Blockform `schlüssel:` mit eingerückten Unterschlüsseln
+darunter. Ohne diese Regel zog die Blockform ihre Unterschlüssel still ins
+Top-Level und machte den Wert zur leeren Liste, also Strukturkorruption ohne
+Fehlermeldung. Wer verschachtelte Angaben braucht, legt sie als strikte
+JSON-Registry unter `sources/derived/` ab, nach dem Muster von
+`skillsafe.media/v1`, und weicht nicht den Parser auf.
+
+## Dateiarten im Tresor
+
+Der Tresor liefert Wissen aus, keinen ausführbaren Inhalt. `validate` lässt
+im Baum nur zu: `.md`, `.json`, `.yaml`, `.sha256`, die registrierten
+Medienformate aus dem Register, die endungslosen Dateien `LICENSE` und
+`VERSION` sowie genau ein Python-Script, `scripts/vault.py`. Ein zweites
+Script, ein Archiv, ein Binary oder ein gesetztes Ausführungsbit bricht
+fail-closed ab. `tools/build_skill_package.py` führt dieselbe Allowlist
+unabhängig ein zweites Mal, damit der Paketbau nicht von dem Script abhängt,
+das er verpackt.
+
 ## Claim-Grammatik
 
 ```text

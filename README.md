@@ -18,13 +18,17 @@ geschützte `dir_fd`-Operationen fail-closed ab.
 📖 **Konzept & Architekturentscheidungen:** [`wissenstresor/KONZEPT.md`](wissenstresor/KONZEPT.md)
 🌐 **Landingpage:** [`index.html`](index.html) (GitHub-Pages-fähig, Source = repo root)
 
-**Aktueller Release: v0.6.1** — Begriffswelten, deterministisches
-Hybrid-Retrieval, geprüfte Bild-/PDF-Regionen und ein reproduzierbares
-`.skill`-Paket für Claude Code und Codex.
+**Aktueller Release: v0.6.2** mit Begriffswelten, deterministischem
+Hybrid-Retrieval, geprüften Bild-/PDF-Regionen und einem reproduzierbaren
+`.skill`-Paket für Claude Code und Codex. Seit v0.6.2 lehnt der
+Frontmatter-Parser Verschachtelung fail-closed ab statt sie still
+umzubauen, und Validierung wie Paketbau führen unabhängig voneinander eine
+Allowlist erlaubter Dateiarten: kein zweites Script, kein Archiv, kein
+gesetztes Ausführungsbit.
 
-Abnahme: 43 Tests bestanden · 28 manifestierte Dateien · 30 sichere
+Abnahme: 48 Tests bestanden · 28 manifestierte Dateien · 30 sichere
 Paketeinträge · SHA-256
-`2954197872dadbbfb2ab34d87c8f35fb113d9ccde0d7fb9f2ee0f81cada8a2b7`.
+`ac7c877baab9534f1d92ff6080c5c500f2ff0a98a406b441a7e0fc1d4189c15f`.
 
 ## RAG-ähnlich, aber lokal und überprüfbar
 

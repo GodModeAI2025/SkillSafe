@@ -42,6 +42,17 @@ import unicodedata
 from datetime import date
 from pathlib import Path
 
+# Die Ausgabe ist UTF-8, auch wenn die Umgebung etwas anderes vorgibt. Auf
+# einer cp1252-Konsole (Windows-Voreinstellung) starb sonst jedes Kommando mit
+# UnicodeEncodeError an der Ampel, statt lesbar zu bleiben. Nicht darstellbare
+# Zeichen werden ersetzt, nie verschluckt.
+for _strom in (sys.stdout, sys.stderr):
+    if hasattr(_strom, "reconfigure"):
+        try:
+            _strom.reconfigure(encoding="utf-8", errors="backslashreplace")
+        except (AttributeError, OSError, ValueError):
+            pass
+
 ROOT = Path(__file__).resolve().parent.parent
 KNOWLEDGE = ROOT / "knowledge"
 SOURCES = ROOT / "sources"

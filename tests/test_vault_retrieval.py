@@ -6,6 +6,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -28,7 +29,7 @@ class VaultRetrievalTests(unittest.TestCase):
         env = os.environ.copy()
         env["PYTHONDONTWRITEBYTECODE"] = "1"
         return subprocess.run(
-            ["python3", "-B", str(self.root / "scripts/vault.py"), *args],
+            [sys.executable, "-B", str(self.root / "scripts/vault.py"), *args],
             cwd=self.root,
             env=env,
             text=True,

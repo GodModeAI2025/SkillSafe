@@ -9,6 +9,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 import stat
@@ -49,7 +50,7 @@ class VaultSecurityTests(unittest.TestCase):
         env = os.environ.copy()
         env["PYTHONDONTWRITEBYTECODE"] = "1"
         return subprocess.run(
-            ["python3", "-B", str(root / "scripts" / "vault.py"), *args],
+            [sys.executable, "-B", str(root / "scripts" / "vault.py"), *args],
             cwd=root,
             env=env,
             text=True,

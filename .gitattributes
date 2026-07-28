@@ -5,3 +5,6 @@
 *.json text eol=lf
 *.sha256 text eol=lf
 VERSION text eol=lf
+LICENSE text eol=lf
+# Endungslose Dateien fallen sonst unter 'text=auto'. Ein Windows-Klon
+# schriebe CRLF, der Hash wiche vom Manifest ab und doctor waere rot.

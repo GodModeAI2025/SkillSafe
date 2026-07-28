@@ -34,3 +34,5 @@ Eintraege nur ueber `python3 scripts/vault.py log <aktion> "<text>"`.
 ## [2026-07-28] release | v0.9.0 — 5 Seiten, 26 Claims, 4 Quellen (minor)
 ## [2026-07-28] note | Haertungsrelease nach externem Audit: eingeruecktes '---' beendete das Frontmatter still (Terminator jetzt strikt); Export schreibt ueber Staging und ersetzt das Ziel atomar (Symlink im Zielordner trug den Export heraus, Halbstand und verwaiste Dokumente bei Re-Export); Trust-Tier wird nicht mehr ins Bundle geschrieben (Widerspruch zur Zusage 'nie gespeichert'); reservierte Dateinamen index.md/log.md und Tag-Zeichen ,[] abgelehnt; Begriffslabels injection-geprueft und als Frontmatter statt HTML-Kommentar exportiert; Linktexte escaped; _trust_tier typfest; Dekodierfehler in Export und Log abgefangen; Satzende-Erkennung respektiert deutsche Abkuerzungen
 ## [2026-07-28] release | v0.10.0 — 5 Seiten, 26 Claims, 4 Quellen (minor)
+## [2026-07-28] note | Betriebsreife: Ausgabe auf Nicht-UTF-8-Konsolen gehaertet (cp1252 brach mit UnicodeEncodeError ab), Bootstrap-Workflow in die Tabelle aufgenommen
+## [2026-07-28] release | v0.10.1 — 5 Seiten, 26 Claims, 4 Quellen (patch)

@@ -1,5 +1,15 @@
 # Umsetzungsplan: OKF v0.2 in SkillSafe
 
+> **Abgeschlossenes Arbeitsprotokoll.** Die Migration auf OKF v0.2 ist mit
+> v0.10.0 durch (R1 bis R5 erledigt, R6 bewusst offen). Dieses Dokument ist die
+> Begründungsspur: es hält fest, was gemessen wurde und warum entschieden wurde
+> wie entschieden. Es ist **keine gültige Anleitung**.
+>
+> Verbindlich sind `README.md` (Projektsicht), `BETRIEB.md` (Betriebssicht) und
+> `wissenstresor/SKILL.md` (Vertrag für das Modell). Das dauerhafte
+> Betriebswissen aus diesem Plan steht inzwischen in `BETRIEB.md`.
+
+
 Stand: 2026-07-28. Grundlage ist die vollständige `SPEC.md` aus
 `GoogleCloudPlatform/knowledge-catalog` (Ordner `okf/`, v0.2 seit
 2026-07-24, Apache-2.0) sowie eine Zeile-für-Zeile-Prüfung des eigenen

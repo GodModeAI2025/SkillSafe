@@ -7,6 +7,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 import zipfile
@@ -21,7 +22,7 @@ PACKAGE_BUILDER = REPOSITORY / "tools/build_skill_package.py"
 class PackagedVaultTests(unittest.TestCase):
     def test_checked_in_skill_and_claude_style_install_are_green(self):
         direct = subprocess.run(
-            ["python3", "-B", str(SOURCE_SKILL / "scripts/vault.py"), "doctor"],
+            [sys.executable, "-B", str(SOURCE_SKILL / "scripts/vault.py"), "doctor"],
             cwd=SOURCE_SKILL,
             text=True,
             stdout=subprocess.PIPE,
@@ -71,7 +72,7 @@ class PackagedVaultTests(unittest.TestCase):
             for target in (first, second):
                 built = subprocess.run(
                     [
-                        "python3", "-B", str(PACKAGE_BUILDER),
+                        sys.executable, "-B", str(PACKAGE_BUILDER),
                         "--skill", str(SOURCE_SKILL),
                         "--output", str(target),
                     ],
@@ -113,7 +114,7 @@ class PackagedVaultTests(unittest.TestCase):
             )
             query = subprocess.run(
                 [
-                    "python3", "-B", str(installed / "scripts/vault.py"),
+                    sys.executable, "-B", str(installed / "scripts/vault.py"),
                     "query", "OKF",
                 ],
                 cwd=project,

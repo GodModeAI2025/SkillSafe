@@ -76,6 +76,7 @@ dieser Workflow ausdrücklich darauf verweist:
 | Bild, Scan oder PDF als belegbare Quelle aufnehmen | Multimodal | `references/multimodal.md` |
 | Fachbegriffe, Synonyme oder Hierarchie pflegen | Begriffswelten | `references/begriffswelten.md` |
 | Bestand prüfen, aufräumen, Drift finden | Lint | `references/lint.md` |
+| Neue Tresor-Instanz anlegen, Demo-Bestand ersetzen | Bootstrap | `references/mehrere-tresore.md`, Abschnitt 4 |
 
 Der OKF-Export steht bewusst **nicht** in dieser Tabelle: kein Workflow ruft ihn auf. Er gibt Wissen aus der Hand, und das entscheidet ein Mensch. Protokoll und Grenzen: `references/export-okf.md`.
 

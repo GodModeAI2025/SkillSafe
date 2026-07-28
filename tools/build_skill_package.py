@@ -208,7 +208,7 @@ def verify_archive(archive_path, root_name, files):
 
 def run_doctor(skill, cwd):
     result = subprocess.run(
-        ["python3", "-B", str(skill / "scripts/vault.py"), "doctor"],
+        [sys.executable, "-B", str(skill / "scripts/vault.py"), "doctor"],
         cwd=cwd,
         env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
         text=True,

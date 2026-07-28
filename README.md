@@ -18,7 +18,7 @@ geschützte `dir_fd`-Operationen fail-closed ab.
 📖 **Konzept & Architekturentscheidungen:** [`wissenstresor/KONZEPT.md`](wissenstresor/KONZEPT.md)
 🌐 **Landingpage:** [`index.html`](index.html) (GitHub-Pages-fähig, Source = repo root)
 
-**Aktueller Release: v0.10.0** (Profil `oksv-lite/1.2`) mit Begriffswelten,
+**Aktueller Release: v0.10.1** (Profil `oksv-lite/1.2`) mit Begriffswelten,
 deterministischem Hybrid-Retrieval, geprüften Bild-/PDF-Regionen und einem
 reproduzierbaren `.skill`-Paket für Claude Code und Codex. Der
 Frontmatter-Parser lehnt Verschachtelung fail-closed ab statt sie still
@@ -37,7 +37,23 @@ OKF-v0.2-Bundle nach außen, ohne dass sich am internen Datenvertrag etwas
 
 Abnahme: 68 Tests bestanden · 31 manifestierte Dateien · 33 sichere
 Paketeinträge · SHA-256
-`7136aa6833c5a338671831d6ba070ec4ab597c4a8112a4e9701012ca409215be`.
+`fa88863bf81cea52f6b48added76f4f9768bccf97a25b7048e021f90f7931069`.
+
+Alles läuft mit der Python-Standardbibliothek, gemessen mit CPython 3.9.6 und
+3.13.13; beide bauen dasselbe Paket mit demselben SHA-256. Selbst nachrechnen
+aus der Repository-Wurzel:
+
+```bash
+python3 -m unittest discover -s tests -t .
+cd wissenstresor && python3 scripts/vault.py doctor
+cd .. && python3 tools/build_skill_package.py && python3 tools/check_docs.py
+```
+
+Wie man am Projekt arbeitet, freigibt und Störfälle behebt, steht in
+[`BETRIEB.md`](BETRIEB.md). Eine Regel daraus vorweg, weil sie sonst Zeit
+kostet: **die Tests sind nach jeder Änderung unter `wissenstresor/` erst nach
+`checksum` oder `release` aussagekräftig**, weil sie `doctor` aufrufen und
+`doctor` bei Manifest-Drift rot wird.
 
 ## RAG-ähnlich, aber lokal und überprüfbar
 
@@ -77,7 +93,9 @@ SkillSafe/
 ├── README.md              dieses Dokument
 ├── LICENSE                Apache License 2.0
 ├── index.html             Landingpage (GitHub-Pages-fähig, ohne Build-Schritt)
-├── tools/                 deterministischer lokaler Paketbau
+├── BETRIEB.md             Betriebs- und Übergabewissen (Release, Störfälle, CI)
+├── .github/workflows/     CI-Kette: validate, verify, doctor, Tests, Paketbau
+├── tools/                 deterministischer Paketbau und Zahlenwächter
 ├── tests/                 Sicherheits-, Retrieval- und Portabilitätstests
 └── wissenstresor/         der Skill selbst — das eigentliche Artefakt
     ├── SKILL.md           Motor: Vertrag für das Modell

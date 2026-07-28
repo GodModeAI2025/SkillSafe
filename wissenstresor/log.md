@@ -30,3 +30,5 @@ Eintraege nur ueber `python3 scripts/vault.py log <aktion> "<text>"`.
 ## [2026-07-28] release | v0.7.0 — 5 Seiten, 26 Claims, 4 Quellen (minor)
 ## [2026-07-28] note | Profil oksv-lite/1.2: optionale Pruefangabe geprueft_von/geprueft_am (Paar, Aktorgrammatik mensch/prozess/agent, Kalendertag), Trust-Tier nach OKF v0.2 §5.3 abgeleitet und nie gespeichert, nie im Score; Envelope und stats um Tier erweitert, doctor-Hinweis nur wenn der Bestand das Feld nutzt
 ## [2026-07-28] release | v0.8.0 — 5 Seiten, 26 Claims, 4 Quellen (minor)
+## [2026-07-28] note | Neues Kommando export --okf: freigegebener Bestand als OKF-v0.2-Bundle ausserhalb des Tresors, byteidentisch, status/Aktor/Fussnoten/Relationen/index/log uebersetzt; Ziel fail-closed gegen Skill-Ladeorte, Tresorinneres und Fremdinhalt, Rohquellen nur mit --with-sources; neue Referenzdatei references/export-okf.md, Exportgrenze in AD-06
+## [2026-07-28] release | v0.9.0 — 5 Seiten, 26 Claims, 4 Quellen (minor)

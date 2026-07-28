@@ -77,6 +77,8 @@ dieser Workflow ausdrücklich darauf verweist:
 | Fachbegriffe, Synonyme oder Hierarchie pflegen | Begriffswelten | `references/begriffswelten.md` |
 | Bestand prüfen, aufräumen, Drift finden | Lint | `references/lint.md` |
 
+Der OKF-Export steht bewusst **nicht** in dieser Tabelle: kein Workflow ruft ihn auf. Er gibt Wissen aus der Hand, und das entscheidet ein Mensch. Protokoll und Grenzen: `references/export-okf.md`.
+
 ## CLI-Kurzreferenz (`python3 scripts/vault.py …`)
 
 | Kommando | Zweck |
@@ -94,6 +96,7 @@ dieser Workflow ausdrücklich darauf verweist:
 | `route <frage…>` | Frage deterministisch routen; meldet Mischfragen über Domänen |
 | `doctor` | Gesamtdiagnose mit Ampel (validate + Drift + Orphans + Manifest) |
 | `release [major\|minor\|patch]` | Transaktionaler Release: validate-Gate → vorbereiten → VERSION/Log → Manifest zuletzt |
+| `export --okf --out <pfad> [--with-sources]` | Freigegebenen Bestand als OKF-v0.2-Bundle ausgeben; schreibt nur außerhalb des Tresors |
 
 Nach jeder inhaltlichen Änderung gilt die feste Kette — als ein Befehl:
 `python3 scripts/vault.py release <stufe>`. Sie bricht fail-closed ab, wenn
@@ -120,7 +123,7 @@ wissenstresor/
 ├── LICENSE             Apache-2.0-Lizenz für eigenständige Weitergabe
 ├── scripts/vault.py    Motor: deterministische Engine (nur Stdlib)
 ├── schema/             Motor: Profil, Typen und Begriffswelten
-├── references/         Motor: Workflow-Protokolle
+├── references/         Motor: Workflow-Protokolle (inkl. OKF-Export)
 ├── knowledge/<domäne>/ Treibstoff: OKF-Seiten mit Claims (Quellentrennung = Ordner)
 ├── sources/            Treibstoff: Register, raw/, derived/ und quarantine/
 ├── graph/graph.json    Treibstoff: abgeleiteter Wissensgraph

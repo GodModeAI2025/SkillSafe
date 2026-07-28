@@ -182,6 +182,16 @@ wird hier nach fester Reihenfolge aufgelöst statt offen gelassen — aber
 transparent, nie kommentarlos: analog zur Supersession bleibt die
 überschriebene Basis benannt, nur nicht mehr als maßgeblich dargestellt.
 
+**Exportgrenze:** `vault.py export --okf` gibt einen Stand nach außen und
+steht damit quer zu „die Grenze ist der Installationsort". Deshalb ist das
+Ziel mechanisch eingeschränkt: außerhalb von `ROOT`, kein Pfadsegment
+`.claude` oder `.codex` (ein Bundle ohne Engine und Manifest darf nie als
+Skill geladen werden), und entweder leer oder ein früherer Export. Rohquellen
+wandern nur mit `--with-sources` mit, weil die Rechte-Spalte Freitext ist und
+ein Script daraus nichts ableiten kann. Ein Rückweg existiert nicht: fremdes
+OKF kommt über den regulären Ingest, nie über einen Import. Details:
+`references/export-okf.md`.
+
 **Grenze:** Eine Person mit legitimem Zugriff auf zwei Tresore gleichzeitig
 ist unproblematisch — das Restrisiko ist Antwort-Attribution/Vermischung
 in einer Session mit mehreren geladenen Tresoren, nicht Dateizugriff
@@ -291,11 +301,19 @@ C-0301 bis C-0310). Für das Profil gilt:
 | `stale_after` (§5.5) | `stand` | Echte Lücke: `stand` ist deskriptiv, kein Verfallsdatum |
 | Attestierung (§10) | `MANIFEST.sha256`, Register-Hashes, reproduzierbares Paket | Verschiedene Ebenen: hier ruhende Bytes, dort ein einzelner Rechenlauf. Ablehnung siehe AD-09 |
 
-Die Wertetabelle für einen künftigen Export lautet `aktiv` zu `stable`,
-`veraltet` zu `deprecated`, `in-pruefung` zu `draft`. Sie ist die einzige
-Stelle exakter semantischer Deckung zwischen beiden Welten. Solange kein
-Export existiert, behauptet der Tresor keine Abbildung; die Namenskollisionen
-stehen in `schema/profil.md`.
+Die Abbildung nach außen leistet `vault.py export --okf`, und zwar
+ausschließlich dort: der interne Datenvertrag bleibt unangetastet. `aktiv` zu
+`stable`, `veraltet` zu `deprecated`, `in-pruefung` zu `draft` ist die einzige
+Stelle exakter semantischer Deckung zwischen beiden Welten. Alles Weitere ist
+Übersetzung mit benannten Verlusten (`generated`, `sources[].author`,
+`usage_count`), und was nicht abbildbar ist, bleibt leer statt geraten zu
+werden. Protokoll und Grenzen: `references/export-okf.md`. Die
+Namenskollisionen selbst stehen in `schema/profil.md`.
+
+Der Tresor bleibt dabei einseitig: er produziert OKF, er konsumiert keins.
+Ein Import fremder Bundles gibt es nicht, weil die Evidenzbindung an eine
+gehashte lokale Datei nicht importierbar ist. Fremdes OKF-Wissen kommt
+denselben Weg wie jede andere Quelle.
 
 ## Antwort- und Befüll-Pfad (Kurzfassung)
 

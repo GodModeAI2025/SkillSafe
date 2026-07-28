@@ -18,7 +18,7 @@ geschützte `dir_fd`-Operationen fail-closed ab.
 📖 **Konzept & Architekturentscheidungen:** [`wissenstresor/KONZEPT.md`](wissenstresor/KONZEPT.md)
 🌐 **Landingpage:** [`index.html`](index.html) (GitHub-Pages-fähig, Source = repo root)
 
-**Aktueller Release: v0.8.0** (Profil `oksv-lite/1.2`) mit Begriffswelten,
+**Aktueller Release: v0.9.0** (Profil `oksv-lite/1.2`) mit Begriffswelten,
 deterministischem Hybrid-Retrieval, geprüften Bild-/PDF-Regionen und einem
 reproduzierbaren `.skill`-Paket für Claude Code und Codex. Der
 Frontmatter-Parser lehnt Verschachtelung fail-closed ab statt sie still
@@ -31,9 +31,13 @@ gegengeprüft hat und wann; daraus leitet die Engine ein Trust-Tier nach
 OKF v0.2 §5.3 ab, ohne es zu speichern und ohne es je in das Ranking
 einzurechnen.
 
-Abnahme: 52 Tests bestanden · 30 manifestierte Dateien · 32 sichere
+Seit v0.9.0 gibt `export --okf` den freigegebenen Bestand als
+OKF-v0.2-Bundle nach außen, ohne dass sich am internen Datenvertrag etwas
+ändert.
+
+Abnahme: 58 Tests bestanden · 31 manifestierte Dateien · 33 sichere
 Paketeinträge · SHA-256
-`99745997113aa2c5a15db90282be8cfbda83cdc692d748dad8096eca5b8cddb4`.
+`de812f72e07654a773c46a9c493cd8298955cc6d9744b88bf8a42e677a6006d3`.
 
 ## RAG-ähnlich, aber lokal und überprüfbar
 
@@ -81,7 +85,7 @@ SkillSafe/
     ├── LICENSE             Apache-2.0-Lizenz im portablen Artefakt
     ├── scripts/vault.py   Motor: deterministische Engine (nur Stdlib)
     ├── schema/            Motor: Profil, Typen und Begriffswelten
-    ├── references/        Motor: Antwort-, Ingest-, Medien-, Begriffs- und Lint-Workflows
+    ├── references/        Motor: Antwort-, Ingest-, Medien-, Begriffs-, Lint- und Export-Workflows
     ├── knowledge/          Treibstoff: Wissensseiten im OKF-Muster (Profil oksv-lite/1.2), nach Domäne getrennt
     ├── sources/            Treibstoff: Register, raw/, derived/, Quarantäne
     ├── graph/graph.json    Treibstoff: abgeleiteter Wissensgraph
@@ -176,6 +180,31 @@ Antworten-Workflow anhand der Kante und benennt beide.
 
 Aktueller Stand: 🟢 `validate` 0 Fehler, 0 Warnungen · `doctor` grün ·
 `checksum --verify` grün.
+
+## Nach OKF v0.2 exportieren
+
+Der Tresor ist ein strenger OKF-**Produzent** für den eigenen Bestand und
+bewusst kein allgemeiner OKF-**Consumer**. Nach außen:
+
+```bash
+cd wissenstresor
+python3 scripts/vault.py export --okf --out ../okf-bundle
+```
+
+Das schreibt eine Momentaufnahme in OKF v0.2 außerhalb des Tresors: `status`
+übersetzt, `sources` aus dem Register aufgefaltet, Claim-Fußnoten nach §5.1,
+Relationen als bundle-relative Links, `index.md` pro Verzeichnis nach §8,
+`log.md` nach §9. Zwei Exporte desselben Stands sind byteidentisch.
+
+Das Ziel ist fail-closed eingeschränkt: außerhalb des Tresors, niemals in
+einem Skill-Ladeort (`.claude`, `.codex`), und entweder leer oder ein früherer
+Export. Ein Bundle hat keine Engine, kein Manifest und keine Regeln; es darf
+nie als Skill geladen werden. Rohquellen wandern nur mit `--with-sources` mit,
+weil die Rechte-Spalte Freitext ist und darüber ein Mensch entscheidet.
+
+Ein Rückweg existiert nicht. Fremdes OKF-Wissen kommt denselben Weg wie jede
+andere Quelle: Quarantäne, lokaler Abzug, Registrierung, Claim-Extraktion.
+Protokoll und benannte Verluste: [`references/export-okf.md`](wissenstresor/references/export-okf.md).
 
 ## Grenzen
 

@@ -2,6 +2,7 @@
 """Sicherheits- und Regressionstests für den portablen Wissenstresor."""
 
 import contextlib
+import hashlib
 import importlib.util
 import io
 import json
@@ -327,6 +328,148 @@ class VaultSecurityTests(unittest.TestCase):
         }
         self.assertIn("trust_tier:unverified", signale["C-0001"])
         self.assertNotIn("trust_tier:unverified", signale["C-0301"])
+
+    def export(self, ziel, *extra, root=None):
+        return self.run_cli(
+            "export", "--okf", "--out", str(ziel), *extra, root=root
+        )
+
+    @staticmethod
+    def tree_digest(ordner: Path):
+        digest = hashlib.sha256()
+        for path in sorted(ordner.rglob("*")):
+            if path.is_file():
+                digest.update(path.relative_to(ordner).as_posix().encode())
+                digest.update(path.read_bytes())
+        return digest.hexdigest()
+
+    def test_okf_export_is_byte_identical_and_reexportable(self):
+        erst, zweit = self.work / "okf-a", self.work / "okf-b"
+        for ziel in (erst, zweit):
+            result = self.export(ziel)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.tree_digest(erst), self.tree_digest(zweit))
+        # Ein früherer Export wird am okf_version im Wurzel-index.md erkannt
+        # und darf ersetzt werden, ein fremder Ordner nicht.
+        wieder = self.export(erst)
+        self.assertEqual(wieder.returncode, 0, wieder.stdout + wieder.stderr)
+        self.assertEqual(self.tree_digest(erst), self.tree_digest(zweit))
+
+    def test_okf_export_output_satisfies_conformance_one_and_two(self):
+        ziel = self.work / "okf-konform"
+        result = self.export(ziel)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        konzepte = [
+            p for p in sorted(ziel.rglob("*.md"))
+            if p.name not in ("index.md", "log.md")
+        ]
+        self.assertTrue(konzepte)
+        for path in konzepte:
+            with self.subTest(datei=path.name):
+                zeilen = path.read_text(encoding="utf-8").split("\n")
+                self.assertEqual(zeilen[0].strip(), "---")
+                ende = next(
+                    (n for n, line in enumerate(zeilen[1:], 1)
+                     if line.strip() == "---"),
+                    None,
+                )
+                self.assertIsNotNone(ende)
+                typen = [
+                    line for line in zeilen[1:ende] if line.startswith("type:")
+                ]
+                self.assertEqual(len(typen), 1)
+                self.assertTrue(typen[0].split(":", 1)[1].strip())
+        wurzel = (ziel / "index.md").read_text(encoding="utf-8")
+        self.assertTrue(wurzel.startswith("---\nokf_version: \"0.2\"\n---"))
+
+    def test_okf_export_refuses_skill_load_paths_and_foreign_folders(self):
+        faelle = (
+            (".claude", self.work / "install/.claude/skills/exportiert",
+             "Skill-Ladeort"),
+            (".codex", self.work / "install/.codex/skills/exportiert",
+             "Skill-Ladeort"),
+            ("im Tresor", self.root / "export-hier", "innerhalb des Tresors"),
+        )
+        for name, ziel, fragment in faelle:
+            with self.subTest(fall=name):
+                result = self.export(ziel)
+                self.assertNotEqual(
+                    result.returncode, 0, result.stdout + result.stderr
+                )
+                self.assertIn(fragment, result.stdout)
+                self.assertFalse(ziel.exists())
+
+        fremd = self.work / "fremder-ordner"
+        fremd.mkdir()
+        (fremd / "wichtig.txt").write_text("nicht überschreiben\n", encoding="utf-8")
+        result = self.export(fremd)
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("nicht leer", result.stdout)
+        self.assertTrue((fremd / "wichtig.txt").is_file())
+        self.assertEqual(sorted(p.name for p in fremd.iterdir()), ["wichtig.txt"])
+
+    def test_okf_export_gates_on_manifest_and_validate(self):
+        ziel = self.work / "okf-gate"
+        page = self.root / "knowledge/demo-okf/okf.md"
+        page.write_text(
+            page.read_text(encoding="utf-8") + "\nDrift\n", encoding="utf-8"
+        )
+        drift = self.export(ziel)
+        self.assertNotEqual(drift.returncode, 0, drift.stdout + drift.stderr)
+        self.assertIn("Manifest", drift.stdout)
+        self.assertFalse(ziel.exists())
+
+        self.replace_text(
+            "knowledge/demo-okf/okf.md", "type: konzept", "type: erfunden"
+        )
+        release = self.run_cli("checksum")
+        self.assertEqual(release.returncode, 0, release.stdout + release.stderr)
+        kaputt = self.export(ziel)
+        self.assertNotEqual(kaputt.returncode, 0, kaputt.stdout + kaputt.stderr)
+        self.assertIn("validate ist rot", kaputt.stdout)
+        self.assertFalse(ziel.exists())
+
+    def test_okf_export_keeps_raw_sources_behind_a_flag(self):
+        ohne, mit = self.work / "okf-ohne", self.work / "okf-mit"
+        erst = self.export(ohne)
+        self.assertEqual(erst.returncode, 0, erst.stdout + erst.stderr)
+        self.assertFalse((ohne / "sources").exists())
+        seite = (ohne / "demo-okf/okf.md").read_text(encoding="utf-8")
+        self.assertIn("resource: registered source S-0001, file not exported", seite)
+
+        zweit = self.export(mit, "--with-sources")
+        self.assertEqual(zweit.returncode, 0, zweit.stdout + zweit.stderr)
+        kopien = sorted(p.name for p in (mit / "sources/raw").iterdir())
+        self.assertEqual(len(kopien), 4)
+        seite = (mit / "demo-okf/okf.md").read_text(encoding="utf-8")
+        self.assertIn(
+            "resource: /sources/raw/S-0001__google-okf-announcement.md", seite
+        )
+
+    def test_okf_export_translates_status_and_actor(self):
+        self.replace_text(
+            "knowledge/demo-okf/okf-v02.md",
+            "type: konzept",
+            "type: konzept\ngeprueft_von: mensch:kuratorin\n"
+            "geprueft_am: 2026-07-28",
+        )
+        release = self.run_cli("release", "patch")
+        self.assertEqual(release.returncode, 0, release.stdout + release.stderr)
+        ziel = self.work / "okf-mapping"
+        result = self.export(ziel)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+        veraltet = (ziel / "demo-okf/okf.md").read_text(encoding="utf-8")
+        self.assertIn("status: deprecated", veraltet)
+        self.assertNotIn("veraltet", veraltet.split("---")[1])
+
+        aktuell = (ziel / "demo-okf/okf-v02.md").read_text(encoding="utf-8")
+        self.assertIn("status: stable", aktuell)
+        self.assertIn("verified: { by: human:kuratorin, at: 2026-07-28 }", aktuell)
+        self.assertIn("oksv_trust_tier: human-reviewed", aktuell)
+        # Fussnotenlabel ist die S-ID, nicht die C-ID (§5.1 Join-Key).
+        self.assertIn("[^S-0004]", aktuell)
+        self.assertIn("- ersetzt: [okf](/demo-okf/okf.md)", aktuell)
 
     def test_route_rejects_traversing_router_entry(self):
         self.replace_text(

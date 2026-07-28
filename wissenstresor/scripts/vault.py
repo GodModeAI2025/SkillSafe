@@ -106,6 +106,18 @@ ACTOR_RE = re.compile(
 TIER_UNVERIFIED = "unverified"
 TIER_MACHINE = "machine-confirmed"
 TIER_HUMAN = "human-reviewed"
+
+# ---- OKF-Export (nur ausgehend; der Tresor konsumiert kein fremdes OKF) ----
+OKF_VERSION = "0.2"
+# Die einzige Stelle exakter semantischer Deckung zwischen beiden Welten.
+STATUS_OKF = {"aktiv": "stable", "veraltet": "deprecated", "in-pruefung": "draft"}
+# Aktorpräfixe nach OKF v0.2 §7. Die Rückrichtung ist bei Großbuchstaben in
+# IDs nicht eindeutig; der Export ist bewusst eine Einbahnstraße.
+ACTOR_OKF = {"mensch:": "human:", "prozess:": "process:", "agent:": ""}
+# Ein exportiertes Bundle hat keine Engine, kein Manifest und keine Regeln.
+# Landet es in einem Skill-Ladeort, lädt ein Agent es als Wissensquelle ohne
+# jede Absicherung. Genau diese Vermischung verhindert AD-06.
+EXPORT_VERBOTENE_SEGMENTE = {".claude", ".codex"}
 VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
 SID_RE = re.compile(r"^S-\d{4}$")
 CID_RE = re.compile(r"^C-\d{4}$")
@@ -3032,6 +3044,349 @@ def cmd_release(stufe):
     return ergebnis
 
 
+# --------------------------------------------------------- OKF-Export
+
+def _yaml_scalar(value):
+    """Skalar so ausgeben, dass jeder YAML-Parser ihn wieder gleich liest."""
+    text = str(value)
+    heikel = (
+        not text
+        or text != text.strip()
+        or text[0] in "-?:,[]{}#&*!|>'\"%@`"
+        or ": " in text
+        or text.endswith(":")
+        or " #" in text
+    )
+    if not heikel:
+        return text
+    return '"' + text.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def _okf_actor(actor):
+    """Deutsche Aktorkennung auf die Konvention aus OKF v0.2 §7 abbilden."""
+    for praefix, ersatz in ACTOR_OKF.items():
+        if actor.startswith(praefix):
+            return ersatz + actor[len(praefix):]
+    return actor
+
+
+def _okf_description(body):
+    """Ersten Satz der Kurzfassung ziehen. Kein Satz, kein Feld."""
+    zeilen, sammeln = [], False
+    for line in body.split("\n"):
+        if line.startswith("## "):
+            if sammeln:
+                break
+            sammeln = line[3:].strip().lower() == "kurzfassung"
+            continue
+        if sammeln:
+            if not line.strip() and zeilen:
+                break
+            if line.strip():
+                zeilen.append(line.strip())
+    text = " ".join(zeilen)
+    if not text:
+        return None
+    kopf, punkt, _ = text.partition(". ")
+    return (kopf + ".") if punkt else text
+
+
+def _okf_sources(fm, register, mit_quellen):
+    """sources-Block nach §5.1 aus Frontmatter plus Registerzeile bauen."""
+    zeilen = []
+    for sid in fm.get("sources", []):
+        eintrag = register.get(sid, {})
+        if mit_quellen:
+            resource = "/" + eintrag.get("ablage", f"sources/raw/{sid}")
+        else:
+            # §5.1 erlaubt ausdrücklich einen nicht folgbaren Deskriptor. Die
+            # Rechte-Spalte ist Freitext; ob eine Ablage weitergegeben werden
+            # darf, entscheidet ein Mensch über --with-sources, nicht ein Regex.
+            resource = f"registered source {sid}, file not exported"
+        zeilen.append(f"  - id: {sid}")
+        zeilen.append(f"    resource: {_yaml_scalar(resource)}")
+        if eintrag.get("titel"):
+            zeilen.append(f"    title: {_yaml_scalar(eintrag['titel'])}")
+        if _iso_date(eintrag.get("stand", "")):
+            zeilen.append(f"    last_modified: {eintrag['stand']}")
+        zeilen.append(f"    oksv_trust: {eintrag.get('trust', '?')}")
+    return zeilen
+
+
+def _okf_frontmatter(fm, body, register, mit_quellen):
+    zeilen = ["---", f"type: {_yaml_scalar(fm.get('type', ''))}"]
+    if fm.get("title"):
+        zeilen.append(f"title: {_yaml_scalar(fm['title'])}")
+    description = _okf_description(body)
+    if description:
+        zeilen.append(f"description: {_yaml_scalar(description)}")
+    tags = fm.get("tags", [])
+    if tags:
+        zeilen.append("tags: [" + ", ".join(_yaml_scalar(t) for t in tags) + "]")
+    zeilen.append(f"status: {STATUS_OKF.get(fm.get('status'), 'stable')}")
+    if fm.get("geprueft_von") and fm.get("geprueft_am"):
+        # §5.2/§11: eine blanke Map gilt als einelementige Liste. Das Datum
+        # bleibt Kalendertag; ein aufgefülltes T00:00:00Z würde Präzision
+        # erfinden, die der Bestand nicht hat.
+        zeilen.append(
+            "verified: { by: %s, at: %s }"
+            % (_yaml_scalar(_okf_actor(fm["geprueft_von"])), fm["geprueft_am"])
+        )
+    quellen = _okf_sources(fm, register, mit_quellen)
+    if quellen:
+        zeilen.append("sources:")
+        zeilen.extend(quellen)
+    # Producer-eigene Zusatzschlüssel, nach §4.1 ausdrücklich erlaubt. Der
+    # Präfix hält sie von v0.2-Standardfeldern fern.
+    zeilen.append(f"oksv_profile: {PROFIL}")
+    for feld in ("domain", "version", "confidence", "stand"):
+        if fm.get(feld):
+            zeilen.append(f"oksv_{feld}: {_yaml_scalar(fm[feld])}")
+    if fm.get("concepts"):
+        zeilen.append("oksv_concepts: [" + ", ".join(fm["concepts"]) + "]")
+    zeilen.append(f"oksv_trust_tier: {_trust_tier(fm.get('geprueft_von'))}")
+    zeilen.append("---")
+    return zeilen
+
+
+def _okf_body(seite, register, concepts):
+    """Body verbatim, plus Fußnoten nach §5.1 und Beziehungen als Links."""
+    ausgabe = []
+    for line in seite["body"].split("\n"):
+        treffer = CLAIM_RE.match(line) if line.startswith(CLAIM_START) else None
+        ausgabe.append(f"{line}[^{treffer.group(2)}]" if treffer else line)
+    text = "\n".join(ausgabe).rstrip("\n")
+
+    if seite["relationen"]:
+        text += "\n\n## Beziehungen\n"
+        for relation in seite["relationen"]:
+            ziel = relation["ziel"][len("knowledge/"):]
+            name = Path(ziel).stem
+            text += f"\n- {relation['typ']}: [{name}](/{ziel})"
+        text += "\n"
+
+    verwendet = sorted({claim["quelle"] for claim in seite["claims"]})
+    if verwendet:
+        # Das Fußnotenlabel MUSS die S-ID sein, nicht die C-ID: §5.1 nennt
+        # sources[].id als Join-Key in die sources-Liste.
+        text += "\n\n"
+        for sid in verwendet:
+            titel = register.get(sid, {}).get("titel") or sid
+            text += f"[^{sid}]: {titel}\n"
+
+    begriffe = sorted(seite["fm"].get("concepts", []))
+    if begriffe:
+        labels = ", ".join(
+            concepts[b]["preferred"] for b in begriffe if b in concepts
+        )
+        if labels:
+            text += f"\n<!-- kontrollierte Begriffe: {labels} -->\n"
+    return text.rstrip("\n") + "\n"
+
+
+def _okf_index_root(domaenen, quelle_beschreibung):
+    zeilen = [
+        "---",
+        f'okf_version: "{OKF_VERSION}"',
+        "---",
+        "",
+        "# Bundle",
+        "",
+        quelle_beschreibung,
+        "",
+        "# Subdirectories",
+        "",
+    ]
+    for domain in sorted(domaenen):
+        zeilen.append(f"* [{domain}]({domain}/) - Wissensdomäne des Tresors.")
+    return "\n".join(zeilen) + "\n"
+
+
+def _okf_index_domain(domain, seiten):
+    zeilen = [f"# {domain}", ""]
+    for rp in sorted(seiten):
+        fm = seiten[rp]["fm"]
+        name = Path(rp).name
+        titel = fm.get("title") or Path(rp).stem
+        beschreibung = _okf_description(seiten[rp]["body"]) or "Wissensseite."
+        zeilen.append(f"* [{titel}]({name}) - {beschreibung}")
+    return "\n".join(zeilen) + "\n"
+
+
+def _okf_log():
+    """log.md in die §9-Form bringen: Datumsgruppen, neueste zuerst."""
+    if not _safe_regular_file(LOG):
+        return None
+    gruppen = {}
+    for line in read(LOG).split("\n"):
+        treffer = re.match(r"^## \[(\d{4}-\d{2}-\d{2})\] ([a-z]+) \| (.+)$", line)
+        if not treffer:
+            continue
+        datum, aktion, text = treffer.groups()
+        gruppen.setdefault(datum, []).append((aktion, text))
+    if not gruppen:
+        return None
+    zeilen = ["# Directory Update Log", ""]
+    for datum in sorted(gruppen, reverse=True):
+        zeilen.append(f"## {datum}")
+        for aktion, text in gruppen[datum]:
+            zeilen.append(f"* **{aktion.capitalize()}**: {text}")
+        zeilen.append("")
+    return "\n".join(zeilen).rstrip("\n") + "\n"
+
+
+def _export_ziel_pruefen(ziel: Path):
+    """Fail-closed: kein Skill-Ladeort, nicht im Tresor, kein Fremdinhalt."""
+    lexikalisch = Path(os.path.abspath(ziel))
+    if lexikalisch.is_symlink():
+        return "Ziel ist ein Symlink"
+    # Containment und Ladeort erst nach dem Auflösen prüfen: ROOT ist selbst
+    # aufgelöst (Path(__file__).resolve()), und auf macOS liegt /var hinter
+    # einem Symlink auf /private/var. Ohne resolve() greift die Prüfung dort
+    # nie. Der lexikalische Pfad wird zusätzlich geprüft, damit auch ein
+    # buchstäblich benannter Ladeort auffällt.
+    aufgeloest = lexikalisch.resolve()
+    if aufgeloest == ROOT or ROOT in aufgeloest.parents:
+        return "Ziel liegt innerhalb des Tresors"
+    verboten = sorted(
+        (set(aufgeloest.parts) | set(lexikalisch.parts))
+        & EXPORT_VERBOTENE_SEGMENTE
+    )
+    if verboten:
+        return (
+            f"Ziel liegt in einem Skill-Ladeort ({', '.join(verboten)}); ein "
+            f"exportiertes Bundle hat keine Engine und keine Regeln und darf "
+            f"nicht als Skill geladen werden"
+        )
+    if not aufgeloest.exists():
+        return None
+    if not aufgeloest.is_dir():
+        return "Ziel existiert und ist kein Verzeichnis"
+    if not any(aufgeloest.iterdir()):
+        return None
+    if _ist_frueherer_export(aufgeloest):
+        return None
+    return (
+        "Ziel ist nicht leer und kein früherer OKF-Export "
+        "(erkannt am okf_version im Wurzel-index.md)"
+    )
+
+
+def _ist_frueherer_export(ordner: Path) -> bool:
+    """Wurzel-index.md mit okf_version im Frontmatter (§12).
+
+    Bewusst nicht über _safe_regular_file: das verlangt einen Pfad innerhalb
+    des Tresors, und das Exportziel liegt per Definition außerhalb. Die
+    Härtung (kein Symlink, echte einfach verlinkte Datei) gilt hier trotzdem.
+    """
+    kandidat = ordner / "index.md"
+    try:
+        status = os.lstat(str(kandidat))
+        if not stat.S_ISREG(status.st_mode) or status.st_nlink != 1:
+            return False
+        zeilen = kandidat.read_text(encoding="utf-8").split("\n")
+    except (OSError, UnicodeError):
+        return False
+    if not zeilen or zeilen[0].strip() != "---":
+        return False
+    for line in zeilen[1:]:
+        if line.strip() == "---":
+            return False
+        if line.startswith("okf_version:"):
+            return True
+    return False
+
+
+def cmd_export(ziel, mit_quellen=False):
+    """Bestand als OKF-v0.2-Bundle außerhalb des Tresors ausgeben."""
+    fehler, _, seiten, _, register, _ = cmd_validate(still=True)
+    if fehler:
+        print("🔴 export: ABBRUCH — validate ist rot; erst den Bestand "
+              "reparieren.")
+        for f in fehler[:10]:
+            print(f"   {f}")
+        return 1
+    manifest_fehler, _ = _manifest_status()
+    if manifest_fehler:
+        print("🔴 export: ABBRUCH — Stand entspricht nicht dem Manifest; "
+              "exportiert wird nur ein freigegebener Release.")
+        for f in manifest_fehler[:10]:
+            print(f"   {f}")
+        return 1
+    _, concepts, concept_fehler = parse_concepts()
+    if concept_fehler:
+        print("🔴 export: ABBRUCH — Begriffswelten sind nicht valide.")
+        return 1
+
+    ziel_pfad = Path(os.path.abspath(ziel))
+    problem = _export_ziel_pruefen(ziel_pfad)
+    if problem:
+        print(f"🔴 export: ABBRUCH — {problem}.")
+        return 1
+
+    version = read(VERSION).strip() if _safe_regular_file(VERSION) else "?"
+    herkunft = (
+        f"Export aus dem Wissenstresor (Profil {PROFIL}, Bestand v{version}). "
+        f"Dies ist eine Momentaufnahme in OKF {OKF_VERSION}, kein Tresor: sie "
+        f"trägt keine Engine, kein Manifest und keine Regeln. "
+        + ("Registrierte Rohquellen liegen unter sources/raw/."
+           if mit_quellen else
+           "Registrierte Rohquellen sind nicht enthalten; sources[].resource "
+           "ist deshalb ein Deskriptor und kein folgbarer Pfad.")
+    )
+
+    dateien = {}
+    domaenen = {}
+    for rp, seite in sorted(seiten.items()):
+        domain = seite["fm"].get("domain", "unbekannt")
+        name = Path(rp).name
+        kopf = _okf_frontmatter(seite["fm"], seite["body"], register, mit_quellen)
+        rumpf = _okf_body(seite, register, concepts)
+        dateien[f"{domain}/{name}"] = "\n".join(kopf) + "\n" + rumpf
+        domaenen.setdefault(domain, {})[rp] = seite
+
+    dateien["index.md"] = _okf_index_root(domaenen, herkunft)
+    for domain, inhalt in sorted(domaenen.items()):
+        dateien[f"{domain}/index.md"] = _okf_index_domain(domain, inhalt)
+    log_text = _okf_log()
+    if log_text:
+        dateien["log.md"] = log_text
+
+    kopien = []
+    if mit_quellen:
+        for sid, eintrag in sorted(register.items()):
+            quelle, pfadfehler = _safe_relative_path(ROOT, eintrag.get("ablage", ""))
+            if pfadfehler or not quelle.is_file():
+                print(f"🔴 export: ABBRUCH — Ablage von {sid} ist nicht "
+                      f"sicher lesbar.")
+                return 1
+            kopien.append((eintrag["ablage"], quelle))
+
+    try:
+        ziel_pfad.mkdir(parents=True, exist_ok=True)
+        for rel_pfad in sorted(dateien):
+            datei = ziel_pfad / rel_pfad
+            datei.parent.mkdir(parents=True, exist_ok=True)
+            datei.write_text(dateien[rel_pfad], encoding="utf-8")
+        for rel_pfad, quelle in kopien:
+            datei = ziel_pfad / rel_pfad
+            datei.parent.mkdir(parents=True, exist_ok=True)
+            datei.write_bytes(quelle.read_bytes())
+    except OSError as exc:
+        print(f"🔴 export: ABBRUCH — Schreiben fehlgeschlagen: {exc}")
+        return 1
+
+    print(f"🟢 export: {len(dateien)} Dokumente"
+          + (f" + {len(kopien)} Rohquellen" if kopien else "")
+          + f" nach {ziel_pfad} geschrieben (OKF {OKF_VERSION}).")
+    print("   Einbahnstraße: der Tresor liest kein fremdes OKF zurück. "
+          "Rückweg ist der reguläre Ingest.")
+    if not mit_quellen:
+        print("   Ohne --with-sources bleiben Rohquellen im Tresor; "
+              "Rechte klärt ein Mensch, nicht das Script.")
+    return 0
+
+
 def cmd_doctor():
     print("── doctor: Gesamtdiagnose ─────────────────────────────────────")
     fehler, warnungen, seiten, claims, register, router = cmd_validate(still=True)
@@ -3166,6 +3521,10 @@ def main():
     v = sub.add_parser("release")
     v.add_argument("stufe", nargs="?", default="patch",
                    choices=["major", "minor", "patch"])
+    e = sub.add_parser("export")
+    e.add_argument("--okf", action="store_true", required=True)
+    e.add_argument("--out", required=True)
+    e.add_argument("--with-sources", action="store_true")
     a = ap.parse_args()
 
     if a.cmd == "validate":
@@ -3202,6 +3561,8 @@ def main():
         sys.exit(cmd_route(a.frage))
     elif a.cmd == "release":
         sys.exit(cmd_release(a.stufe))
+    elif a.cmd == "export":
+        sys.exit(cmd_export(a.out, mit_quellen=a.with_sources))
 
 
 if __name__ == "__main__":

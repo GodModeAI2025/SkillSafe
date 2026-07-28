@@ -238,13 +238,13 @@
         <p class="sub">Belegtes Wissen aus Text, Bildern und PDFs — als Skill, nicht als Server.</p>
         <p class="tagline-en">Für Claude Code und Codex: kontrollierte Begriffswelten, reproduzierbares Hybrid-Retrieval, Wissensgraph-Kontext und geprüfte Bildfundstellen — lokal, nachvollziehbar und ohne Embedding-Pflicht.</p>
         <div class="cta-row">
-          <a class="btn btn-primary" href="#funktionen">Was v0.8.0 kann</a>
+          <a class="btn btn-primary" href="#funktionen">Was v0.9.0 kann</a>
           <a class="btn btn-ghost" href="#regeln">Die sechs Regeln</a>
           <a class="btn btn-ghost" href="wissenstresor/KONZEPT.md">Konzept lesen</a>
           <a class="btn btn-ghost" href="https://github.com/GodModeAI2025/SkillSafe">GitHub</a>
         </div>
       </div>
-      <div class="stamp"><span><b>VALIDATE</b>0 Fehler<br>5 Seiten · 26 Claims<br>v0.8.0</span></div>
+      <div class="stamp"><span><b>VALIDATE</b>0 Fehler<br>5 Seiten · 26 Claims<br>v0.9.0</span></div>
     </div>
   </section>
 
@@ -299,6 +299,7 @@
         <div class="rule-card"><div><h3>Bilder mit belegbarer Region</h3><p>PNG, JPEG, GIF, WebP, TIFF und PDF bleiben als gehashte Originale erhalten. Geprüfte Regionen binden sichtbare Befunde an Claims; OCR und Bildbeschreibung bleiben untrusted Quelldaten und gelangen nie direkt in Antworten.</p></div></div>
         <div class="rule-card"><div><h3>Gesundheit laufend geprüft</h3><p>Das Script <code>doctor</code> findet deterministisch Drift, verwaiste Seiten und Manifest-Abweichungen. Der Lint-Workflow beurteilt zusätzlich Aktualität und ungedeckte Kurzfassungen. Veraltetes bleibt über Supersession sichtbar, und Widersprüche bekommen eine eigene Kante im Wissensgraph, statt stillschweigend entschieden zu werden.</p></div></div>
         <div class="rule-card"><div><h3>Wissen aus Teams und Einzelpersonen</h3><p>Der kontrollierte Ingest funktioniert für eine Person genauso wie für ein Team, das über Git zusammenarbeitet. Der Validator fängt Kollisionen bei Claim-IDs fail-closed ab. Getrennte Zielgruppen bekommen eigene Tresor-Instanzen mit fester Rangfolge von Organisation bis persönlich.</p></div></div>
+        <div class="rule-card"><div><h3>Export nach OKF v0.2</h3><p><code>export --okf</code> gibt den freigegebenen Bestand als Bundle nach außen: Status übersetzt, Quellen aus dem Register aufgefaltet, Claims mit Fußnoten, Relationen als Links. Zwei Exporte desselben Stands sind byteidentisch. Das Ziel darf nie ein Skill-Ladeort sein, denn ein Bundle trägt keine Engine und keine Regeln. Einen Rückweg gibt es nicht.</p></div></div>
         <div class="rule-card"><div><h3>Ein Skill, zwei Laufzeiten</h3><p>Der reproduzierbare Builder erzeugt ein geprüftes <code>.skill</code>-Archiv mit genau einer Ordnerwurzel. Dasselbe Artefakt ist für die Skill-Verzeichnisse von Claude Code und Codex ausgelegt; Ordner-, Pfad- und Script-Portabilität sind geprüft, die angemeldete Host-Discovery bleibt ein separater Smoke-Test.</p></div></div>
       </div>
     </div>
@@ -437,7 +438,7 @@
 
 <footer>
   <div class="wrap-wide">
-    <span>SkillSafe v0.8.0 · Apache License 2.0 · Motor bleibt stabil, Treibstoff ist flüchtig.</span>
+    <span>SkillSafe v0.9.0 · Apache License 2.0 · Motor bleibt stabil, Treibstoff ist flüchtig.</span>
     <span><a href="README.md">README</a> · <a href="wissenstresor/KONZEPT.md">Konzept</a> · <a href="wissenstresor/SKILL.md">Skill-Vertrag</a> · <a href="https://godmodeai2025.github.io/MarkZimmermann/" target="_blank" rel="noopener">Impressum</a></span>
   </div>
 </footer>

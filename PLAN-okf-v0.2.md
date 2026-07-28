@@ -99,7 +99,7 @@ Ein fehlgeschlagener `release` hinterlässt keinen Rückstand: der
 R1  0.6.1 → 0.6.2   patch   Parser fail-closed, Paket-Allowlist        ERLEDIGT
 R2  0.6.2 → 0.7.0   minor   Bestand lernt v0.2 + gesamte Doku          ERLEDIGT
 R3  0.7.0 → 0.8.0   minor   geprueft_von / geprueft_am, Profil oksv-lite/1.2 ERLEDIGT
-R4  0.8.0 → 0.9.0   minor   export --okf
+R4  0.8.0 → 0.9.0   minor   export --okf                                ERLEDIGT
 R5  später          minor   gueltig_bis + --asof, nur bei Anlass
 ```
 
@@ -875,7 +875,37 @@ Einstufung angreifbar.
 
 ---
 
-## 7. R4 · `export --okf` (minor, 0.9.0)
+## 7. R4 · `export --okf` (minor, 0.9.0) — ERLEDIGT
+
+Umgesetzt am 2026-07-28. 58 Tests, `validate`, `doctor`, `checksum --verify`
+grün, 31 manifestierte Dateien, 33 Paketeinträge, Paket-SHA-256
+`de812f72e07654a773c46a9c493cd8298955cc6d9744b88bf8a42e677a6006d3`. Zwei
+Exporte desselben Stands sind byteidentisch, die Ausgabe erfüllt §11
+Bedingung 1 und 2 für jedes Konzeptdokument.
+
+Die vorab offene AD-06-Frage ist als Sechs-Punkte-Regel entschieden und in
+`references/export-okf.md` sowie in AD-06 festgeschrieben: Menschenakt, kein
+Skill-Ladeort, kein Fremdinhalt, nur ein freigegebener Release, Rohquellen nur
+mit `--with-sources`, keine Rückrichtung.
+
+Zwei Befunde aus der Umsetzung, beide von den Tests gefunden:
+
+* **`_safe_regular_file` war die falsche Wahl für das Exportziel.** Der Helfer
+  verlangt einen Pfad innerhalb von `ROOT`, und das Ziel liegt per Definition
+  außerhalb. Die Erkennung eines früheren Exports schlug deshalb immer fehl.
+  Die Härtung (kein Symlink, echte einfach verlinkte Datei) gilt jetzt
+  trotzdem, nur ohne die Containment-Bedingung.
+* **Die Containment-Prüfung griff auf macOS nicht.** `ROOT` ist aufgelöst
+  (`Path(__file__).resolve()`), `os.path.abspath` löst keine Symlinks, und
+  `/var` liegt hinter einem Symlink auf `/private/var`. Ein Export in den
+  eigenen Tresor lief dort durch. Jetzt wird gegen den aufgelösten Pfad
+  geprüft, und die Ladeort-Segmente werden zusätzlich lexikalisch geprüft,
+  damit auch ein buchstäblich benannter Ladeort auffällt.
+
+Bewusst nicht abbildbar und im Export leer statt geraten: `generated`,
+`sources[].author`, `usage_count`/`usage_window`, und `last_modified` bei
+nicht-datumsförmiger Stand-Angabe (S-0004 trägt `v0.2 / 2026-07-24`).
+
 
 Neues Unterkommando `export --okf --out <pfad>`. `validate`-Gate davor
 (Muster: `cmd_index`, `vault.py:1552-1569`), kein Schreibzugriff innerhalb

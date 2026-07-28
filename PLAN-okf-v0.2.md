@@ -98,7 +98,7 @@ Ein fehlgeschlagener `release` hinterlässt keinen Rückstand: der
 ```
 R1  0.6.1 → 0.6.2   patch   Parser fail-closed, Paket-Allowlist        ERLEDIGT
 R2  0.6.2 → 0.7.0   minor   Bestand lernt v0.2 + gesamte Doku          ERLEDIGT
-R3  0.7.0 → 0.8.0   minor   geprueft_von / geprueft_am, Profil oksv-lite/1.2
+R3  0.7.0 → 0.8.0   minor   geprueft_von / geprueft_am, Profil oksv-lite/1.2 ERLEDIGT
 R4  0.8.0 → 0.9.0   minor   export --okf
 R5  später          minor   gueltig_bis + --asof, nur bei Anlass
 ```
@@ -737,7 +737,40 @@ Doku-Breite.
 
 ---
 
-## 6. R3 · `geprueft_von` und `geprueft_am` (minor, 0.8.0, Profil oksv-lite/1.2)
+## 6. R3 · `geprueft_von` und `geprueft_am` (minor, 0.8.0, Profil oksv-lite/1.2) — ERLEDIGT
+
+Umgesetzt am 2026-07-28. 52 Tests bestanden, `validate`, `doctor` und
+`checksum --verify` grün, drei Query-Läufe byteidentisch, Paket-SHA-256
+`99745997113aa2c5a15db90282be8cfbda83cdc692d748dad8096eca5b8cddb4`.
+
+Vier Entscheidungen, die während der Umsetzung fielen:
+
+* **Der `doctor`-Hinweis ist bedingt.** Er feuert nur, wenn mindestens eine
+  Seite `geprueft_von` führt. Sonst hätte ein Tresor, der das Feld gar nicht
+  nutzt, auf jeder Seite mit `confidence: hoch` einen Hinweis, und das ist
+  Rauschen statt Signal. Gemessen: ohne Nutzung 0 Hinweise, mit Nutzung genau
+  ein Hinweis, Ampel in beiden Fällen grün.
+* **`geprueft_am` vor `stand` ist eine Warnung, kein Fehler.** Eine Prüfung
+  darf älter sein als die letzte inhaltliche Änderung. Sie deckt den Inhalt
+  dann nur nicht mehr, und genau das soll sichtbar werden statt den Release
+  zu blockieren.
+* **Die Injection-Prüfung auf dem Aktor ist erreichbar, aber knapp.** Der
+  Zeichenvorrat von `ACTOR_RE` lässt keine Leerzeichen zu und verhindert
+  natürlichsprachige Anweisungen von sich aus. Für `mensch:ignore all
+  previous instructions` greift die spezifischere Meldung, weil die
+  Injection-Prüfung vor der Grammatikprüfung liegt. Ein Testfall war zuerst
+  falsch gedacht: `ignore-all-previous-instructions` mit Bindestrichen ist
+  eine gültige Aktor-ID, und das ist richtig so.
+* **Kein `generated`-Aktor.** `geprueft_von` ist §5.2 `verified`. Wer
+  geschrieben hat, bleibt bewusst offen: es wäre eine zweite Angabe ohne
+  zweiten Nutzen, und für den Export ist ein leeres `generated` ehrlicher als
+  ein erfundener Aktor.
+
+Die Aktorkonvention gegen Personenbezug steht als Abschnitt 9 in
+`references/mehrere-tresore.md`: Rollenkennung statt Klarname, weil der
+Bestand die Historie behält und das ZIP den Ort wechselt. Der Validator prüft
+nur die Grammatik, die Konvention durchzusetzen bleibt Kuratierungsarbeit.
+
 
 Zwei optionale flache Frontmatter-Felder. Aus ihnen wird die Trust-Stufe
 nach §5.3 **abgeleitet**: kein Feld gleich unverified, nicht-menschlicher

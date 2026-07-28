@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""vault.py — deterministische Engine des Wissenstresors (Profil: oksv-lite/1.1).
+"""vault.py — deterministische Engine des Wissenstresors (Profil: oksv-lite/1.2).
 
 Arbeitsteilung: Dieses Script erledigt ALLES, was deterministisch geht
 (Prüfen, Indizieren, Graph ableiten, Suchen, Hashen, Loggen, Zählen).
@@ -56,10 +56,15 @@ LOG = ROOT / "log.md"
 VERSION = ROOT / "VERSION"
 RELEASE_LOCK = ROOT / ".vault-release.lock"
 
-PROFIL = "oksv-lite/1.1"
+PROFIL = "oksv-lite/1.2"
 REQUIRED_FIELDS = ["type", "title", "domain", "status", "confidence",
                    "version", "stand", "sources", "tags"]
-OPTIONAL_FIELDS = {"relations", "concepts"}
+OPTIONAL_FIELDS = {"relations", "concepts", "geprueft_von", "geprueft_am"}
+# Optionale Skalarfelder brauchen eine eigene Typprüfung: die Textschleife in
+# lade_seiten deckt nur Pflichtfelder ab, die Listenschleife nur LIST_FIELDS.
+# Ohne diesen Satz würde 'geprueft_von:' ohne Wert stillschweigend zur leeren
+# Liste und eine Inline-Liste als Wert bis in die Regex-Prüfung durchrutschen.
+OPTIONAL_SCALAR_FIELDS = {"geprueft_von", "geprueft_am"}
 LIST_FIELDS = {"sources", "tags", "relations", "concepts"}
 STATUS_WERTE = {"aktiv", "veraltet", "in-pruefung"}
 CONF_WERTE = {"hoch", "mittel", "niedrig"}
@@ -86,6 +91,21 @@ REFERENCE_LINK_RE = re.compile(
 )
 HTML_LINK_RE = re.compile(r"<(?:a|img)\b", re.IGNORECASE)
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+# Aktorgrammatik für geprueft_von. Bewusst strenger als OKF v0.2 §7: die Spec
+# fixiert nur das Präfix, nicht den Zeichenvorrat. Deutsche Präfixe, weil der
+# ganze Vertrag deutsch ist; die Abbildung auf human:/process: gehört in einen
+# späteren Export, nicht in den Bestand.
+ACTOR_RE = re.compile(
+    r"^(?:mensch:[a-z0-9][a-z0-9._-]{0,63}"
+    r"|prozess:[a-z0-9][a-z0-9._-]{0,63}"
+    r"|agent:[A-Za-z0-9][A-Za-z0-9._-]{0,63}/[A-Za-z0-9][A-Za-z0-9._-]{0,63})$"
+)
+# Trust-Tiers nach OKF v0.2 §5.3. Sie werden ausschließlich ABGELEITET, nie
+# gespeichert, und gehen niemals in das Ranking ein: sonst würde aus einem
+# reproduzierbaren Score ein Vertrauensurteil (AD-01).
+TIER_UNVERIFIED = "unverified"
+TIER_MACHINE = "machine-confirmed"
+TIER_HUMAN = "human-reviewed"
 VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
 SID_RE = re.compile(r"^S-\d{4}$")
 CID_RE = re.compile(r"^C-\d{4}$")
@@ -168,6 +188,29 @@ def _plain_text(value, field, errors, *, maximum=500, allow_empty=False):
         errors.append(f"{field}: Steuerzeichen/Zeilenumbrüche sind verboten")
         return False
     return True
+
+
+def _iso_date(value):
+    """Kalendergültiges JJJJ-MM-TT oder None.
+
+    Das Format allein genügt nicht: '2026-02-31' passiert DATE_RE, ist aber
+    kein Datum. Rückgabe ist das date-Objekt, damit Aufrufer vergleichen
+    können, ohne ein zweites Mal zu parsen.
+    """
+    text = str(value)
+    if not DATE_RE.match(text):
+        return None
+    try:
+        return date.fromisoformat(text)
+    except ValueError:
+        return None
+
+
+def _trust_tier(actor):
+    """Trust-Tier nach OKF v0.2 §5.3 ableiten, nie speichern."""
+    if not actor:
+        return TIER_UNVERIFIED
+    return TIER_HUMAN if actor.startswith("mensch:") else TIER_MACHINE
 
 
 def _strict_json_pairs(pairs):
@@ -1211,7 +1254,7 @@ def lade_seiten(register, typen, reltypen, concepts=None, media=None):
         for feld in LIST_FIELDS:
             if feld in fm and not isinstance(fm[feld], list):
                 fehler.append(f"{rp}: Frontmatter-Feld {feld!r} muss eine Liste sein")
-        for feld in set(REQUIRED_FIELDS) - LIST_FIELDS:
+        for feld in (set(REQUIRED_FIELDS) - LIST_FIELDS) | OPTIONAL_SCALAR_FIELDS:
             if feld in fm and not isinstance(fm[feld], str):
                 fehler.append(f"{rp}: Frontmatter-Feld {feld!r} muss Text sein")
         typ = fm.get("type", "")
@@ -1227,10 +1270,46 @@ def lade_seiten(register, typen, reltypen, concepts=None, media=None):
             fehler.append(f"{rp}: status muss eins sein von {sorted(STATUS_WERTE)}")
         if fm.get("confidence") not in CONF_WERTE:
             fehler.append(f"{rp}: confidence muss eins sein von {sorted(CONF_WERTE)}")
-        if not DATE_RE.match(str(fm.get("stand", ""))):
-            fehler.append(f"{rp}: stand muss JJJJ-MM-TT sein")
+        stand = _iso_date(fm.get("stand", ""))
+        if stand is None:
+            fehler.append(f"{rp}: stand muss ein gültiges Datum JJJJ-MM-TT sein")
         if not VERSION_RE.match(str(fm.get("version", ""))):
             fehler.append(f"{rp}: version muss SemVer sein (z. B. 1.0.0)")
+
+        # Optionale Prüfangabe (OKF v0.2 §5.2/§5.3, hier flach und deutsch).
+        # Sie tritt als Paar auf oder gar nicht: ein Prüfer ohne Datum ist
+        # nicht nachvollziehbar, ein Datum ohne Prüfer nicht zurechenbar.
+        geprueft_von = fm.get("geprueft_von")
+        geprueft_am = fm.get("geprueft_am")
+        if isinstance(geprueft_von, str) or isinstance(geprueft_am, str):
+            if not (isinstance(geprueft_von, str) and isinstance(geprueft_am, str)):
+                fehler.append(
+                    f"{rp}: geprueft_von und geprueft_am treten nur gemeinsam "
+                    f"auf; eine Prüfung braucht Prüfer und Datum")
+        if isinstance(geprueft_von, str):
+            if _plain_text(geprueft_von, f"{rp}: geprueft_von", fehler, maximum=128):
+                if PROMPT_INJECTION_RE.search(geprueft_von):
+                    fehler.append(
+                        f"{rp}: geprueft_von enthält eine offensichtliche "
+                        f"Instruktionssignatur")
+                elif not ACTOR_RE.match(geprueft_von):
+                    fehler.append(
+                        f"{rp}: geprueft_von muss 'mensch:<id>', "
+                        f"'prozess:<id>' oder 'agent:<name>/<version>' sein, "
+                        f"nicht {geprueft_von!r}")
+        if isinstance(geprueft_am, str):
+            geprueft_datum = _iso_date(geprueft_am)
+            if geprueft_datum is None:
+                fehler.append(
+                    f"{rp}: geprueft_am muss ein gültiges Datum JJJJ-MM-TT sein")
+            elif stand is not None and geprueft_datum < stand:
+                # Kein Fehler: eine Prüfung DARF älter als die letzte
+                # inhaltliche Änderung sein. Sie ist dann nur nicht mehr
+                # aussagekräftig, und genau das soll sichtbar werden.
+                warnungen.append(
+                    f"{rp}: geprueft_am {geprueft_am} liegt vor stand "
+                    f"{fm.get('stand')} — die Prüfung deckt den aktuellen "
+                    f"Inhalt nicht mehr")
 
         quellen = fm.get("sources", [])
         if not isinstance(quellen, list):
@@ -2080,6 +2159,9 @@ def build_query_result(snapshot, world=None, limit=8):
                 "page": path,
                 "page_status": fm.get("status"),
                 "page_confidence": fm.get("confidence"),
+                "page_reviewed_by": fm.get("geprueft_von"),
+                "page_reviewed_at": fm.get("geprueft_am"),
+                "page_trust_tier": _trust_tier(fm.get("geprueft_von")),
                 "score": int(score),
                 "reasons": sorted(set(reasons)),
                 "kind": claim["art"],
@@ -2103,6 +2185,11 @@ def build_query_result(snapshot, world=None, limit=8):
                 item["signals"].append("low_confidence")
             if source.get("trust") == "T3":
                 item["signals"].append("source_trust:T3")
+            # Nur die unterste Stufe wird als Signal geführt, analog zu
+            # source_trust:T3. Der Tier ist abgeleitet, geht nie in den Score
+            # ein und ist keine Zugriffskontrolle (OKF v0.2 §5.3).
+            if item["page_trust_tier"] == TIER_UNVERIFIED:
+                item["signals"].append(f"trust_tier:{TIER_UNVERIFIED}")
             region_id = claim.get("region")
             representation = snapshot["media"].get(claim["quelle"])
             if region_id and representation:
@@ -2132,6 +2219,9 @@ def build_query_result(snapshot, world=None, limit=8):
             "status": fm.get("status"),
             "confidence": fm.get("confidence"),
             "stand": fm.get("stand"),
+            "reviewed_by": fm.get("geprueft_von"),
+            "reviewed_at": fm.get("geprueft_am"),
+            "trust_tier": _trust_tier(fm.get("geprueft_von")),
             "score": int(page_scores[path]),
             "reasons": sorted(set(page_reasons[path])),
             "concepts": sorted(fm.get("concepts", [])),
@@ -2715,18 +2805,21 @@ def cmd_stats():
     worlds, concepts, _ = parse_concepts()
     media, _ = parse_media_representations(register)
     g = build_graph(seiten)
-    dom, typ, status = {}, {}, {}
+    dom, typ, status, tiers = {}, {}, {}, {}
     for s in seiten.values():
         fm = s["fm"]
         dom[fm.get("domain", "?")] = dom.get(fm.get("domain", "?"), 0) + 1
         typ[fm.get("type", "?")] = typ.get(fm.get("type", "?"), 0) + 1
         status[fm.get("status", "?")] = status.get(fm.get("status", "?"), 0) + 1
+        tier = _trust_tier(fm.get("geprueft_von"))
+        tiers[tier] = tiers.get(tier, 0) + 1
     print(f"Profil {PROFIL} — {len(seiten)} Seiten, {len(claims)} Claims, "
           f"{len(register)} Quellen, {len(g['kanten'])} Kanten "
           f"({len(fehler)} Fehler, {len(warn)} Warnungen)")
     print(f"  Begriffswelten: {len(worlds)}, Begriffe: {len(concepts)}, "
           f"Medienrepräsentationen: {len(media)}")
-    for name, d in (("Domänen", dom), ("Typen", typ), ("Status", status)):
+    for name, d in (("Domänen", dom), ("Typen", typ), ("Status", status),
+                    ("Trust-Tiers", tiers)):
         print(f"  {name}: " + ", ".join(f"{k}={v}" for k, v in sorted(d.items())))
     return 0
 
@@ -3012,6 +3105,19 @@ def cmd_doctor():
         if n_zeilen > SPLIT_ZEILEN_SCHWELLE:
             hinweise.append(f"{rp}: Body {n_zeilen} Zeilen (Schwelle {SPLIT_ZEILEN_SCHWELLE}) "
                             f"— möglicher Verdichtungs-/Split-Kandidat, siehe Kompressionsregel")
+
+    # Prüfangabe: nur melden, wenn der Bestand das Feld überhaupt nutzt. Ein
+    # Tresor, der es gar nicht führt, ist nicht auffällig, sondern schlicht
+    # unverifiziert — dann wäre der Hinweis auf jeder Seite reines Rauschen.
+    # Hinweisstufe, damit ein Kalenderstand nie eine grüne Ampel kippt.
+    if any(s["fm"].get("geprueft_von") for s in seiten.values()):
+        for rp, s in sorted(seiten.items()):
+            fm = s["fm"]
+            if fm.get("confidence") == "hoch" and not fm.get("geprueft_von"):
+                hinweise.append(
+                    f"{rp}: confidence hoch, aber keine Prüfangabe "
+                    f"(Trust-Tier {TIER_UNVERIFIED}) — der Bestand nutzt "
+                    f"geprueft_von bereits, diese Seite nicht")
 
     print("── Prüfsummen ─────────────────────────────────────────────────")
     if cmd_checksum(verify=True) != 0:

@@ -1,4 +1,4 @@
-# Wissenstresor — Konzept (Profil oksv-lite/1.1)
+# Wissenstresor — Konzept (Profil oksv-lite/1.2)
 
 Ein lokaler, evidenzgebundener Wissensspeicher als **purer Skill**: Der
 Skill-Ordner selbst ist das Wissensartefakt. Kein Server, keine Datenbank,
@@ -285,7 +285,8 @@ C-0301 bis C-0310). Für das Profil gilt:
 | v0.2 | Profil | Verhältnis |
 |---|---|---|
 | `sources` mit Glaubwürdigkeitssignalen (§5.1) | Claim-Grammatik plus gehashtes `sources/REGISTER.md` | Profil ist strenger: erzwungene Evidenzart, Prüfsumme, geklärte Rechte. Die Fußnotenattribution aus §5.1 leistet die Claim-ID bereits |
-| Trust-Tiers aus `verified` (§5.3) | `confidence` plus Register-Trust plus geschlossene Welt | v0.2 berät, das Profil erzwingt. Ein Aktor fehlt hier noch |
+| `verified` (§5.2) und Trust-Tiers (§5.3) | `geprueft_von` plus `geprueft_am`, Tier abgeleitet | übernommen, flach und deutsch. Das Tier trägt die §5.3-Namen, wird nie gespeichert und geht nie in den Score ein |
+| `generated` (§5.2) | keine Entsprechung | bewusst offen: der Tresor weiß, wer geprüft hat, nicht wer geschrieben hat. Ein Aktor für die Erzeugung wäre eine zweite Angabe ohne zweiten Nutzen |
 | `status` (§5.4) | `status` plus typisierte `ersetzt`-Kante | Der Status sagt, dass etwas nicht mehr gilt; die Kante sagt, was stattdessen gilt. v0.2 kennt nur ungetypte Links und kann das nicht ausdrücken |
 | `stale_after` (§5.5) | `stand` | Echte Lücke: `stand` ist deskriptiv, kein Verfallsdatum |
 | Attestierung (§10) | `MANIFEST.sha256`, Register-Hashes, reproduzierbares Paket | Verschiedene Ebenen: hier ruhende Bytes, dort ein einzelner Rechenlauf. Ablehnung siehe AD-09 |

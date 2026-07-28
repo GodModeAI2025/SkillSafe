@@ -91,6 +91,16 @@ anlegen, Claims umziehen (IDs bleiben), `log update` schreiben. Außerdem:
   Antworten-Workflow legt Konflikte offen, er entscheidet sie nicht still).
 * Kurzfassung zuletzt schreiben: 3–6 dichte Sätze, jede Kernaussage durch
   einen Claim gedeckt.
+* **Prüfangabe nur nach echter Gegenprüfung.** `geprueft_von` und
+  `geprueft_am` werden gesetzt, wenn jemand die Claims dieser Seite gegen die
+  Quelle gelesen hat, nicht wenn die Seite geschrieben wurde. Wer extrahiert
+  hat, ist nicht wer geprüft hat. Beim reinen Ingest bleiben beide Felder
+  leer, und das ist die ehrliche Angabe: Trust-Tier `unverified` heißt „von
+  niemandem bestätigt", nicht „schlecht". Ändert sich der Inhalt später,
+  bleibt eine alte Prüfung stehen und `validate` warnt, dass sie den
+  aktuellen Stand nicht mehr deckt. Dann entweder erneut prüfen und das Datum
+  anheben oder die Angabe entfernen, nie das Datum ohne Prüfung nachziehen.
+  Für den Aktor gilt die Konvention aus `references/mehrere-tresore.md`.
 
 **6. Begriffe und Router pflegen.** Passende IDs aus
 `schema/begriffswelten.json` im optionalen `concepts`-Feld der Seite

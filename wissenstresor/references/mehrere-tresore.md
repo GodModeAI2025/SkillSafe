@@ -168,7 +168,32 @@ Best-Effort-Modellurteil, sobald mehrere Tresor-Beschreibungen sichtbar
 sind — kein Script prüft das mechanisch (kein gemeinsamer Router über
 Tresor-Grenzen hinweg). Nicht als Vollständigkeitsgarantie missverstehen.
 
-## 9. Was das hier NICHT ist
+## 9. Aktorkonvention für `geprueft_von` (Personenbezug)
+
+`geprueft_von` steht im Frontmatter einer Seite, und Seiten wandern: der
+Tresor wird als ZIP paketiert und in fremde Skill-Ordner entpackt. Ein
+Klarname darin verlässt damit den Ort, an dem er entstanden ist, und zwar
+ohne dass jemand das noch einmal bewusst entscheidet.
+
+Deshalb gilt für alle Instanzen ab Organisation aufwärts: **Rollenkennung
+statt Klarname.** `mensch:kuratorin`, `mensch:fachbereich-hr`,
+`mensch:qs-team` sind gute Werte, `mensch:mark-zimmermann` ist einer, den man
+später nicht mehr zurücknehmen kann, weil der Bestand die Historie behält.
+Wer eine Person zweifelsfrei zuordnen muss, tut das außerhalb des Tresors,
+etwa in einem Verzeichnis, das die Rollenkennung auflöst und dessen Zugriff
+getrennt geregelt ist.
+
+In einer rein persönlichen Instanz ist ein Kürzel unbedenklich, solange diese
+Instanz nie in einen breiteren Skill-Ladeort kopiert oder symlinkt wird. Das
+ist dieselbe Grenze wie in Abschnitt 5: der Ort entscheidet, nicht ein
+Feature im Skill.
+
+`prozess:<id>` und `agent:<name>/<version>` sind unkritisch, sie bezeichnen
+Systeme. Der Validator prüft nur die Grammatik, nicht die Konvention; die
+Konvention durchzusetzen ist Kuratierungsarbeit und gehört in den
+Befüllen-Workflow, Schritt 5.
+
+## 10. Was das hier NICHT ist
 
 Kein ACL-/Rollensystem, kein Meta-Router-Script, kein
 `vault.py identity`/`whoami`-Kommando, kein Content-Sync zwischen

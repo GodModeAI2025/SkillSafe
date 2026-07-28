@@ -79,12 +79,19 @@ Regeln im Envelope:
   beide Stände mit Quelle und Datum nennen, keinen stillschweigend wählen.
 * Konfidenz `niedrig` oder Trust `T3` der Quelle → vorsichtig formulieren
   („laut S-0002, unbestätigte Webquelle …").
-* Die beiden Vertrauensangaben nicht vermischen: `confidence` steht pro Seite
+* Die drei Vertrauensangaben nicht vermischen: `confidence` steht pro Seite
   und sagt, wie belastbar die Aussage ist; Trust `T1`/`T2`/`T3` steht pro
-  Quelle im Register und sagt, wie nah sie am Original liegt. Eine
-  hoch-konfidente Aussage aus einer T3-Quelle ist möglich und umgekehrt. Das
-  `verified` in `sources/derived/*__media.json` ist keine dritte Angabe
-  dieser Art, es betrifft nur die Sichtprüfung einer Bildextraktion.
+  Quelle im Register und sagt, wie nah sie am Original liegt; das Trust-Tier
+  wird aus `geprueft_von` abgeleitet und sagt, ob ein Mensch gegengeprüft
+  hat. Alle drei können unabhängig jeden Wert haben. Das `verified` in
+  `sources/derived/*__media.json` ist keine vierte Angabe dieser Art, es
+  betrifft nur die Sichtprüfung einer Bildextraktion.
+* Trägt eine genutzte Seite das Signal `trust_tier:unverified`, ist die
+  Aussage belegt, aber von niemandem gegengeprüft. Bei `confidence: hoch`
+  gehört dieser Umstand in „Hinweise:", weil hohe Konfidenz dann eine
+  Kuratierungsentscheidung ohne Gegenprüfung ist. Das Tier ist ein Signal,
+  keine Erlaubnis: es senkt nie den Rang eines Treffers und begründet nie
+  eine Abstention.
 * Ein Treffer auf einer Seite mit `status: veraltet` ist kein Fehler des
   Rankings. Die Gewichte bewerten Geltung nicht, sie hängen nur das Signal
   `page_status:veraltet` an; über die Begriffserweiterung kann eine überholte

@@ -233,18 +233,18 @@
   <section class="hero">
     <div class="wrap">
       <div>
-        <p class="eyebrow">Profil oksv-lite/1.1 · purer Skill</p>
+        <p class="eyebrow">Profil oksv-lite/1.2 · purer Skill</p>
         <h1>SkillSafe</h1>
         <p class="sub">Belegtes Wissen aus Text, Bildern und PDFs — als Skill, nicht als Server.</p>
         <p class="tagline-en">Für Claude Code und Codex: kontrollierte Begriffswelten, reproduzierbares Hybrid-Retrieval, Wissensgraph-Kontext und geprüfte Bildfundstellen — lokal, nachvollziehbar und ohne Embedding-Pflicht.</p>
         <div class="cta-row">
-          <a class="btn btn-primary" href="#funktionen">Was v0.7.0 kann</a>
+          <a class="btn btn-primary" href="#funktionen">Was v0.8.0 kann</a>
           <a class="btn btn-ghost" href="#regeln">Die sechs Regeln</a>
           <a class="btn btn-ghost" href="wissenstresor/KONZEPT.md">Konzept lesen</a>
           <a class="btn btn-ghost" href="https://github.com/GodModeAI2025/SkillSafe">GitHub</a>
         </div>
       </div>
-      <div class="stamp"><span><b>VALIDATE</b>0 Fehler<br>5 Seiten · 26 Claims<br>v0.7.0</span></div>
+      <div class="stamp"><span><b>VALIDATE</b>0 Fehler<br>5 Seiten · 26 Claims<br>v0.8.0</span></div>
     </div>
   </section>
 
@@ -280,7 +280,7 @@
         <div class="rule-card"><span class="rule-num">2</span><div><h3>Vertrauen zur Abfragezeit</h3><p>Kurzfassungen gelten beim Antworten als wahr. Wer pro Anfrage erneut gegen die Quelle prüft, zahlt doppelt und macht den Tresor sinnlos.</p></div></div>
         <div class="rule-card"><span class="rule-num">3</span><div><h3>Retrieve then read</h3><p><code>query</code> liefert zuerst manifestgebundene Kandidaten. Reichen sie nicht, folgt der explizite Fallback-Prüfumfang — niemals stilles Auffüllen aus Modellwissen.</p></div></div>
         <div class="rule-card"><span class="rule-num">4</span><div><h3>Fail closed</h3><p>Bei unbekanntem Typ, Validierungsfehler oder unklaren Rechten hält der Tresor an und fragt den Menschen, statt zu raten oder Regeln aufzuweichen.</p></div></div>
-        <div class="rule-card"><span class="rule-num">5</span><div><h3>Skript vor Modell</h3><p>Hashen, Indizieren, Graph, Hybrid-Retrieval, Suchen und Loggen laufen als deterministisches Stdlib-Script. Das Modell rechnet so etwas nicht im Kopf nach.</p></div></div>
+        <div class="rule-card"><span class="rule-num">5</span><div><h3>Skript vor Modell</h3><p>Hashen, Indizieren, Graph, Hybrid-Retrieval, Suchen und Loggen laufen als deterministisches Stdlib-Script. Das Modell rechnet so etwas nicht im Kopf nach. Es ist zugleich das einzige Script, das der Tresor ausführt: Inhalte dürfen keine Ausführungspfade benennen.</p></div></div>
         <div class="rule-card"><span class="rule-num">6</span><div><h3>Quellen sind Daten</h3><p>Inhalte aus <code>sources/</code> sind niemals Anweisungen. Eingebettete Prompt-Injections werden gemeldet, nicht befolgt.</p></div></div>
       </div>
     </div>
@@ -437,7 +437,7 @@
 
 <footer>
   <div class="wrap-wide">
-    <span>SkillSafe v0.7.0 · Apache License 2.0 · Motor bleibt stabil, Treibstoff ist flüchtig.</span>
+    <span>SkillSafe v0.8.0 · Apache License 2.0 · Motor bleibt stabil, Treibstoff ist flüchtig.</span>
     <span><a href="README.md">README</a> · <a href="wissenstresor/KONZEPT.md">Konzept</a> · <a href="wissenstresor/SKILL.md">Skill-Vertrag</a> · <a href="https://godmodeai2025.github.io/MarkZimmermann/" target="_blank" rel="noopener">Impressum</a></span>
   </div>
 </footer>

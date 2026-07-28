@@ -1,4 +1,4 @@
-# Profil oksv-lite/1.1 — Datenvertrag des Wissenstresors
+# Profil oksv-lite/1.2 — Datenvertrag des Wissenstresors
 
 Dieses Profil schreibt Seiten, die als OKF-Konzeptdokumente lesbar sind: jede
 Seite unter `knowledge/` trägt parsebares YAML-Frontmatter mit nicht leerem
@@ -54,6 +54,37 @@ Optionale Felder:
 |---|---|---|
 | `relations` | Liste `typ -> domäne/seite.md` | Typisierte Seitenkanten |
 | `concepts` | Liste `B-nnnn` | Verknüpfung zur kontrollierten Begriffswelt |
+| `geprueft_von` | `mensch:<id>`, `prozess:<id>` oder `agent:<name>/<version>` | Wer den Inhalt gegen die Quellen gegengeprüft hat |
+| `geprueft_am` | `JJJJ-MM-TT` | Wann diese Prüfung stattgefunden hat |
+
+Die Prüfangabe tritt als Paar auf oder gar nicht: ein Prüfer ohne Datum ist
+nicht nachvollziehbar, ein Datum ohne Prüfer nicht zurechenbar. Liegt
+`geprueft_am` vor `stand`, ist das kein Fehler, sondern eine Warnung: die
+Prüfung darf älter sein als die letzte inhaltliche Änderung, sie deckt den
+aktuellen Inhalt dann nur nicht mehr. Fehlt die Angabe ganz, ist das der
+Normalfall und keine Auffälligkeit.
+
+### Drei Vertrauensangaben, die nicht dasselbe messen
+
+| Angabe | Ort | Frage |
+|---|---|---|
+| `confidence` | Seiten-Frontmatter | Wie belastbar ist die Aussage? |
+| Trust `T1`/`T2`/`T3` | `sources/REGISTER.md` | Wie nah liegt die Quelle am Original? |
+| Trust-Tier | abgeleitet aus `geprueft_von` | Hat ein Mensch das gegengeprüft? |
+
+Alle drei können unabhängig voneinander jeden Wert haben. Eine
+hoch-konfidente Aussage aus einer T3-Quelle ist möglich, ebenso eine
+menschlich geprüfte Seite mit niedriger Konfidenz. Das Trust-Tier folgt
+OKF v0.2 §5.3 und heißt deshalb `unverified`, `machine-confirmed` oder
+`human-reviewed`; `mensch:` ergibt `human-reviewed`, jeder andere Aktor
+`machine-confirmed`, keine Angabe `unverified`.
+
+Das Tier wird **ausschließlich abgeleitet und niemals gespeichert**, und es
+geht **niemals in das Ranking** ein. Sonst würde aus einem reproduzierbaren
+Score ein Vertrauensurteil, und die Begründung von AD-01 fällt. Im
+Query-Envelope erscheint es als Ausgabefeld, und nur die unterste Stufe
+erzeugt zusätzlich das Signal `trust_tier:unverified`, analog zu
+`source_trust:T3`.
 
 Frontmatter nutzt nur Skalar, Inline-Liste und Bindestrich-Liste. Kein
 Nesting. Listenfelder müssen tatsächlich als Liste geschrieben werden.

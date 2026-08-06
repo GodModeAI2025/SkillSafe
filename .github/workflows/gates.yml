@@ -52,6 +52,11 @@ jobs:
   gates:
     name: ${{ matrix.os }} / Python ${{ matrix.python }}
     runs-on: ${{ matrix.os }}
+    # Beobachtet am 06.08.2026: Die Frist läuft ab dem Anlegen des Jobs, nicht
+    # ab dem Start auf einem Runner. Lauf 14 bekam nie einen Runner und wurde
+    # exakt 15:02 nach dem Anlegen abgeräumt. Ein so beendeter Lauf ist kein
+    # roter Lauf, sondern gar keiner — siehe BETRIEB.md, "Ein fehlender Lauf
+    # ist kein grüner Lauf".
     timeout-minutes: 15
     strategy:
       fail-fast: false

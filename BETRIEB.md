@@ -105,30 +105,51 @@ Netzquelle hängt. Ein Gate soll den Bestand messen, nicht das Wetter.
 
 ### Ein fehlender Lauf ist kein grüner Lauf
 
-Die zweite Stelle, an der dasselbe Muster zuschlägt — und die unangenehmere,
-weil sie nicht in diesem Repository liegt:
+Der Trigger oben ist nur einer von mehreren Wegen, auf denen ein ungeprüfter
+Stand nach `main` kommt. Sie sehen alle gleich aus, nämlich **grau**.
 
-**Ein Merge oder Push über einen App-Token löst keinen Workflow aus.** Das ist
-kein Fehler, sondern GitHub-Verhalten: Was mit `GITHUB_TOKEN` oder einem
-Installations-Token einer App geschieht, erzeugt bewusst keine neuen Läufe,
-damit sich Automatisierung nicht selbst rekursiv auslöst. Betroffen sind
-Merges über Connector, Bot oder eine Action — nicht der Merge über die
-Weboberfläche.
+Beobachtet am 6. August 2026, ohne Deutung:
 
-Die Folge: `main` trägt danach einen Stand, den nie eine Kette gesehen hat.
-Auffallen wird das niemandem, weil nichts rot ist.
+| Commit | Anlass | gates-Lauf |
+|---|---|---|
+| `e659a2d` | Merge PR #3, 14:34, Weboberfläche | Lauf 10, grün |
+| `9452a89` | Merge PR #4, 18:23, Connector | **keiner** — Lauf 14 erst von Hand angestoßen |
+| `6f69801` | Merge PR #5, 18:38, Weboberfläche | **keiner** |
 
-**Gegenmittel, eines davon:**
+Dazu am selben Abend: Lauf 14 bekam für alle vier Jobs keinen Runner
+(`runner_name` blieb über die gesamte Laufzeit leer) und wurde um 18:40:31
+abgeräumt — exakt 15:02 nach dem Start, also vom eigenen `timeout-minutes: 15`
+dieses Workflows. Der Pages-Lauf auf `e659a2d` baute erfolgreich und scheiterte
+danach im Deploy mit `Timeout reached, aborting!`.
 
-* über die Weboberfläche mergen, oder
-* nach dem Merge `gates.yml` per `workflow_dispatch` auf `main` anstoßen
+**Eine Ursache steht damit nicht fest.** Die naheliegende Erklärung — Merges
+mit einem App-Token lösen bewusst keine Läufe aus, damit sich Automatisierung
+nicht rekursiv auslöst — deckt Zeile zwei und scheitert an Zeile drei: die hat
+ein Mensch über die Oberfläche gemergt, und auch dort kam nichts. Sie steht
+hier als das, was sie ist: eine Hypothese, die die Beobachtung nicht erklärt.
+
+Genau das ist der Eintrag, der bleiben muss. Der Tresor verlangt für jede
+Behauptung eine Fundstelle; für Betriebsbefunde gilt dasselbe. An diesem Tag
+wurde die Ursache zweimal benannt, bevor sie belegt war. **Eine unbelegte
+Ursache ist schlimmer als keine, weil sie das Suchen beendet.**
+
+**Was unabhängig von der Ursache trägt — und das Verfahren ist:**
+
+* Vor „betriebsbereit" prüfen, ob für den fraglichen Commit ein Lauf
+  *existiert*: `Actions` → `gates`, Filter `Branch: main`, Commit suchen.
+  Kein Eintrag ist ein Befund, kein Nichts.
+* Fehlt er, `gates.yml` per `workflow_dispatch` auf `main` anstoßen
   (`Actions` → `gates` → `Run workflow`, Branch `main`).
+* Bleiben die Jobs danach im Status `queued`, ohne dass ein Runner zugeteilt
+  wird, liegt es nicht an diesem Repository. Dann hilft nur ein erneuter
+  Anstoß später; `timeout-minutes` räumt den hängenden Lauf von selbst ab.
+  Ein so abgeräumter Lauf zählt als *kein* Lauf, nicht als roter.
 
-Beide Vorfälle dieses Musters — der Branch-Präfix oben und der App-Token hier —
-haben dieselbe Wurzel: Wer Betriebsbereitschaft daran festmacht, dass nichts
-rot ist, misst die Abwesenheit von Information. Rot ist ein Befund, **grau ist
-keiner**. Die Frage lautet nie „ist etwas rot", sondern „hat die Kette diesen
-Stand tatsächlich gesehen".
+Die Regel dahinter, einmal formuliert statt jedes Mal neu entdeckt: Wer
+Betriebsbereitschaft daran festmacht, dass nichts rot ist, misst die
+Abwesenheit von Information. Rot ist ein Befund, **grau ist keiner**. Die
+Frage lautet nie „ist etwas rot", sondern „hat die Kette diesen Stand
+tatsächlich gesehen".
 
 Ein Unterschied zur Handarbeit ist beabsichtigt: **die CI ruft niemals
 `checksum` oder `release`.** Beide schreiben und würden genau den Fehler

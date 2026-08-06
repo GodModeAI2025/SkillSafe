@@ -13,9 +13,14 @@ name: gates
 #    Tests laufen über `unittest discover` statt über pytest, damit die CI
 #    dieselbe Nullabhängigkeit hat wie das ausgelieferte Artefakt.
 
+# Beide Branch-Präfixe stehen bewusst nebeneinander: `agent/**` deckt die
+# Historie ab, `claude/**` das heutige Namensschema. Das Schema hat sich
+# einmal verschoben, ohne dass der Trigger mitzog — Feature-Branches liefen
+# danach ungegated, und das fiel nicht auf, weil ein fehlender Lauf kein
+# roter Lauf ist. Wer künftig ein Präfix einführt, trägt es hier nach.
 on:
   push:
-    branches: ["main", "agent/**"]
+    branches: ["main", "agent/**", "claude/**"]
   pull_request:
     branches: ["main"]
   workflow_dispatch:

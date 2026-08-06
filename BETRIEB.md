@@ -88,8 +88,20 @@ auch wenn die Profil-Nummer dabei steigt.
 
 ## Was die CI prüft
 
-`.github/workflows/gates.yml` fährt dieselbe Kette bei jedem Push und Pull
-Request, über Python 3.9, 3.11 und 3.13 auf Ubuntu und 3.13 auf macOS.
+`.github/workflows/gates.yml` fährt dieselbe Kette über Python 3.9, 3.11 und
+3.13 auf Ubuntu und 3.13 auf macOS.
+
+Ausgelöst wird sie bei Pushes auf `main`, `agent/**` und `claude/**` sowie bei
+jedem Pull Request gegen `main`. **Die Präfix-Liste ist die eigentliche
+Zusage**, nicht „jeder Push": Ein Branch außerhalb dieser Muster läuft
+ungegated, und das fällt niemandem auf, weil ein fehlender Lauf kein roter
+Lauf ist. Genau das ist einmal passiert, als das Namensschema von `agent/`
+auf `claude/` wechselte. Wer ein neues Präfix einführt, trägt es dort nach —
+oder arbeitet über einen Pull Request, der immer greift.
+
+Die Kette ist außerdem netzfrei: `SKILLSAFE_OFFLINE=1` steht global im
+Workflow, damit ein Gate nicht an der Verfügbarkeit einer aufgeführten
+Netzquelle hängt. Ein Gate soll den Bestand messen, nicht das Wetter.
 
 Ein Unterschied zur Handarbeit ist beabsichtigt: **die CI ruft niemals
 `checksum` oder `release`.** Beide schreiben und würden genau den Fehler

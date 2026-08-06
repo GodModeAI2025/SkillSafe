@@ -1,0 +1,37 @@
+{
+  "anchors": [
+    {
+      "block": "absatz",
+      "document": "handbuch/mietminderung.md",
+      "document_sha256": "1d5d03e6b6ac39135d50b78ba4c17877c55fdb1f2814ff889a3a22477c09a58a",
+      "id": "A-0004",
+      "locator": "Abschnitt \"Voraussetzungen\", Satz 2",
+      "sentence_index": 4,
+      "suspicious_instruction": false,
+      "text": "Erheblicher Schimmelbefall in Wohnräumen ist ein solcher Mangel und berechtigt zur Mietminderung.",
+      "text_sha256": "6fdc2900d3eed55cb64418119420391b9f73b1beef5418111ed7d37244aa12b7"
+    },
+    {
+      "block": "absatz",
+      "document": "handbuch/mietminderung.md",
+      "document_sha256": "1d5d03e6b6ac39135d50b78ba4c17877c55fdb1f2814ff889a3a22477c09a58a",
+      "id": "A-0007",
+      "locator": "Abschnitt \"Anzeigepflicht\", Satz 1",
+      "sentence_index": 7,
+      "suspicious_instruction": false,
+      "text": "Der Mangel ist dem Vermieter unverzüglich anzuzeigen.",
+      "text_sha256": "30e8241f5f1e49d097156928ab026756a8acc905f6b7b14a2d45fbe695b3910d"
+    }
+  ],
+  "extractor": {
+    "kind": "human",
+    "name": "lokale Sichtprüfung",
+    "version": "1"
+  },
+  "language": "de",
+  "schema": "skillsafe.anchors/v1",
+  "segmentation": "satzsegmentierung/v1",
+  "source_id": "X-0001",
+  "source_kind": "markdown-tree",
+  "verified": true
+}

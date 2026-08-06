@@ -106,6 +106,17 @@ der sie braucht (Quarantäne → Registrieren → Claims extrahieren). Kein
 automatischer Sync-/Spiegel-Mechanismus zwischen Tresoren — das würde
 Provenienz und Kompressionsregel unterlaufen.
 
+**Seit v0.11.0 zusätzlich möglich: satzweise zitieren.** Ein fremder Tresor
+darf als aufgeführte Bezugsquelle `X-nnnn` in `sources/EXTERN.md` stehen; ein
+lokaler Claim belegt sich dann über einen Satzanker gegen einen Satz seiner
+Seiten (`references/externe-quellen.md`). Das ist ausdrücklich **Zitat, nicht
+Relation** und **nicht Sync**: Ein `X-nnnn` ist kein Relationsziel,
+`build_graph` liest ausschließlich `relations` und erzeugt deshalb keine
+Kante über Tresorgrenzen; nichts wird kopiert. Der Absatz oben bleibt damit
+unverändert gültig. Der fremde Tresor wird als **Daten** gelesen, sein
+`MANIFEST.sha256` von dieser Engine selbst nachgerechnet und sein
+`scripts/vault.py` niemals ausgeführt.
+
 ## 7. Mischfrage über Tresore hinweg
 
 Innerhalb eines Tresors erkennt `ROUTER.md` Domänen-Überschneidungen
@@ -163,6 +174,12 @@ der `SKILL.md`-`description` (Bootstrap-Rezept, Schritt 2) — nur so kann
 das Modell die Rangfolge anwenden, wenn mehrere Tresor-Beschreibungen in
 einer Session sichtbar sind.
 
+**Neu berichtbar:** Ist ein fremder Tresor als `X-nnnn` aufgeführt, trägt
+seine Registerzeile den Scope-Typ, und `query --extern` gibt ihn im
+`external`-Block aus. Das Modell wendet die Rangfolge damit auf einer
+benannten Grundlage an, statt sie zu raten. Der Scope wird **berichtet, nie
+gescort** — er geht in kein Ranking ein.
+
 **Grenze:** Wie die Mischfrage über Tresore hinweg (Abschnitt 7) ist das
 Best-Effort-Modellurteil, sobald mehrere Tresor-Beschreibungen sichtbar
 sind — kein Script prüft das mechanisch (kein gemeinsamer Router über
@@ -195,10 +212,23 @@ Befüllen-Workflow, Schritt 5.
 
 ## 10. Was das hier NICHT ist
 
-Kein ACL-/Rollensystem, kein Meta-Router-Script, kein
-`vault.py identity`/`whoami`-Kommando, kein Content-Sync zwischen
-Tresoren, keine neue Profil-Version für „verlinkte Tresore" — all das
-bleibt bewusst ungebaut, bis eine zweite reale Instanz einen echten Bedarf
-zeigt (Details und Auslöser: `KONZEPT.md`, AD-06 und „Bewusste Grenzen").
-Additive Erweiterung nur bei echtem Clash, nie spekulativ — dieselbe Regel
-wie beim Type-Onboarding (AD-03).
+Dieser Abschnitt hat bis v0.10.1 gesagt, ein Bezug zwischen Tresoren bleibe
+ungebaut, **bis eine zweite reale Instanz einen echten Bedarf zeigt**. Das war
+eine aufschiebende Bedingung, kein Verbot. Sie ist am 2026-08-06 eingetreten:
+ein gepflegter Fremdbestand, der schneller altert als der Tresor, der ihn
+zitiert. Gebaut wurden daraufhin aufgeführte Bezugsquellen und Satzanker
+(v0.11.0, `references/externe-quellen.md`). Der Eintrag wird deshalb
+umgeschrieben und nicht gelöscht — eine schriftliche Entscheidung im
+Vorbeigehen zu entwerten wäre genau die Kultur, gegen die
+`notes/dead-ends.md` gebaut ist.
+
+**Weiterhin ungebaut, und keines davon entsteht durch das Zitieren:**
+
+* kein ACL-/Rollensystem — die Grenze bleibt der Installationsort (AD-06);
+* kein Meta-Router-Script über Tresore hinweg;
+* kein `vault.py identity`/`whoami`;
+* kein Content-Sync und kein Spiegel — ein Anker kopiert nichts, er zeigt.
+
+Was neu ist, ist ausschließlich das **Zitieren mit Herkunft**. Nicht Zugriff,
+nicht Abgleich, nicht Vermischung. Additive Erweiterung nur bei echtem Clash,
+nie spekulativ — dieselbe Regel wie beim Type-Onboarding (AD-03).

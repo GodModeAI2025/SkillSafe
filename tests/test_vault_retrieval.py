@@ -522,5 +522,303 @@ Das Bild zeigt eine grüne Produktionsfreigabe.
         self.assertNotIn("RecursionError", result.stderr)
 
 
+    # ---------------------------------------------- Externe Bezugsquellen
+
+    EXTERN_FIXTURE = {
+        "handbuch/miete.md": (
+            "---\ntitle: Minderung bei Maengeln\ntags: [minderung, mangel]\n---\n\n"
+            "# Minderung bei Maengeln\n\n"
+            "Erheblicher Schimmelbefall in Wohnraeumen ist ein Mangel. "
+            "Die Wohnung ist dann nicht vertragsgemaess.\n"
+        ),
+        "handbuch/see.md": (
+            "---\ntitle: Minderung und Maengel im Seehandel\ntags: [minderung, mangel]\n---\n\n"
+            "# Minderung und Maengel im Seehandel\n\n"
+            "Die Schiffshypothek sichert eine Forderung am eingetragenen Schiff. "
+            "Der Rang entscheidet ueber den Erloes.\n"
+        ),
+    }
+
+    def install_extern_fixture(self, inhalt=None):
+        """Externe Wurzel im SELBEN Tempdir wie der Wegwerf-Tresor.
+
+        Damit gilt die st_dev-Invariante automatisch, die Bytes stehen im
+        Testquelltext und Hashes wie Scores sind reproduzierbar. Nie an einen
+        Pfad ausserhalb des Tempdirs binden, nie an $HOME, nie an das Repo.
+        """
+        wurzel = Path(self.tempdir.name) / "extern-handbuch"
+        for relpfad, text in (inhalt or self.EXTERN_FIXTURE).items():
+            ziel = wurzel / relpfad
+            ziel.parent.mkdir(parents=True, exist_ok=True)
+            ziel.write_text(text, encoding="utf-8")
+        (self.root / "sources/EXTERN.md").write_text(
+            "# Register externer Bezugsquellen\n\n"
+            "| ID | Titel | Art | Ziel | Stand/Version | Bindungsschlüssel | Trust | Rechte |\n"
+            "|---|---|---|---|---|---|---|---|\n"
+            "| X-0001 | Testhandbuch | markdown-tree | - | 2026-08-06 | testhandbuch | T3 | frei |\n",
+            encoding="utf-8",
+        )
+        for pfad in (self.root / "sources/derived").glob("X-*.json"):
+            pfad.unlink()
+        seite = self.root / "knowledge/demo-extern/mietminderung.md"
+        if seite.exists():
+            shutil.rmtree(seite.parent)
+            router = self.root / "ROUTER.md"
+            text = router.read_text(encoding="utf-8")
+            start = text.index("## demo-extern")
+            ende = text.index("## demo-okf")
+            router.write_text(text[:start] + text[ende:], encoding="utf-8")
+        return wurzel
+
+    def bind_extern(self, wurzel):
+        result = self.run_cli("extern", "bind", "X-0001", str(wurzel))
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def build_katalog(self):
+        result = self.run_cli("orchestrator-template", "X-0001")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        katalog = json.loads(result.stdout)
+        titel = {
+            "handbuch/miete.md": ("Minderung bei Maengeln", ["minderung", "mangel"]),
+            "handbuch/see.md": ("Minderung und Maengel im Seehandel",
+                                ["minderung", "mangel"]),
+        }
+        for dok in katalog["documents"]:
+            name, tags = titel.get(dok["path"], (dok["path"], []))
+            dok["title"], dok["summary"], dok["tags"] = name, "", tags
+        (self.root / "sources/derived/X-0001__orchestrator.json").write_text(
+            json.dumps(katalog, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        return katalog
+
+    def extern_query(self, *words):
+        result = self.run_cli("query", "--extern", *words)
+        payload = json.loads(result.stdout)
+        return result, payload["external"]
+
+    def test_default_query_never_leaves_the_skill_folder(self):
+        """Ohne --extern darf eine tote Bindungswurzel nichts ausmachen."""
+        wurzel = self.install_extern_fixture()
+        self.bind_extern(wurzel)
+        shutil.rmtree(wurzel)
+        self.release()
+        result, payload = self.query("Was ist OKF?")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(payload["state"], "candidates_found")
+        self.assertEqual(payload["external"]["state"], "not_requested")
+        self.assertEqual(payload["external"]["hits"], [])
+
+    def test_substring_never_matches_across_token_boundaries(self):
+        """'himmel' darf niemals 'schimmel' finden."""
+        wurzel = self.install_extern_fixture()
+        self.bind_extern(wurzel)
+        self.build_katalog()
+        self.release()
+        _, block = self.extern_query("himmel")
+        self.assertEqual(block["state"], "no_external_candidates")
+        self.assertEqual(block["hits"], [])
+        self.assertIn("Fachbegriffe", block["reason"])
+
+    def test_second_stage_beats_a_misleading_catalog(self):
+        """Katalogtext ist schwach, der tatsaechliche Bestand ist stark."""
+        wurzel = self.install_extern_fixture()
+        self.bind_extern(wurzel)
+        self.build_katalog()
+        self.release()
+        _, block = self.extern_query("Schimmelbefall Wohnraeumen")
+        self.assertEqual(block["state"], "external_candidates_found")
+        treffer = {h["document"]: h for h in block["hits"]}
+        self.assertIn("handbuch/miete.md", treffer)
+        # Die Abdeckungsschwelle wirft das Seerecht heraus, obwohl sein
+        # Katalogtext fast identisch ist.
+        self.assertNotIn("handbuch/see.md", treffer)
+        self.assertEqual(block["hits"][0]["document"], "handbuch/miete.md")
+        self.assertGreater(treffer["handbuch/miete.md"]["coverage_percent"], 0)
+
+    def test_external_hits_are_never_evidence(self):
+        wurzel = self.install_extern_fixture()
+        self.bind_extern(wurzel)
+        self.build_katalog()
+        self.release()
+        result = self.run_cli("query", "--extern", "Schimmelbefall")
+        payload = json.loads(result.stdout)
+        for treffer in payload["external"]["hits"]:
+            self.assertFalse(treffer["is_evidence"])
+            self.assertEqual(treffer["role"], "external_pointer")
+            self.assertNotIn("claim_id", treffer)
+        claim_ids = {item["claim_id"] for item in payload["evidence"]}
+        for treffer in payload["external"]["hits"]:
+            self.assertNotIn(treffer["document"], claim_ids)
+
+    def test_retrieval_fingerprint_ignores_external_block(self):
+        """Der lokale Fingerprint darf nicht an fremder Verfuegbarkeit haengen."""
+        wurzel = self.install_extern_fixture()
+        self.bind_extern(wurzel)
+        self.build_katalog()
+        self.release()
+        _, ohne = self.query("Schimmelbefall")
+        result = self.run_cli("query", "--extern", "Schimmelbefall")
+        mit = json.loads(result.stdout)
+        self.assertEqual(ohne["retrieval_fingerprint"], mit["retrieval_fingerprint"])
+        self.assertIsNotNone(mit["external"]["external_fingerprint"])
+
+    def test_sentence_segmentation_is_stable(self):
+        faelle = [
+            ("Das Profil nutzt z. B. flache Listen. Danach folgt mehr.",
+             ["Das Profil nutzt z. B. flache Listen.", "Danach folgt mehr."]),
+            ("Siehe § 536 Abs. 2 BGB. Danach gilt mehr.",
+             ["Siehe § 536 Abs. 2 BGB.", "Danach gilt mehr."]),
+            ("Der Wert ist 3.14 und bleibt. Ende.",
+             ["Der Wert ist 3.14 und bleibt.", "Ende."]),
+            ("Dr. Meier kam. Prof. Schulz auch.",
+             ["Dr. Meier kam.", "Prof. Schulz auch."]),
+            ("Version v0.2 gilt. Alles klar.",
+             ["Version v0.2 gilt.", "Alles klar."]),
+        ]
+        wurzel = self.install_extern_fixture({
+            "probe.md": "\n\n".join(text for text, _ in faelle) + "\n"
+        })
+        self.bind_extern(wurzel)
+        result = self.run_cli("anchor-template", "X-0001", "probe.md")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        saetze = [a["text"] for a in json.loads(result.stdout)["anchors"]]
+        erwartet = [satz for _, gruppe in faelle for satz in gruppe]
+        self.assertEqual(saetze, erwartet)
+
+    def test_anchor_drift_is_a_warning_not_an_error(self):
+        wurzel = self.install_extern_fixture()
+        self.bind_extern(wurzel)
+        result = self.run_cli("anchor-template", "X-0001", "handbuch/miete.md")
+        vorlage = json.loads(result.stdout)
+        vorlage["anchors"] = [vorlage["anchors"][1]]
+        vorlage["anchors"][0]["locator"] = "Abschnitt 1"
+        vorlage["extractor"] = {"kind": "human", "name": "Test", "version": "1"}
+        vorlage["verified"] = True
+        (self.root / "sources/derived/X-0001__anchors.json").write_text(
+            json.dumps(vorlage, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        self.release()
+        # Text davor einfuegen: der Satz verschiebt sich, bricht aber nicht.
+        pfad = wurzel / "handbuch/miete.md"
+        pfad.write_text(
+            pfad.read_text(encoding="utf-8").replace(
+                "# Minderung bei Maengeln\n",
+                "# Minderung bei Maengeln\n\nEin neuer Vorspann. Noch ein Satz.\n",
+            ),
+            encoding="utf-8",
+        )
+        self.assertEqual(self.run_cli("validate").returncode, 0)
+        doctor = self.run_cli("doctor")
+        self.assertIn("verschoben", doctor.stdout)
+        self.assertEqual(doctor.returncode, 0, doctor.stdout)
+
+    def test_scope_is_reported_not_scored(self):
+        wurzel = self.install_extern_fixture()
+        (self.root / "sources/EXTERN.md").write_text(
+            "# Register\n\n"
+            "| ID | Titel | Art | Ziel | Stand/Version | Bindungsschlüssel | Trust | Rechte |\n"
+            "|---|---|---|---|---|---|---|---|\n"
+            "| X-0001 | Fremdtresor | skillsafe-vault | - | 2026-08-06, Scope: fachbereich | testhandbuch | T3 | frei |\n",
+            encoding="utf-8",
+        )
+        self.bind_extern(wurzel)
+        self.release()
+        _, block = self.extern_query("Schimmelbefall")
+        quelle = block["sources"][0]
+        self.assertEqual(quelle["scope"], "fachbereich")
+        self.assertNotIn("score", quelle)
+
+
+    # Kleines, beschriftetes Evalset gegen den mitgelieferten Beispielbaum.
+    # Die fuenf Negativfaelle sind der eigentliche Punkt: ohne sie misst man
+    # nur, wie gern ein System antwortet.
+    EXTERN_EVALSET_POSITIV = (
+        ("Schimmelbefall Wohnraeumen", "handbuch/mietminderung.md"),
+        ("Minderungsquote Gebrauchsbeeintraechtigung", "handbuch/mietminderung.md"),
+        ("Vermieter unverzueglich anzuzeigen", "handbuch/mietminderung.md"),
+        ("Mangel vertraglich vereinbarten Zustand", "handbuch/mietminderung.md"),
+        ("Schiffshypothek Schiffsregister", "handbuch/schiffshypothek.md"),
+        ("Rang Eintragung Erloes", "handbuch/schiffshypothek.md"),
+        ("Vorzugsbegriff Synonyme Hierarchie", "handbuch/begriffsarbeit.md"),
+        ("Definition-Claim Alias-Kollisionen", "handbuch/begriffsarbeit.md"),
+        ("Discovery Antwort-Evidenz", "handbuch/begriffsarbeit.md"),
+        ("Geschwisterordner Bindungswurzel", "README.md"),
+    )
+    EXTERN_EVALSET_NEGATIV = (
+        "himmel", "Quantenverschraenkung", "Bilanzsumme Konzernabschluss",
+        "Photosynthese", "Zinseszins",
+    )
+
+    def test_external_routing_quality_stays_above_the_floor(self):
+        """Ohne Messung ist der Orchestrator eine Behauptung.
+
+        Untergrenze statt Punktwert: die Zahl in
+        references/externe-quellen.md darf nicht still absacken. Die
+        Stichprobe ist klein und selbst gebaut — sie zeigt, dass zweite
+        Rankingstufe und Abdeckungsschwelle wirken, nicht wie sich das
+        Routing auf einem gewachsenen Fremdbestand schlägt.
+        """
+        if not (self.root / "sources/derived/X-0001__orchestrator.json").exists():
+            self.skipTest("Demo-Bestand ohne externen Katalog")
+        wurzel = REPOSITORY / "beispiel-extern"
+        if not wurzel.is_dir():
+            self.skipTest("Beispielbaum fehlt")
+        ziel = Path(self.tempdir.name) / "beispiel-extern"
+        shutil.copytree(wurzel, ziel)
+        self.assertEqual(
+            self.run_cli("extern", "bind", "X-0001", str(ziel)).returncode, 0)
+
+        def treffer(frage):
+            result = self.run_cli("query", "--extern", "--source", "X-0001", frage)
+            return json.loads(result.stdout)["external"]["hits"]
+
+        top1 = 0
+        kleinste_abdeckung = 100
+        for frage, soll in self.EXTERN_EVALSET_POSITIV:
+            hits = treffer(frage)
+            self.assertTrue(hits, f"kein Treffer für {frage!r}")
+            if hits[0]["document"] == soll:
+                top1 += 1
+                kleinste_abdeckung = min(
+                    kleinste_abdeckung, hits[0]["coverage_percent"])
+        quote = 100 * top1 // len(self.EXTERN_EVALSET_POSITIV)
+        self.assertGreaterEqual(quote, 90, f"Top-1 auf {quote} % gefallen")
+
+        for frage in self.EXTERN_EVALSET_NEGATIV:
+            self.assertEqual(
+                treffer(frage), [],
+                f"Fehltreffer auf {frage!r} — ein plausibler Fehltreffer ist "
+                f"teurer als kein Treffer",
+            )
+        # Der empirische Nebenbefund, der die Schwelle rechtfertigt.
+        self.assertGreater(kleinste_abdeckung, 0)
+
+
+    def test_unknown_source_filter_fails_closed_instead_of_looking_empty(self):
+        """Ein Tippfehler in der Quellen-ID darf keinen Negativbefund erzeugen."""
+        wurzel = self.install_extern_fixture()
+        self.bind_extern(wurzel)
+        self.build_katalog()
+        self.release()
+        result = self.run_cli("query", "--extern", "--source", "X-9999",
+                              "Schimmelbefall")
+        block = json.loads(result.stdout)["external"]
+        self.assertEqual(block["state"], "invalid_query")
+        self.assertEqual(block["hits"], [])
+        self.assertIn("X-9999", block["reason"])
+        self.assertIn("kein Negativbefund", block["reason"])
+
+    def test_external_lookup_offer_is_visible_without_the_flag(self):
+        """Der Antwort-Workflow muss ohne --extern erkennen, ob 4c existiert."""
+        wurzel = self.install_extern_fixture()
+        self.bind_extern(wurzel)
+        self.release()
+        _, payload = self.query("Was ist OKF?")
+        self.assertTrue(payload["fallback"]["external_lookup_available"])
+        self.assertFalse(payload["fallback"]["external_live_lookup_used"])
+
+
 if __name__ == "__main__":
     unittest.main()

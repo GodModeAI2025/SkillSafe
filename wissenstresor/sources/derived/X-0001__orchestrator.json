@@ -1,0 +1,117 @@
+{
+  "document_count": 4,
+  "documents": [
+    {
+      "path": "README.md",
+      "sentence_count": 9,
+      "sha256": "7fcf4911695eb3477813e0f11361be328277ad741bcb7d6b9d1e1f35e52cd6e4",
+      "summary": "Erklaert, warum dieser Ordner neben dem Tresor liegt und nicht in ihm.",
+      "tags": [
+        "beispiel",
+        "extern",
+        "grenze"
+      ],
+      "title": "Beispielbaum: Zweck und Grenzen",
+      "token_count": 113,
+      "top_tokens": [
+        "nicht",
+        "er",
+        "baum",
+        "bestand",
+        "engine",
+        "externe",
+        "fuer",
+        "markdown",
+        "nur",
+        "tresors",
+        "warum",
+        "wird"
+      ]
+    },
+    {
+      "path": "handbuch/begriffsarbeit.md",
+      "sentence_count": 10,
+      "sha256": "9a5eca5476db1fe6b23c3d8ccdce6d0a393bde7a289cf30f573161a4e22cd4a5",
+      "summary": "Zweck, Pflege und Grenze kontrollierter Begriffe.",
+      "tags": [
+        "begriffswelt",
+        "synonym",
+        "ontologie"
+      ],
+      "title": "Begriffswelten pflegen",
+      "token_count": 46,
+      "top_tokens": [
+        "katalogtext",
+        "synonyme",
+        "alias",
+        "antwort",
+        "begriff",
+        "begriffswelt",
+        "begriffswelten",
+        "belegten",
+        "bestand",
+        "braucht",
+        "buendelt",
+        "claim"
+      ]
+    },
+    {
+      "path": "handbuch/mietminderung.md",
+      "sentence_count": 11,
+      "sha256": "1d5d03e6b6ac39135d50b78ba4c17877c55fdb1f2814ff889a3a22477c09a58a",
+      "summary": "Regelt Mangelbegriff, Anzeigepflicht und Minderungsquote.",
+      "tags": [
+        "miete",
+        "minderung",
+        "mangel"
+      ],
+      "title": "Mietminderung bei Maengeln",
+      "token_count": 51,
+      "top_tokens": [
+        "mangel",
+        "mietminderung",
+        "nicht",
+        "abweicht",
+        "anzeige",
+        "anzeigepflicht",
+        "anzuzeigen",
+        "ausmass",
+        "berechtigt",
+        "einzelfallbetrachtung",
+        "erheblicher",
+        "erklaert"
+      ]
+    },
+    {
+      "path": "handbuch/schiffshypothek.md",
+      "sentence_count": 10,
+      "sha256": "81001c709584b04a0c5ed3df8f04b52da5fc4a27192a8f7338fa99cdbfe34c5a",
+      "summary": "Regelt Entstehung und Rang der Schiffshypothek.",
+      "tags": [
+        "see",
+        "minderung",
+        "mangel"
+      ],
+      "title": "Minderung und Maengel im Seehandel",
+      "token_count": 50,
+      "top_tokens": [
+        "eintragung",
+        "rang",
+        "abgrenzung",
+        "am",
+        "anderen",
+        "bestand",
+        "daran",
+        "denselben",
+        "dieses",
+        "dokument",
+        "einen",
+        "eingetragenen"
+      ]
+    }
+  ],
+  "generated_from_sha256": "22aa8277df9d916215c0573b6b42bb53faba86a5466dbcab2d24bbdf79292bad",
+  "schema": "skillsafe.orchestrator/v1",
+  "segmentation": "satzsegmentierung/v1",
+  "source_id": "X-0001"
+}

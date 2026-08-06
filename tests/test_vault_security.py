@@ -1015,5 +1015,277 @@ class VaultSecurityTests(unittest.TestCase):
         self.assertEqual(stat.S_IMODE(log.stat().st_mode), 0o600)
 
 
+    # ---------------------------------------------- Externe Bezugsquellen
+
+    EXTERN_REGISTER = (
+        "# Register externer Bezugsquellen\n\n"
+        "| ID | Titel | Art | Ziel | Stand/Version | Bindungsschlüssel | Trust | Rechte |\n"
+        "|---|---|---|---|---|---|---|---|\n"
+        "| X-0001 | Testhandbuch | markdown-tree | {ziel} | 2026-08-06 | testhandbuch | T3 | frei |\n"
+    )
+
+    def extern_wurzel(self, name="extern-handbuch"):
+        """Externe Wurzel im SELBEN Tempdir wie der Tresor — nie ausserhalb."""
+        wurzel = self.work / name
+        (wurzel / "handbuch").mkdir(parents=True, exist_ok=True)
+        (wurzel / "handbuch/miete.md").write_text(
+            "# Minderung\n\nErheblicher Schimmelbefall ist ein Mangel.\n",
+            encoding="utf-8",
+        )
+        return wurzel
+
+    def install_extern_register(self, ziel="-", root=None):
+        root = root or self.root
+        for pfad in (root / "sources/derived").glob("X-*.json"):
+            pfad.unlink()
+        seite = root / "knowledge/demo-extern"
+        if seite.exists():
+            shutil.rmtree(seite)
+            router = root / "ROUTER.md"
+            text = router.read_text(encoding="utf-8")
+            router.write_text(
+                text[:text.index("## demo-extern")] + text[text.index("## demo-okf"):],
+                encoding="utf-8",
+            )
+        (root / "sources/EXTERN.md").write_text(
+            self.EXTERN_REGISTER.format(ziel=ziel), encoding="utf-8")
+
+    def test_external_root_must_be_absolute_and_free_of_dotdot(self):
+        self.install_extern_register()
+        wurzel = self.extern_wurzel()
+        for unsicher, fragment in (
+            ("relativ/pfad", "absoluter Pfad"),
+            (f"{wurzel}/../{wurzel.name}", "'..'"),
+        ):
+            with self.subTest(unsicher=unsicher):
+                result = self.run_cli("extern", "bind", "X-0001", unsicher)
+                self.assertNotEqual(result.returncode, 0, result.stdout)
+                self.assertIn(fragment, result.stdout)
+
+    def test_symlinked_root_is_resolved_and_stored_as_its_target(self):
+        """Aufloesen statt ablehnen — aber sichtbar, nicht still.
+
+        Eine fruehere Fassung verlangte eine schon kanonische Wurzel. Das war
+        auf macOS unbrauchbar, weil dort /var ein Symlink auf /private/var ist
+        und das Betriebssystem Temporaerpfade so ausliefert. Gebunden und
+        gespeichert wird deshalb der aufgeloeste Pfad.
+        """
+        self.install_extern_register()
+        wurzel = self.extern_wurzel()
+        link = self.work / "extern-link"
+        os.symlink(str(wurzel), str(link))
+        result = self.run_cli("extern", "bind", "X-0001", str(link))
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        bindung = json.loads(
+            (self.root / ".vault-extern.json").read_text(encoding="utf-8"))
+        gespeichert = bindung["bindings"][0]["root"]
+        self.assertEqual(gespeichert, str(wurzel.resolve()))
+        self.assertNotEqual(gespeichert, str(link))
+
+    def test_external_root_and_vault_must_not_contain_each_other(self):
+        self.install_extern_register()
+        for ziel in (str(self.root), str(self.root.parent)):
+            with self.subTest(ziel=ziel):
+                result = self.run_cli("extern", "bind", "X-0001", ziel)
+                self.assertNotEqual(result.returncode, 0, result.stdout)
+                self.assertIn("einander nicht enthalten", result.stdout)
+
+    def test_external_document_traversal_is_rejected_even_unbound(self):
+        """Die Pfadpruefung ist lexikalisch und wirkt ohne jede Bindung."""
+        self.install_extern_register()
+        (self.root / "sources/derived/X-0001__anchors.json").write_text(
+            json.dumps({
+                "schema": "skillsafe.anchors/v1", "source_id": "X-0001",
+                "source_kind": "markdown-tree",
+                "segmentation": "satzsegmentierung/v1", "language": "de",
+                "extractor": {"kind": "human", "name": "t", "version": "1"},
+                "verified": True,
+                "anchors": [{
+                    "id": "A-0001", "document": "../geheim.md",
+                    "document_sha256": "0" * 64, "sentence_index": 1,
+                    "block": "absatz", "locator": "x", "text": "Ein Satz.",
+                    "text_sha256": "0" * 64, "suspicious_instruction": False,
+                }],
+            }, ensure_ascii=False), encoding="utf-8")
+        self.assert_validate_fails("unzulässiger Pfad")
+
+    def test_external_special_files_are_rejected(self):
+        if not hasattr(os, "mkfifo"):
+            self.skipTest("mkfifo ist auf dieser Plattform nicht verfügbar")
+        self.install_extern_register()
+        wurzel = self.extern_wurzel()
+        os.mkfifo(str(wurzel / "handbuch/pipe.md"))
+        self.run_cli("extern", "bind", "X-0001", str(wurzel))
+        result = self.run_cli("orchestrator-template", "X-0001")
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertIn("keine reguläre Datei", result.stdout)
+
+    def test_external_document_budget_fails_closed_without_partial_result(self):
+        self.install_extern_register()
+        wurzel = self.extern_wurzel()
+        vault = self.load_vault(self.root, "budget")
+        for nummer in range(vault.MAX_EXTERN_DOKUMENTE + 2):
+            (wurzel / "handbuch" / f"d{nummer:05d}.md").write_text(
+                "# T\n\nEin Satz.\n", encoding="utf-8")
+        self.run_cli("extern", "bind", "X-0001", str(wurzel))
+        result = self.run_cli("orchestrator-template", "X-0001")
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["state"], "budget_exceeded")
+        self.assertNotIn("documents", payload)
+
+    def test_binding_file_is_never_manifested_and_never_packaged(self):
+        """Der wichtigste Test: eine host-lokale Datei darf das Paket nie erreichen."""
+        self.install_extern_register()
+        wurzel = self.extern_wurzel()
+        ohne = self.run_cli("checksum")
+        self.assertEqual(ohne.returncode, 0, ohne.stdout)
+        manifest_ohne = (self.root / "MANIFEST.sha256").read_text(encoding="utf-8")
+        self.run_cli("extern", "bind", "X-0001", str(wurzel))
+        self.assertTrue((self.root / ".vault-extern.json").is_file())
+        self.assertEqual(self.run_cli("checksum", "--verify").returncode, 0)
+        self.run_cli("checksum")
+        self.assertEqual(
+            manifest_ohne,
+            (self.root / "MANIFEST.sha256").read_text(encoding="utf-8"),
+            "Die Bindung hat das Manifest verändert",
+        )
+        self.assertNotIn(".vault-extern", manifest_ohne)
+
+    def test_claim_on_external_source_needs_exactly_one_known_anchor(self):
+        seite = self.root / "knowledge/demo-extern/mietminderung.md"
+        if not seite.exists():
+            self.skipTest("Demo-Bestand ohne externe Seite")
+        self.replace_text(
+            "knowledge/demo-extern/mietminderung.md",
+            "[X-0001 | A-0004 | Wortlaut]",
+            "[X-0001 | A-9999 | Wortlaut]",
+        )
+        self.assert_validate_fails("unbekannten Anker")
+
+    def test_suspicious_anchor_cannot_back_a_claim(self):
+        pfad = self.root / "sources/derived/X-0001__anchors.json"
+        if not pfad.exists():
+            self.skipTest("Demo-Bestand ohne Ankerdatei")
+        daten = json.loads(pfad.read_text(encoding="utf-8"))
+        daten["anchors"][0]["suspicious_instruction"] = True
+        pfad.write_text(json.dumps(daten, ensure_ascii=False), encoding="utf-8")
+        self.assert_validate_fails("verdächtigen Anker")
+
+    def test_only_https_targets_under_the_registered_prefix_are_reachable(self):
+        vault = self.load_vault(self.root, "netz")
+        praefix = "https://example.invalid/pfad/"
+        for ziel, fragment in (
+            ("http://example.invalid/pfad/x.md", "registrierten Präfix"),
+            ("https://anderer.invalid/x.md", "registrierten Präfix"),
+        ):
+            with self.subTest(ziel=ziel):
+                self.assertIn(fragment, vault._hole_https(ziel, praefix)[1])
+        for roh, fragment in (
+            ("http://example.invalid/", "nur https"),
+            ("https://example.invalid/?q=x", "Query"),
+            ("https://user:pw@example.invalid/", "Zugangsdaten"),
+            ("https://example.invalid/../x", "'..'"),
+        ):
+            with self.subTest(roh=roh):
+                self.assertIn(fragment, vault._https_praefix(roh)[1])
+
+    def test_offline_switch_blocks_every_fetch_before_the_socket(self):
+        vault = self.load_vault(self.root, "offline")
+        praefix = "https://example.invalid/"
+        os.environ[vault.EXTERN_OFFLINE_ENV] = "1"
+        try:
+            def darf_nicht_aufgerufen_werden(*args, **kwargs):
+                raise AssertionError("Es wurde trotz Offline-Schaltung geöffnet")
+            daten, grund = vault._hole_https(
+                praefix + "x.md", praefix, opener=darf_nicht_aufgerufen_werden)
+        finally:
+            del os.environ[vault.EXTERN_OFFLINE_ENV]
+        self.assertIsNone(daten)
+        self.assertIn(vault.EXTERN_OFFLINE_ENV, grund)
+
+    def test_no_unverified_ssl_context_anywhere(self):
+        quelle = (self.root / "scripts/vault.py").read_text(encoding="utf-8")
+        # 'verify=False' waere ein falscher Treffer: cmd_checksum hat einen
+        # gleichnamigen Parameter, der mit TLS nichts zu tun hat.
+        for verboten in ("_create_unverified_context", "CERT_NONE",
+                         "check_hostname = False", "ssl._create_default_https_context"):
+            self.assertNotIn(verboten, quelle)
+        self.assertIn("ssl.create_default_context()", quelle)
+
+    def test_foreign_vault_script_is_never_executed(self):
+        """Ein fremder Tresor ist Daten. Sein Script laeuft nie."""
+        self.install_extern_register()
+        fremd = self.new_vault()
+        marker = self.work / "fremdcode-lief"
+        (fremd / "scripts/vault.py").write_text(
+            "import pathlib\n"
+            f"pathlib.Path({str(marker)!r}).write_text('x')\n",
+            encoding="utf-8",
+        )
+        (self.root / "sources/EXTERN.md").write_text(
+            self.EXTERN_REGISTER.format(ziel="-").replace(
+                "markdown-tree", "skillsafe-vault").replace(
+                "2026-08-06", "2026-08-06, Scope: projekt"),
+            encoding="utf-8",
+        )
+        self.run_cli("extern", "bind", "X-0001", str(fremd))
+        self.run_cli("release", "patch")
+        result = self.run_cli("query", "--extern", "Schimmelbefall")
+        self.assertFalse(marker.exists(), "Fremdes vault.py wurde ausgeführt")
+        payload = json.loads(result.stdout)
+        # Das manipulierte Script passt nicht mehr zum fremden Manifest.
+        self.assertEqual(payload["external"]["state"], "invalid_external_source")
+
+    def test_foreign_manifest_mismatch_fails_closed(self):
+        self.install_extern_register()
+        fremd = self.new_vault()
+        (fremd / "knowledge/demo-okf/okf.md").write_text(
+            "manipuliert\n", encoding="utf-8")
+        (self.root / "sources/EXTERN.md").write_text(
+            self.EXTERN_REGISTER.format(ziel="-").replace(
+                "markdown-tree", "skillsafe-vault").replace(
+                "2026-08-06", "2026-08-06, Scope: projekt"),
+            encoding="utf-8",
+        )
+        self.run_cli("extern", "bind", "X-0001", str(fremd))
+        self.run_cli("release", "patch")
+        result = self.run_cli("query", "--extern", "OKF")
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["external"]["state"], "invalid_external_source")
+        self.assertIn("Prüfsumme", payload["external"]["reason"])
+        self.assertEqual(payload["external"]["hits"], [])
+
+
+    def test_okf_export_carries_external_provenance_but_never_a_binding_path(self):
+        """Eine extern belegte Seite darf den Tresor nicht ohne Beleg verlassen."""
+        seite = self.root / "knowledge/demo-extern/mietminderung.md"
+        if not seite.exists():
+            self.skipTest("Demo-Bestand ohne extern belegte Seite")
+        wurzel = self.work / "extern-handbuch"
+        wurzel.mkdir(exist_ok=True)
+        self.run_cli("extern", "bind", "X-0001", str(wurzel))
+        ziel = self.work / "bundle"
+        result = self.run_cli("export", "--okf", "--out", str(ziel))
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        bundle = (ziel / "demo-extern/mietminderung.md").read_text(encoding="utf-8")
+
+        # Herkunft ist da: Quellen-ID, Deskriptor, Titel und Trust.
+        self.assertIn("  - id: X-0001", bundle)
+        self.assertIn("    resource:", bundle)
+        self.assertIn("    oksv_trust:", bundle)
+        self.assertIn("    oksv_external_kind: markdown-tree", bundle)
+        # Die Fußnote ist mehr als die nackte ID: sie nennt die Fundstelle.
+        self.assertRegex(bundle, r"\[\^X-0001\]: .+ — .+ Satz \d+")
+
+        # Der host-lokale Bindungspfad verlässt den Tresor nie.
+        for datei in ziel.rglob("*"):
+            if datei.is_file():
+                self.assertNotIn(
+                    str(wurzel), datei.read_text(encoding="utf-8"),
+                    f"Bindungspfad im Bundle: {datei}",
+                )
+
+
 if __name__ == "__main__":
     unittest.main()

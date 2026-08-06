@@ -29,6 +29,12 @@ ALLOWED_SUFFIXES = frozenset({
 })
 ALLOWED_EXTENSIONLESS = frozenset({"LICENSE", "VERSION"})
 ENGINE_SCRIPT = "scripts/vault.py"
+# Host-lokale Dateien: nie im Paket, nie im Manifest. .vault-extern.json
+# enthaelt absolute Pfade DIESER Maschine — waere sie im Archiv, haenge die
+# reproduzierbare Paket-SHA-256 am Rechner statt am Bestand. Dass vault.py
+# sie ebenfalls ausschliesst, reicht hier bewusst nicht: zwei unabhaengige
+# Gates, wie bei der Dateiart-Allowlist.
+HOST_LOCAL_FILES = frozenset({".vault-release.lock", ".vault-extern.json"})
 
 
 def sha256(path):
@@ -77,12 +83,12 @@ def collect_files(skill):
             path = current_path / name
             relative = safe_relative(path, skill)
             pure = PurePosixPath(relative)
-            if name.startswith(".") and name != ".vault-release.lock":
+            if name.startswith(".") and name not in HOST_LOCAL_FILES:
                 raise ValueError(
                     f"versteckte Datei darf nicht ins Paket: {relative}"
                 )
             if (
-                name == ".vault-release.lock"
+                name in HOST_LOCAL_FILES
                 or path.suffix == ".pyc"
                 or "__pycache__" in pure.parts
                 or pure.parts[:1] == ("evals",)

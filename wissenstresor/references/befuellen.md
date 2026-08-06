@@ -136,3 +136,27 @@ Profil, Registry oder Grammatik.
 **8. Abschluss.** Verworfene Extraktionswege nach `notes/dead-ends.md`.
 Dem Menschen kurz berichten: Quelle, Trust, neue/geänderte Seiten,
 Claim-Bereich, Auffälligkeiten (inkl. etwaiger Injection-Funde).
+
+## Externe Quelle statt Datei
+
+Manches Material soll gar nicht einwandern: ein gepflegtes fremdes Handbuch,
+ein lebendes Repo, ein zweiter Tresor. Wer es kopiert, hat in wenigen Wochen
+eine Fassung, die falsch ist und weiter richtig klingt.
+
+Dafür gibt es den Weg über aufgeführte Bezugsquellen und Satzanker:
+`references/externe-quellen.md`. Ein Claim belegt sich dann gegen genau einen
+Satz der fremden Quelle, nachrechenbar über dessen Prüfsumme.
+
+**Ein Anker ist keine Abkürzung um diesen Workflow.** Er ersetzt Quarantäne,
+Registrierung und Hashen nicht — er ist eine andere Art von Beleg, kein
+schnellerer Ingest. Die Entscheidung zwischen beiden Wegen:
+
+| Situation | Weg |
+|---|---|
+| Die Quelle ist ein abgeschlossenes Dokument, das nicht mehr altert | Regulärer Ingest als `S-nnnn` (dieser Workflow) |
+| Die Quelle wird anderswo weitergepflegt und soll aktuell bleiben | Aufführen als `X-nnnn`, satzweise verankern |
+| Der Inhalt soll wirklich eigener Bestand werden | Regulärer Ingest — auch dann, wenn er zuvor extern zitiert wurde |
+
+Rechte gelten unverändert: Was nicht im Volltext gespeichert werden darf, darf
+auch nicht satzweise als Anker abgelegt werden. Die Rechtespalte entscheidet
+ein Mensch, nicht das Script.

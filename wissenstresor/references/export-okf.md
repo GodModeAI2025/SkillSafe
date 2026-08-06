@@ -48,9 +48,11 @@ python3 scripts/vault.py export --okf --out <zielordner> [--with-sources]
 |---|---|
 | `status: aktiv` / `veraltet` / `in-pruefung` | `status: stable` / `deprecated` / `draft` (§5.4) |
 | `sources: [S-nnnn]` plus Registerzeile | `sources`-Liste mit `id`, `resource`, `title`, `last_modified` (§5.1) |
+| `externe_quellen: [X-nnnn]` plus Zeile aus `sources/EXTERN.md` | derselbe `sources`-Block; `resource` ist das registrierte https-Präfix, sonst ein nicht folgbarer Deskriptor. Dazu `oksv_external_kind` |
 | Trust `T1`/`T2`/`T3` | `oksv_trust` pro Quelleneintrag, ausdrücklich kein v0.2-Feld |
 | `geprueft_von` / `geprueft_am` | `verified: { by, at }` mit `mensch:` zu `human:`, `prozess:` zu `process:`, `agent:x/y` zu `x/y` (§5.2, §7) |
-| Claim-Zeile | unverändert plus Fußnote `[^S-nnnn]`; das Label ist die S-ID, weil §5.1 sie als Join-Key nennt |
+| Claim-Zeile | unverändert plus Fußnote `[^S-nnnn]` bzw. `[^X-nnnn]`; das Label ist die Quellen-ID, weil §5.1 sie als Join-Key nennt |
+| Satzanker `A-nnnn` | in der Fußnote als „Dokument Satz n" hinter dem Quellentitel |
 | `relations` | Abschnitt „Beziehungen" mit bundle-relativen Links, führender Slash (§6.1) |
 | erster Satz der Kurzfassung | `description` (§4.1) |
 | `confidence`, `domain`, `version`, `stand`, `concepts` | `oksv_`-Zusatzschlüssel, nach §4.1 erlaubt |
@@ -84,6 +86,18 @@ Wer ein Bundle behalten will, kopiert es weg, bevor er neu exportiert.
   Datum daraus zu raten wäre genau die Art Vermutung, die Regel 4 verbietet.
 * **`stale_after`.** Der interne Vertrag kennt kein Verfallsdatum. Kommt es,
   wandert es hier mit.
+* **Der zitierte Satzwortlaut externer Quellen.** Ein Satzanker trägt den
+  Wortlaut im Tresor (`sources/derived/X-nnnn__anchors.json`), aber die
+  Ankerdatei wandert nicht ins Bundle. Der Export gibt nur den Zeiger aus:
+  Quelle, Dokument und Satzposition in der Fußnote. Ein Bundle ist gegenüber
+  externen Quellen deshalb **nicht selbsttragend** — wer den Wortlaut
+  nachlesen will, braucht Zugang zur aufgeführten Quelle. Das ist die
+  Kehrseite davon, fremdes Material nicht einzufrieren, und keine Lücke, die
+  sich durch Mitkopieren schließen ließe: dann wäre es wieder eingefroren.
+* **Der Bindungspfad.** `.vault-extern.json` ist host-lokal und verlässt den
+  Tresor nie — weder als `resource` noch sonstwo. Ein absoluter Pfad hat
+  außerhalb dieser Maschine keine Bedeutung und wäre eine Preisgabe der
+  lokalen Ablagestruktur. Eigener Test.
 * **`Attested Computation`.** Bewusst abgelehnt, siehe AD-09 in
   `KONZEPT.md`.
 * **Das Trust-Tier.** Es wird nicht geschrieben. Das Profil sagt zu, dass es

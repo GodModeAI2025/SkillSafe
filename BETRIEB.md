@@ -88,8 +88,18 @@ auch wenn die Profil-Nummer dabei steigt.
 
 ## Was die CI prüft
 
-`.github/workflows/gates.yml` fährt dieselbe Kette über Python 3.9, 3.11 und
-3.13 auf Ubuntu und 3.13 auf macOS.
+`.github/workflows/gates.yml` fährt dieselbe Kette über Python 3.9 und 3.13
+auf Ubuntu und 3.13 auf macOS.
+
+Die Matrix ist an ihrem Ertrag gemessen, nicht an einem Gefühl von Gründlichkeit.
+Über die ersten 14 Läufe gab es genau einen roten Lauf, und dort war **nur**
+`macos-latest` rot: 18 Testfehler, alle Ubuntu-Jobs grün, Ursache `/var` als
+Symlink auf `/private/var`. Der Sicherheitsteil des Tresors ist Pfadbehandlung
+— Symlinks, `dir_fd`, `O_NOFOLLOW`, `realpath` —, und genau dort laufen die
+Plattformen auseinander; 71 der 97 Tests hängen daran. Deshalb bleibt macOS.
+Gestrichen wurde stattdessen `ubuntu / 3.11`: nie ein Eigenbefund, eingeklemmt
+zwischen der Untergrenze 3.9 und dem aktuellen 3.13. Wer eine Zeile zurück in
+die Matrix holen will, nennt den Lauf, in dem sie allein rot war.
 
 Ausgelöst wird sie bei Pushes auf `main`, `agent/**` und `claude/**` sowie bei
 jedem Pull Request gegen `main`. **Die Präfix-Liste ist die eigentliche

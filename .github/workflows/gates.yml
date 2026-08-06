@@ -62,20 +62,30 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # 3.9 ist die untere Grenze, die tatsächlich benutzt wird (System-
-          # Python auf macOS). Die belegte API-Untergrenze des Codes liegt
-          # darunter, wird aber nicht zugesagt. Wer 3.9 streicht, muss README
-          # und BETRIEB.md mitziehen.
+          # Jede Zeile steht hier mit ihrem Ertrag, nicht mit ihrer Absicht.
+          # Grundlage sind die ersten 14 Läufe dieses Workflows.
+          #
+          # 3.9 — zugesagte Untergrenze, System-Python auf macOS. Die belegte
+          # API-Untergrenze des Codes liegt darunter, wird aber nicht
+          # zugesagt. Wer 3.9 streicht, muss README und BETRIEB.md mitziehen.
           - os: ubuntu-latest
             python: "3.9"
-          - os: ubuntu-latest
-            python: "3.11"
+          # 3.13 — aktuelle Fassung, das obere Ende derselben Spanne.
           - os: ubuntu-latest
             python: "3.13"
-          # macOS deckt die Plattform ab, auf der der Tresor entstanden ist,
-          # und ein zweites Dateisystem für die dir_fd-Schreibpfade.
+          # macOS — zweites Dateisystem und die Plattform, auf der der Tresor
+          # benutzt wird. Der einzige Job, der je einen Eigenbefund geliefert
+          # hat: Lauf 6/7 auf 34b254b, 18 Testfehler, alle drei Ubuntu-Jobs
+          # grün. `/var` ist dort ein Symlink auf `/private/var`, und
+          # _resolve_external_root verlangte einen kanonischen Pfad. Der
+          # Sicherheitsteil des Tresors ist Pfadbehandlung — genau dort laufen
+          # Linux und macOS auseinander, und 71 der 97 Tests hängen daran.
           - os: macos-latest
             python: "3.13"
+          # Gestrichen am 06.08.2026: ubuntu / 3.11. In 14 Läufen nie ein
+          # Eigenbefund. Es saß zwischen 3.9 und 3.13, und was dort bricht,
+          # bricht auch an einem der beiden Ränder. Wer es zurückholen will,
+          # nennt bitte den Lauf, in dem es allein rot war.
 
     steps:
       - uses: actions/checkout@v4

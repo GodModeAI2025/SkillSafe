@@ -103,6 +103,33 @@ Die Kette ist außerdem netzfrei: `SKILLSAFE_OFFLINE=1` steht global im
 Workflow, damit ein Gate nicht an der Verfügbarkeit einer aufgeführten
 Netzquelle hängt. Ein Gate soll den Bestand messen, nicht das Wetter.
 
+### Ein fehlender Lauf ist kein grüner Lauf
+
+Die zweite Stelle, an der dasselbe Muster zuschlägt — und die unangenehmere,
+weil sie nicht in diesem Repository liegt:
+
+**Ein Merge oder Push über einen App-Token löst keinen Workflow aus.** Das ist
+kein Fehler, sondern GitHub-Verhalten: Was mit `GITHUB_TOKEN` oder einem
+Installations-Token einer App geschieht, erzeugt bewusst keine neuen Läufe,
+damit sich Automatisierung nicht selbst rekursiv auslöst. Betroffen sind
+Merges über Connector, Bot oder eine Action — nicht der Merge über die
+Weboberfläche.
+
+Die Folge: `main` trägt danach einen Stand, den nie eine Kette gesehen hat.
+Auffallen wird das niemandem, weil nichts rot ist.
+
+**Gegenmittel, eines davon:**
+
+* über die Weboberfläche mergen, oder
+* nach dem Merge `gates.yml` per `workflow_dispatch` auf `main` anstoßen
+  (`Actions` → `gates` → `Run workflow`, Branch `main`).
+
+Beide Vorfälle dieses Musters — der Branch-Präfix oben und der App-Token hier —
+haben dieselbe Wurzel: Wer Betriebsbereitschaft daran festmacht, dass nichts
+rot ist, misst die Abwesenheit von Information. Rot ist ein Befund, **grau ist
+keiner**. Die Frage lautet nie „ist etwas rot", sondern „hat die Kette diesen
+Stand tatsächlich gesehen".
+
 Ein Unterschied zur Handarbeit ist beabsichtigt: **die CI ruft niemals
 `checksum` oder `release`.** Beide schreiben und würden genau den Fehler
 zudecken, den die Pipeline finden soll, nämlich einen Commit ohne mitgezogenes

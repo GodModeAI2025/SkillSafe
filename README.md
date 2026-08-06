@@ -11,6 +11,10 @@ Arbeitsweise: kontrollierte Begriffswelten, lexikalisches Ranking, ein
 Graph-Hop und danach ausschließlich belegte Claims. Bilder, Scans und PDFs
 werden über geprüfte Regionen an diese Claims gebunden.
 
+Fremdes Material, das anderswo weitergepflegt wird, muss dafür nicht
+einwandern: Es wird **satzweise** über Anker belegt und im Fallback live
+nachgeschlagen — siehe [Externe Quellen satzweise referenzieren](#externe-quellen-satzweise-referenzieren).
+
 Der Skill-Ordner [`wissenstresor/`](wissenstresor/) *ist* das Artefakt: alles,
 was ein Agent braucht — Engine, Schema, Wissen, Graph, Prüfsummen — liegt in
 einem einzigen portablen Ordner. Sichere Schreibkommandos sind für macOS,
@@ -20,7 +24,7 @@ geschützte `dir_fd`-Operationen fail-closed ab.
 📖 **Konzept & Architekturentscheidungen:** [`wissenstresor/KONZEPT.md`](wissenstresor/KONZEPT.md)
 🌐 **Landingpage:** [`index.html`](index.html) (GitHub-Pages-fähig, Source = repo root)
 
-**Aktueller Release: v0.10.1** (Profil `oksv-lite/1.2`) mit Begriffswelten,
+**Aktueller Release: v0.11.0** (Profil `oksv-lite/1.3`) mit Begriffswelten,
 deterministischem Hybrid-Retrieval, geprüften Bild-/PDF-Regionen und einem
 reproduzierbaren `.skill`-Paket für Claude Code und Codex. Der
 Frontmatter-Parser lehnt Verschachtelung fail-closed ab statt sie still
@@ -36,6 +40,16 @@ einzurechnen.
 Seit v0.9.0 gibt `export --okf` den freigegebenen Bestand als
 OKF-v0.2-Bundle nach außen, ohne dass sich am internen Datenvertrag etwas
 ändert.
+
+Neu in v0.11.0 sind **aufgeführte externe Bezugsquellen**: ein fremdes
+Handbuch, ein Repo oder ein zweiter Tresor wird satzweise über Anker belegt,
+statt kopiert zu werden. Damit verschiebt sich eine bisher harte Zusage, und
+das soll genauso deutlich dastehen wie vorher ihre harte Fassung: **„kein
+Netzwerk im Skill" gilt jetzt für den Default-Query-Pfad**, nicht mehr
+absolut. Ohne `--extern` verlässt kein Byte den Skill-Ordner; mit `--extern`
+liest der Tresor ausschließlich Ziele, die namentlich in
+`sources/EXTERN.md` stehen, und protokolliert jeden Abruf. Erreicht wird nie
+etwas, das dort nicht aufgeführt ist.
 
 Abnahme: 68 Tests bestanden · 31 manifestierte Dateien · 33 sichere
 Paketeinträge · SHA-256
@@ -97,6 +111,7 @@ SkillSafe/
 ├── index.html             Landingpage (GitHub-Pages-fähig, ohne Build-Schritt)
 ├── BETRIEB.md             Betriebs- und Übergabewissen (Release, Störfälle, CI)
 ├── .github/workflows/     CI-Kette: validate, verify, doctor, Tests, Paketbau
+├── beispiel-extern/       Demo eines externen Markdown-Baums (kein Teil des Skills)
 ├── tools/                 deterministischer Paketbau und Zahlenwächter
 ├── tests/                 Sicherheits-, Retrieval- und Portabilitätstests
 └── wissenstresor/         der Skill selbst — das eigentliche Artefakt
@@ -106,8 +121,10 @@ SkillSafe/
     ├── scripts/vault.py   Motor: deterministische Engine (nur Stdlib)
     ├── schema/            Motor: Profil, Typen und Begriffswelten
     ├── references/        Motor: Antwort-, Ingest-, Medien-, Begriffs-, Lint- und Export-Workflows
-    ├── knowledge/          Treibstoff: Wissensseiten im OKF-Muster (Profil oksv-lite/1.2), nach Domäne getrennt
+    ├── knowledge/          Treibstoff: Wissensseiten im OKF-Muster (Profil oksv-lite/1.3), nach Domäne getrennt
     ├── sources/            Treibstoff: Register, raw/, derived/, Quarantäne
+    ├── sources/EXTERN.md   Treibstoff: Allowlist externer Bezugsquellen (X-nnnn)
+    ├── .vault-extern.json  host-lokale Bindung (außerhalb des Manifests, wie log.md)
     ├── graph/graph.json    Treibstoff: abgeleiteter Wissensgraph
     ├── INDEX.md, ROUTER.md Treibstoff: Navigation und manuelles Audit
     ├── log.md              Historie (append-only, außerhalb des Manifests)
@@ -201,6 +218,103 @@ Antworten-Workflow anhand der Kante und benennt beide.
 Aktueller Stand: 🟢 `validate` 0 Fehler, 0 Warnungen · `doctor` grün ·
 `checksum --verify` grün.
 
+## Externe Quellen satzweise referenzieren
+
+### Aufgeführt ist nicht recherchiert
+
+Zwei Dinge, die oft verwechselt werden:
+
+* **Internetrecherche** heißt offene Suche, Suchmaschine, Links folgen,
+  unbekannte Ziele. Das tut der Tresor nie. Es gibt keinen Codepfad, der ein
+  Ziel aus einer Anfrage, einem Dokument oder einer Antwort übernimmt.
+* Eine **aufgeführte Bezugsquelle** steht namentlich mit Titel, Ziel, Trust
+  und Rechten in `wissenstresor/sources/EXTERN.md` und ist über
+  `MANIFEST.sha256` gepinnt. Das ist Bestandsverwaltung — dieselbe Kategorie
+  wie eine Zeile im Quellenregister.
+
+Deshalb wird eine aufgeführte Netzquelle behandelt wie eine interne, auch
+dort, wo Internetrecherche ausdrücklich untersagt ist. Damit das überprüfbar
+bleibt statt behauptet: nur `GET` unter dem registrierten Präfix, jedes
+Redirect muss darunter bleiben, und jeder Abruf steht mit URL, Prüfsumme und
+Zeitpunkt in `log.md`. `SKILLSAFE_OFFLINE=1` schaltet Netzabrufe hart ab, vor
+jedem Socket — die CI-Kette läuft damit netzfrei.
+
+### Anleitung
+
+```bash
+cd wissenstresor
+
+# 1. Aufgeführte Quellen und ihren Bindungszustand ansehen
+python3 scripts/vault.py extern list
+
+# 2. Lokale Quelle an diesen Host binden (Netzquellen brauchen das nicht)
+python3 scripts/vault.py extern bind X-0001 "$(cd ../beispiel-extern && pwd)"
+
+# 3. Sätze des Dokuments mit Index und Prüfsumme ansehen und einen auswählen
+python3 scripts/vault.py anchor-template X-0001 handbuch/mietminderung.md
+
+# 4. Gewählte Anker nach sources/derived/X-0001__anchors.json übernehmen,
+#    locator ausfüllen, extractor benennen, verified auf true setzen.
+
+# 5. Claim kuratieren: externe_quellen: [X-0001] ins Frontmatter, dann
+#    - **C-0401** [X-0001 | A-0004 | Wortlaut] Kuratierte Aussage.
+
+# 6. Freigeben und prüfen
+python3 scripts/vault.py release minor
+python3 scripts/vault.py doctor
+```
+
+`sources:` darf leer bleiben, wenn eine Seite ausschließlich extern belegt
+ist. Ganz ohne Beleg bleibt sie unzulässig.
+
+### Orchestrator und Live-Fallback
+
+Damit der Tresor in einem fremden Markdown-Baum auch *suchen* kann, bekommt
+dieser einen Katalog. Das Skript rechnet alles Nachrechenbare aus; Titel,
+Kurzfassung und Tags bleiben leer und sind Kuratierungsarbeit:
+
+```bash
+python3 scripts/vault.py orchestrator-template X-0001 \
+  > sources/derived/X-0001__orchestrator.json
+
+python3 scripts/vault.py query --extern "Minderung Mangel Wohnung"
+```
+
+Ohne `--extern` verlässt **kein Byte** den Skill-Ordner, weder zur Platte noch
+ins Netz. Das Flag gehört ans Ende des Antwort-Workflows: erst der lokale
+Bestand, dann die vollständige Fallback-Prüfung, dann extern.
+
+Das Ranking läuft in zwei Stufen, und die zweite entscheidet:
+
+| Dokument | Stufe 1 (Katalog) | Stufe 2 (Bestand) | Abdeckung |
+|---|---|---|---|
+| `handbuch/mietminderung.md` | 60 | **460** | 100 % |
+| `handbuch/schiffshypothek.md` | **78** | 152 | 33 % |
+
+Stufe 1 stellt das Seerecht vor das Mietrecht — die Katalogtexte ähneln sich
+absichtlich. Stufe 2 dreht das Verhältnis. Der Katalogtext ist ein schwaches
+Signal, der Bestand dahinter das starke.
+
+### Ehrlich scheitern
+
+Findet die zweite Stufe nichts, kommt nichts zurück:
+
+```bash
+python3 scripts/vault.py query --extern "himmel"
+# external.state = no_external_candidates
+# "Kein aufgeführtes Dokument enthält die Anfragebegriffe ['himmel'].
+#  Fachbegriffe statt Eigennamen verwenden. Es wird bewusst kein bester
+#  Fehltreffer geliefert."
+```
+
+Kein alphabetischer Fallback, kein bester Fehltreffer. „himmel" findet auch
+kein „schimmel": abgeglichen wird ausschließlich an Tokengrenzen. Ein
+plausibel aussehender Fehltreffer ist teurer als kein Treffer, weil er nicht
+als Fehler auffällt.
+
+Protokoll und Grenzen im Detail:
+[`references/externe-quellen.md`](wissenstresor/references/externe-quellen.md).
+
 ## Nach OKF v0.2 exportieren
 
 Der Tresor ist ein strenger OKF-**Produzent** für den eigenen Bestand und
@@ -230,7 +344,18 @@ Protokoll und benannte Verluste: [`references/export-okf.md`](wissenstresor/refe
 
 Ausgelegt für kuratierte Bestände bis in den niedrigen Tausenderbereich an
 Seiten. Medien werden nicht durch die Engine dekodiert; sie verwaltet
-gehashte Originale und geprüfte Regionen. Darüber (oder bei Bedarf an
+gehashte Originale und geprüfte Regionen.
+
+Bei externen Quellen gilt: Satzanker altern. Eine Umformulierung in der
+fremden Quelle bricht den Beleg; `doctor` meldet das hash-first und
+unterscheidet „verschoben" von „gebrochen" — beides **gelb, nie rot**, weil
+der Tresor die fremde Quelle nicht kontrolliert. Die Trefferqualität des
+Nachschlagens hängt an der Struktur fremder Dokumente; kein Ranking heilt
+schlechte Fremddokumentation. Ein Zugriffs- oder Rechtesystem bekommt der
+Tresor dadurch **nicht**: Eine Bindung nutzt nur den Zugriff, den das
+Betriebssystem ohnehin gewährt. Und wer ein `.skill`-Paket weitergibt, gibt
+seine aufgeführten Netzquellen mit — beim Empfänger greift kein zusätzlicher
+lokaler Schalter außer `SKILLSAFE_OFFLINE`. Darüber (oder bei Bedarf an
 blinder externer Qualifikation, Signaturen, SBOM oder Millionen Dokumenten)
 ist der Ausbaupfad der OKSV-Vollausbau mit getrennten Vertrauenszonen.
 Details: [`wissenstresor/KONZEPT.md`](wissenstresor/KONZEPT.md).

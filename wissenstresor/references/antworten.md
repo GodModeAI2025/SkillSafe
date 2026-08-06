@@ -46,6 +46,13 @@ Protokoll für den jeweils maßgeblichen Tresor durchlaufen — eine
    mit Synonymen helfen, aber ein fehlender Lexiktreffer ist kein
    Negativbeweis. Erst die vollständige Prüfung dieses manifestierten
    Seitenumfangs erlaubt „Nicht im Bestand".
+4c. **Externer Fallback.** Erst **danach**, und nur wenn
+   `fallback.external_lookup_available` das anbietet:
+   `python3 scripts/vault.py query --extern "<frage>"`. Das liest aufgeführte
+   externe Bezugsquellen live und ist eine bewusste Ausnahme von Regel 2 —
+   nie der Default, nie eine Abkürzung um Schritt 4b. Ein externer Treffer
+   **ersetzt „Nicht im Bestand" nicht**, er ergänzt es um einen benannten
+   Hinweis. Details: `references/externe-quellen.md`.
 5. **Antworten** im Answer Envelope (unten). Ausschließlich aus dem
    Gelesenen; Formulierung und Struktur sind Modellarbeit, Inhalt nicht.
 6. **Abstention.** Deckt der Bestand die Frage nicht oder nur teilweise:
@@ -65,6 +72,7 @@ Stand: <ältester 'stand' der genutzten Seiten>; Konfidenz: <niedrigste genutzte
 [Nur falls zutreffend:]
 Hinweise: <veraltete Fassung existiert / Konflikt zwischen C-x und C-y / Mischfrage X+Y>
 Nicht im Bestand: <ungedeckte Teilfragen>
+Extern (nicht im Bestand): <X-nnnn, Dokument, Satzposition, Abrufzeitpunkt>
 ```
 
 Regeln im Envelope:
@@ -92,6 +100,16 @@ Regeln im Envelope:
   Kuratierungsentscheidung ohne Gegenprüfung ist. Das Tier ist ein Signal,
   keine Erlaubnis: es senkt nie den Rang eines Treffers und begründet nie
   eine Abstention.
+* Ein Treffer aus dem `external`-Block ist **kein Beleg**. Er trägt keine
+  Claim-ID, steht in der Zeile „Extern (nicht im Bestand):" und wird immer mit
+  Quelle, Dokument und Satzposition benannt. Er darf nie so formuliert werden,
+  als stünde er im Bestand — der Weg dorthin führt ausschließlich über den
+  Befüllen-Workflow. Bei `live: true` gehört der Abrufzeitpunkt dazu, weil das
+  Ergebnis anders als der lokale Teil nicht reproduzierbar ist.
+* Trägt ein genutzter Claim das Signal `external_source`, stammt sein Beleg
+  aus einer aufgeführten externen Quelle. Er ist damit vollwertige Evidenz —
+  aber sein Wortlaut steht anderswo, und ein `doctor`-Hinweis auf Anker-Drift
+  gehört dann in „Hinweise:".
 * Ein Treffer auf einer Seite mit `status: veraltet` ist kein Fehler des
   Rankings. Die Gewichte bewerten Geltung nicht, sie hängen nur das Signal
   `page_status:veraltet` an; über die Begriffserweiterung kann eine überholte

@@ -46,8 +46,12 @@ Seiten und Claims — mit festen Ganzzahlgewichten aus:
 3. genau einem begrenzten Begriffs- oder Seitengraph-Hop.
 
 Erst danach liest das Modell die gelieferten Seiten und formuliert aus den
-gelieferten Claims. Es gibt keinen Vektorindex, kein Embedding-Modell, kein
-willkürliches Chunking, keinen Netzwerkaufruf und keinen Query-Cache im Skill.
+gelieferten Claims. Es gibt keinen Vektorindex, kein Embedding-Modell und kein
+willkürliches Chunking. Auf dem Default-Query-Pfad gibt es außerdem keinen
+Netzwerkaufruf, keinen Dateizugriff außerhalb des Skill-Ordners und keinen
+Query-Cache; erst das ausdrückliche `--extern` liest aufgeführte externe
+Bezugsquellen, in einem eigenen Block und ohne Einfluss auf den lokalen
+Fingerprint (AD-10 bis AD-13).
 
 **Begründung:** „RAG" bezeichnet die Arbeitsfolge besser als eine konkrete
 Speichertechnik. Für einen kuratierten Bestand bis in den niedrigen
@@ -199,6 +203,17 @@ in einer Session mit mehreren geladenen Tresoren, nicht Dateizugriff
 höher-sensitive Instanz nie in einen breiteren Skill-Ladeort zu
 symlinken oder zu kopieren.
 
+**Grenze, seit aufgeführte Bezugsquellen existieren (AD-10):** Ein Tresor darf
+einen anderen als `X-nnnn` zitieren. Das schafft **keinen** Zugriff — es nutzt
+den, den das Betriebssystem der ausführenden Person ohnehin gewährt. Es
+schafft aber einen neuen Leckkanal: Wer legitim zwei Tresore hat, kann den
+sensibleren als Quelle des weniger sensiblen binden und Inhalte an die falsche
+Stelle kuratieren. Kein Mechanismus verhindert das, weil es per AD-06 keine
+ACL gibt. Gemildert, nicht gelöst: Der Scope-Typ steht in der Registerzeile,
+`doctor` warnt bei invertierter Scope-Richtung, `BETRIEB.md` benennt das
+Risiko. Wer eine echte Grenze braucht, braucht getrennte Rechte am
+Installationsort — genau wie bisher.
+
 ### AD-07 · Multimodalität als gebundene Fundstelle, nicht zweite Wahrheit
 
 **Entscheidung:** Bild- und PDF-Originale bleiben unverändert unter
@@ -285,6 +300,113 @@ verlangen.
 OKSV-Vollausbau mit getrennten Vertrauenszonen und Signaturen, nicht in
 einen portablen Ordner ohne Vertrauensanker.
 
+**Grenze, seit es externe Bezugsquellen gibt:** Der generierte Orchestrator
+könnte nach generiertem Code klingen. Er ist `.json`, wird von
+`parse_orchestrators` gelesen und von nichts ausgeführt; `ARTEFAKT_SUFFIXE`
+und die zweite Allowlist im Paketbau bleiben deshalb unverändert — das ist der
+Beleg, nicht die Behauptung. Ein fremder Tresor wird ebenso als Daten gelesen:
+sein Manifest rechnet diese Engine selbst nach, sein `scripts/vault.py` ist
+eine Datei mit einer Prüfsumme. **Restrisiko außerhalb der Prozessgrenze:** Ein
+fremder Baum kann eine `SKILL.md` enthalten, die ein Agent nebenher lädt. Das
+kann `vault.py` nicht verhindern; es gehört beim Binden bedacht und steht so
+in `references/externe-quellen.md`.
+
+### AD-10 · Externe Bezugsquellen sind Anker, nicht Bestand
+
+**Entscheidung:** Fremdes Material wird satzweise über `X-nnnn` und Satzanker
+`A-nnnn` belegt, statt in den Bestand kopiert zu werden. Der Anker speichert
+den zitierten Satz und seinen SHA-256; der Claim bleibt die kuratierte,
+komprimierte Aussage.
+
+**Begründung:** Ein Bestand, der die Inhalte eines lebenden Fremdrepositoriums
+einfriert, ist nach wenigen Wochen falsch — und zwar auf die unangenehmste
+Art, weil er weiter richtig klingt. Eingefroren wird deshalb nur das Zitat,
+nicht die Quelle. Das ist genau die Bauform, die Bild und PDF schon haben:
+`R-nnnn` bindet einen sichtbaren Befund, `A-nnnn` einen Satz. In beiden Fällen
+bleibt der Quelltext untrusted und ist nie Evidenz; Evidenz ist der Claim.
+Wer `references/multimodal.md` verstanden hat, muss
+`references/externe-quellen.md` ohne neues Konzept lesen können.
+
+**Grenze:** Anker altern. Eine Umformulierung in der Quelle bricht den Beleg.
+Deshalb prüft `doctor` hash-first und meldet Verschiebung getrennt von Bruch —
+und deshalb blockiert Drift keinen Release: Der Tresor kontrolliert die fremde
+Quelle nicht.
+
+### AD-11 · Die Bindung liegt außerhalb des Manifests
+
+**Entscheidung:** `sources/EXTERN.md` (Was darf erreicht werden) ist
+manifestiert; `.vault-extern.json` (Wo findet diese Maschine eine lokale
+Quelle) ist es nicht — dieselbe Sonderstellung wie `log.md`. Eine Netzquelle
+braucht gar keine Bindung: ihre URL ist auf jedem Host dieselbe.
+
+**Begründung:** Ein absoluter Pfad ist eine Eigenschaft des Hosts, nicht des
+Artefakts. Stünde er im Manifest, wäre die Paket-SHA-256 maschinenabhängig und
+AD-08 (Distribution ist ein reproduzierbarer Ordner) fiele. Zwei unabhängige
+Gates halten die Datei draußen: `_tracked_path` in der Engine und eine eigene
+Regel im Paketbau — dieselbe Doppelung wie bei der Dateiart-Allowlist.
+
+**Grenze:** Eine ungebundene Quelle macht `validate` bewusst **nicht** rot.
+Sonst wäre jedes frisch entpackte Paket auf jedem neuen Host rot. Fail-closed
+greift erst bei der Nutzung. Diese Asymmetrie ist eine Entscheidung.
+
+### AD-12 · Der Orchestrator ist Daten, und das Ranking scheitert ehrlich
+
+**Entscheidung:** Für einen externen Markdown-Baum entsteht ein Katalog als
+`.json` (`skillsafe.orchestrator/v1`), den die Engine liest. Das Ranking
+`extern-zweistufig/v1` nutzt ihn nur als Prefilter und rechnet Stufe 2 gegen
+den jetzt gelesenen Text. Ein Dokument ohne einen einzigen Anfragebegriff
+fällt heraus, unabhängig vom Katalog-Score. Bleibt nichts übrig, kommt nichts
+zurück.
+
+**Begründung:** Der Katalogtext ist ein schwaches Signal, der Bestand dahinter
+das starke. Im Demo-Bestand liefert „Minderung Mangel Wohnung" in Stufe 1 das
+Seerecht mit 78 Punkten **vor** dem Mietrecht mit 60; Stufe 2 dreht das auf
+460 zu 152. Eine Rankingstufe reicht nicht. Und ein plausibel aussehender
+Fehltreffer ist teurer als kein Treffer, weil er nicht als Fehler auffällt —
+deshalb kein alphabetischer Fallback und kein „bester Fehltreffer", sondern
+eine Meldung, die sagt, was zu tun ist.
+
+Abgeglichen wird ausschließlich an Tokengrenzen (`_retrieval_tokens`,
+`_phrase_present`). Ein rohes Substring-`in` gibt es im externen Pfad nicht,
+sonst fände „himmel" ein „schimmel".
+
+**Grenze:** Die Trefferqualität hängt an der Struktur fremder Dokumente. Wer
+dort schludert, bekommt schlechtere Treffer; kein Ranking heilt das.
+
+### AD-13 · Netz nur im Fallback, Cache außerhalb des Artefakts
+
+**Entscheidung:** Eine aufgeführte Bezugsquelle darf ein festes
+https-Präfix sein. Abgerufen wird nur unter diesem Präfix, nur bei
+ausdrücklichem `--extern`, mit Zertifikatsprüfung, Zeit-, Byte- und
+Redirect-Grenzen, und jeder Abruf steht in `log.md`. Der TTL-Abzug liegt
+außerhalb des Skill-Ordners im Nutzer-Cache-Verzeichnis.
+
+**Begründung:** Eine aufgeführte Bezugsquelle ist keine Internetrecherche.
+Recherche heißt offene Suche und unbekannte Ziele; aufgeführt heißt: ein
+namentlich benanntes, über das Manifest gepinntes Ziel. Das ist dieselbe
+Kategorie wie eine Zeile im Quellenregister, und deshalb wird eine aufgeführte
+Netzquelle behandelt wie eine interne — auch dort, wo Internetrecherche
+ausdrücklich untersagt ist. Damit das überprüfbar bleibt statt behauptet,
+existiert das Herkunftsprotokoll. Der Cache liegt außerhalb, weil er innerhalb
+von `ROOT` durch Dateiart- und Manifest-Walk liefe und das Artefakt
+verunreinigte.
+
+**Grenze, offen benannt:** Der Satz „kein Netzwerk im Skill" gilt jetzt für den
+Default-Query-Pfad statt absolut. Er ist damit schwächer, und die Landingpage
+sagt das genauso deutlich wie vorher die harte Fassung. Der Netzpfad ist
+außerdem **nicht deterministisch** — ein Socket-Timeout kann das Ergebnis
+formen. Deshalb bleiben Netztreffer aus dem lokalen `retrieval_fingerprint`
+heraus, tragen `live: true`, Abrufzeitpunkt und Cache-Alter, und `doctor` wie
+CI kennen mit `SKILLSAFE_OFFLINE=1` eine harte Schaltung ohne Socket-Aufruf.
+Der lokale externe Pfad bleibt dagegen deterministisch: Budgets werden
+gezählt, nie über eine Uhr gestoppt.
+
+Zweite offene Folge: Weil eine Netzquelle durch ihre Registrierung gebunden
+ist, greift beim Empfänger eines `.skill`-Pakets kein zusätzlicher lokaler
+Schalter. Wer ein Paket weitergibt, gibt seine aufgeführten Netzquellen mit.
+Das ist die gewollte Folge der Gleichbehandlung und steht so in `README.md`
+und `BETRIEB.md`.
+
 ## Verhältnis zu OKF v0.2
 
 OKF v0.2 (2026-07-24) macht Provenienz, Vertrauen, Lebenszyklus und
@@ -349,6 +471,11 @@ Modell) — der Linter repariert nur Metadaten und Router, nie Inhalte.
   gepflegte Sprache kann weiterhin verfehlt werden; lexikalische
   Claim-Suche liefert deshalb nur Kandidaten. `no_candidates` ist ein
   Rückfallsignal zur vollständigen Seitenprüfung, kein Negativbefund.
+* Externe Bezugsquellen altern außerhalb der eigenen Kontrolle. Anker-Drift
+  ist deshalb gelb und kein Release-Blocker; die Trefferqualität des
+  Nachschlagens hängt an fremder Dokumentqualität. Ein fremder Baum kann
+  zudem eine `SKILL.md` enthalten, die ein Agent nebenher lädt — außerhalb
+  der Prozessgrenze dieses Scripts.
 * Selbstprüfung im Skill ist nur diagnostisch. Belastbare Qualifikation
   braucht einen externen, gold-aware Prüfer gegen ein blindes System —
   Gold-Holdouts liegen deshalb grundsätzlich außerhalb dieses Skills.

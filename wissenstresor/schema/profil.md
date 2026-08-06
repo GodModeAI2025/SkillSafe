@@ -1,4 +1,4 @@
-# Profil oksv-lite/1.2 — Datenvertrag des Wissenstresors
+# Profil oksv-lite/1.3 — Datenvertrag des Wissenstresors
 
 Dieses Profil schreibt Seiten, die als OKF-Konzeptdokumente lesbar sind: jede
 Seite unter `knowledge/` trägt parsebares YAML-Frontmatter mit nicht leerem
@@ -54,6 +54,7 @@ Optionale Felder:
 |---|---|---|
 | `relations` | Liste `typ -> domäne/seite.md` | Typisierte Seitenkanten |
 | `concepts` | Liste `B-nnnn` | Verknüpfung zur kontrollierten Begriffswelt |
+| `externe_quellen` | Liste `X-nnnn` | Aufgeführte externe Bezugsquellen dieser Seite |
 | `geprueft_von` | `mensch:<id>`, `prozess:<id>` oder `agent:<name>/<version>` | Wer den Inhalt gegen die Quellen gegengeprüft hat |
 | `geprueft_am` | `JJJJ-MM-TT` | Wann diese Prüfung stattgefunden hat |
 
@@ -123,11 +124,24 @@ das er verpackt.
 ## Claim-Grammatik
 
 ```text
-- **C-nnnn** [S-nnnn | Fundstelle | Wortlaut|Beobachtung|Auslegung] Aussagetext.
+- **C-nnnn** [S-nnnn|X-nnnn | Fundstelle | Wortlaut|Beobachtung|Auslegung] Aussagetext.
 ```
+
+Eine Zeilenform, Präfix-Dispatch: `S-` ist eine lokal gehashte Quelle, `X-`
+eine aufgeführte externe Bezugsquelle.
 
 * `C-nnnn` ist tresorweit eindeutig.
 * `S-nnnn` steht im Register und im `sources`-Feld der Seite.
+* `X-nnnn` steht in `sources/EXTERN.md` und im `externe_quellen`-Feld der
+  Seite. Bei einer externen Quelle enthält die Fundstelle genau eine
+  existierende `A-nnnn` — dieselbe mechanische Regel wie `R-nnnn` bei Bild
+  und PDF. Ein Anker mit `suspicious_instruction: true` darf keinen Claim
+  tragen.
+* `Beobachtung` bleibt Bild-/PDF-Quellen vorbehalten. Ein zitierter externer
+  Satz ist `Wortlaut`, eine Schlussfolgerung daraus `Auslegung`.
+* `sources` darf genau dann leer sein, wenn `externe_quellen` nicht leer ist:
+  eine Seite kann ausschließlich extern belegt sein. Ganz ohne Beleg bleibt
+  sie unzulässig.
 * `Wortlaut` gibt Text oder geprüftes OCR nah an der Quelle wieder.
 * `Beobachtung` ist ein unmittelbar sichtbarer Befund und nur für eine
   registrierte Bild-/PDF-Repräsentation erlaubt.
@@ -250,7 +264,160 @@ Das Ranking `hybrid-local/v1` verwendet ausschließlich Ganzzahlen:
 kontrollierte Begriffe/Aliase, lexikalische Token-Treffer und höchstens einen
 Graph-Hop. `retrieval_complete` bedeutet nur, dass dieser Ranking-Scan alle
 validierten Claims gesehen hat; es ist kein semantischer Vollständigkeits-
-beweis. Keine Embeddings, kein Netzwerk, kein Cache im Skill.
+beweis.
+
+Keine Embeddings, niemals. Auf dem **Default-Query-Pfad** verlässt außerdem
+kein Byte den Skill-Ordner: kein Netzwerk, kein Dateizugriff nach außen, kein
+Cache. Erst das ausdrückliche `--extern` liest aufgeführte externe
+Bezugsquellen — dann live, gekennzeichnet und in einem eigenen Block. Im
+**manifestierten Bestand** gibt es weiterhin keinen Cache; der TTL-Abzug einer
+Netzquelle liegt außerhalb des Skill-Ordners im Nutzer-Cache-Verzeichnis und
+meldet sein Alter in jeder Ausgabe.
+
+## Externe Bezugsquellen (`sources/EXTERN.md`)
+
+Die Allowlist. Erreichbar ist ausschließlich, was hier namentlich steht; es
+gibt keinen Codepfad, der ein Ziel aus einer Anfrage, einem Dokument oder
+einer Antwort übernimmt. Acht Spalten:
+`ID | Titel | Art | Ziel | Stand/Version | Bindungsschlüssel | Trust | Rechte`.
+
+* `Art` ist `markdown-tree` oder `skillsafe-vault`. Ein fremder Tresor wird
+  als **Daten** gelesen; sein `MANIFEST.sha256` rechnet diese Engine selbst
+  nach, sein `scripts/vault.py` wird niemals ausgeführt.
+* `Ziel` ist ein festes `https://`-Präfix oder `-` für eine lokale Quelle.
+  `http`, Query, Fragment, Zugangsdaten im Host und `..` sind verboten. Ein
+  absoluter lokaler Pfad steht hier nie — er gehört in die Bindung.
+* `Bindungsschlüssel` ist `[a-z0-9][a-z0-9-]{0,63}` und tresorweit eindeutig.
+* Bei `skillsafe-vault` nennt `Stand/Version` zusätzlich genau einen Scope aus
+  `organisation`, `fachbereich`, `projekt`, `persoenlich` — Grundlage der
+  Rangfolge aus `references/mehrere-tresore.md` §8. Der Scope wird berichtet,
+  nie in das Ranking eingerechnet.
+
+Eine aufgeführte Quelle ohne Anker und ohne Katalog ist eine Warnung: sie
+trägt nichts.
+
+## Satzanker (`sources/derived/X-nnnn__anchors.json`)
+
+Schema `skillsafe.anchors/v1`, das textuelle Gegenstück zu Medienregionen.
+Alle Felder sind Pflicht, unbekannte Schlüssel sind Fehler.
+
+```json
+{
+  "schema": "skillsafe.anchors/v1",
+  "source_id": "X-0001",
+  "source_kind": "markdown-tree",
+  "segmentation": "satzsegmentierung/v1",
+  "language": "de",
+  "extractor": {"kind": "human", "name": "lokale Sichtprüfung", "version": "1"},
+  "verified": true,
+  "anchors": [
+    {
+      "id": "A-0001",
+      "document": "handbuch/mietminderung.md",
+      "document_sha256": "<sha256 des Dokuments>",
+      "sentence_index": 4,
+      "block": "absatz",
+      "locator": "Abschnitt \"Voraussetzungen\", Satz 2",
+      "text": "Der zitierte Satz, nach satzsegmentierung/v1 normalisiert.",
+      "text_sha256": "<sha256 über text>",
+      "suspicious_instruction": false
+    }
+  ]
+}
+```
+
+`block` ist `absatz`, `listenpunkt`, `tabellenzelle`, `ueberschrift` oder
+`zitat`. `document` wird lexikalisch geprüft und wirkt damit auch ungebunden.
+`verified` muss vor einem Release `true` sein. `text_sha256` macht den Anker
+selbstprüfend; `sentence_index` ist nur ein Hinweis, deshalb ist Drift eine
+Warnung und kein Fehler.
+
+Wie Region-`text` bleibt Anker-`text` **untrusted** und ist nie Evidenz. Der
+Query-Pfad gibt nur Anker-ID, Dokument, Satzposition und Digest aus.
+
+## Satzsegmentierung `satzsegmentierung/v1`
+
+Der Satzindex ist Teil des Ankers, also braucht die Zerlegung einen
+versionierten, deterministischen Algorithmus:
+
+* YAML-Frontmatter und eingezäunte Codeblöcke werden **vor** der Zerlegung
+  entfernt — sie enthalten keine Sätze und würden Indizes verschieben.
+* Jede Blockgrenze beendet einen Satz: Absatz, Listenpunkt, Tabellenzelle,
+  Überschrift, Zitat. Ein Satz überschreitet nie eine Blockgrenze.
+* Kein Satzende nach Abkürzung, Einzelbuchstabe, reiner Ziffernfolge,
+  `§`-Nummer oder einem auf eine Ziffer endenden Token (`v0.2`).
+* `sentence_index` ist 1-basiert je Dokument.
+* Normalisierung zum Hashen ist **NFC** plus kollabierter Whitespace —
+  bewusst nicht das NFKC des Retrievals: NFKC faltet Ligaturen und
+  Formatzeichen und verändert damit den Wortlaut. Zwei Normalisierungen,
+  zwei Zwecke, beide versioniert.
+
+## Orchestrator (`sources/derived/X-nnnn__orchestrator.json`)
+
+Schema `skillsafe.orchestrator/v1`, nur für `markdown-tree`. Der Katalog ist
+**Daten**, kein zweites Script (AD-09): eine `.json`, die `vault.py` liest.
+
+```json
+{
+  "schema": "skillsafe.orchestrator/v1",
+  "source_id": "X-0001",
+  "segmentation": "satzsegmentierung/v1",
+  "generated_from_sha256": "<sha256 über 'pfad\\0hash\\n' aller Dokumente>",
+  "document_count": 4,
+  "documents": [
+    {
+      "path": "handbuch/mietminderung.md",
+      "sha256": "<sha256>",
+      "title": "Mietminderung bei Mängeln",
+      "summary": "Regelt Mangelbegriff, Anzeigepflicht und Minderungsquote.",
+      "tags": ["miete", "minderung", "mangel"],
+      "sentence_count": 11,
+      "token_count": 62,
+      "top_tokens": ["minderung", "mangel"]
+    }
+  ]
+}
+```
+
+`document_count` muss `len(documents)` entsprechen — bewusst redundant, damit
+eine abgeschnittene Datei auffällt. Alle Zahlenfelder sind nachrechenbar und
+kommen aus dem Script; `title`, `summary` und `tags` sind Modellarbeit. Genau
+diese Trennlinie ist der Prüfpunkt.
+
+Das Ranking `extern-zweistufig/v1` nutzt den Katalog nur als Prefilter
+(Stufe 1) und rechnet Stufe 2 immer gegen den **jetzt gelesenen** Text. Ein
+Dokument ohne einen einzigen Anfragebegriff als ganzes Token fällt heraus,
+unabhängig vom Katalog-Score. Abgeglichen wird ausschließlich an
+Tokengrenzen; Substring-Treffer sind strukturell ausgeschlossen.
+
+## Bindung (`.vault-extern.json`)
+
+Schema `skillsafe.bindung/v1`, **nicht manifestiert, nicht paketiert,
+gitignoriert** — dieselbe Sonderstellung wie `log.md`, aus demselben Grund:
+Sie enthält absolute Pfade dieses Hosts, und die sagen nichts über das
+Artefakt.
+
+```json
+{
+  "schema": "skillsafe.bindung/v1",
+  "bindings": [
+    {"key": "beispiel-handbuch", "source_id": "X-0001",
+     "root": "/absoluter/pfad", "bound_at": "2026-08-06"}
+  ],
+  "cache_ttl_seconds": 21600
+}
+```
+
+Nur lokale Quellen stehen hier; eine Netzquelle ist durch ihre Registrierung
+gebunden. Eine fehlende Bindung ist **nie** ein Validierungsfehler —
+ungebunden ist der Normalzustand eines frisch entpackten Pakets.
+
+Die Bindungswurzel ist die einzige Stelle im System, an der ein absoluter
+Pfad zulässig ist. Sie muss kanonisch und symlinkfrei sein, darf den Tresor
+weder enthalten noch in ihm liegen, keine andere Wurzel überlappen und keine
+Mount-Grenze überschreiten. Gelesen werden nur reguläre Dateien; Budgets für
+Tiefe, Einträge, Dokumentzahl und Bytes werden **gezählt**, nie über eine Uhr
+gestoppt — ein Zeitlimit bräche die Determinismus-Garantie.
 
 ## Quellenregister und Pfadgrenzen
 

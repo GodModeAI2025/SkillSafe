@@ -46,7 +46,10 @@ Daraus folgt zweierlei:
 
 ## Release-Checkliste
 
-Abzuarbeiten ohne Nachdenken, in dieser Reihenfolge:
+Abzuarbeiten ohne Nachdenken, in dieser Reihenfolge. Eine Vorbemerkung:
+`.vault-extern.json` ist host-lokal, gitignoriert und gehört in keinen
+Commit — sie enthält absolute Pfade dieser Maschine.
+
 
 ```bash
 # 1. Inhalt und manifestierte Doku ändern
@@ -55,7 +58,7 @@ cd wissenstresor
 python3 scripts/vault.py validate
 
 # 3. Historie schreiben, dann freigeben
-python3 scripts/vault.py log <ingest|update|lint|release|note|onboarding> "<text>"
+python3 scripts/vault.py log <ingest|update|lint|release|note|onboarding|extern> "<text>"
 python3 scripts/vault.py release <major|minor|patch>
 
 # 4. Erst jetzt prüfen
@@ -138,6 +141,59 @@ immer dasselbe.
 auflösen: einen Zweig als Basis nehmen, die inhaltlichen Änderungen des anderen
 darauf anwenden, `VERSION` auf die höhere Stufe setzen und **ein** neues
 Release fahren. Das Manifest ist ein Ergebnis, kein Text, den man mischt.
+
+## Externe Bezugsquellen im Betrieb
+
+### Binden
+
+`sources/EXTERN.md` sagt, **was** erreicht werden darf; `.vault-extern.json`
+sagt, **wo** diese Maschine eine lokale Quelle findet. Netzquellen brauchen
+keine Bindung — ihre URL ist auf jedem Host dieselbe.
+
+```bash
+cd wissenstresor
+python3 scripts/vault.py extern list
+python3 scripts/vault.py extern bind X-0001 /absoluter/pfad
+python3 scripts/vault.py extern unbind X-0001
+```
+
+**`.vault-extern.json` wird nie committet** und ist gitignoriert. Sie steht
+außerhalb des Manifests und außerhalb des Pakets, gehalten von zwei
+unabhängigen Regeln (Engine und Paketbau). Rutscht sie in eine davon hinein,
+wird die reproduzierbare Paket-SHA-256 maschinenabhängig und `check_docs.py`
+schlägt überall fehl. Genau dafür gibt es zwei Tests.
+
+### Warnung: `--extern` ist kein Regelbetrieb
+
+Ohne `--extern` verlässt kein Byte den Skill-Ordner. Wer das Flag
+gewohnheitsmäßig setzt, hat den Tresor faktisch in eine Live-Suche über einen
+ungefrorenen Baum verwandelt und Regel 2 (Vertrauen zur Abfragezeit)
+ausgehebelt. Es gehört ans Ende des Antwort-Workflows: erst der lokale
+Bestand, dann die vollständige Fallback-Prüfung, dann extern.
+
+`SKILLSAFE_OFFLINE=1` schaltet jeden Netzabruf hart ab, vor dem ersten Socket.
+Die CI-Kette setzt die Variable global — ein Gate darf nicht an fremder
+Verfügbarkeit hängen, sonst misst es das Wetter statt den Bestand.
+
+### Weitergabe
+
+Wer ein `.skill`-Paket weitergibt, gibt seine aufgeführten **Netzquellen** mit:
+Sie sind durch ihre Registrierung gebunden, beim Empfänger greift kein
+zusätzlicher lokaler Schalter außer `SKILLSAFE_OFFLINE`. Lokale Quellen sind
+beim Empfänger ungebunden und damit wirkungslos, bis er sie bewusst bindet.
+Das ist die gewollte Folge der Gleichbehandlung — vor der Weitergabe die
+Registerzeilen durchsehen.
+
+### Störfälle
+
+| Symptom | Ursache | Behebung |
+|---|---|---|
+| `extern list` zeigt „ungebunden" | Normal nach Installation oder Pfad hat sich geändert | `extern bind` — nur wenn hier tatsächlich nachgeschlagen werden soll |
+| `Bindungswurzel und Tresor dürfen einander nicht enthalten` | Die Wurzel liegt im Tresor oder umgekehrt | Externen Baum als Geschwisterordner ablegen, nie im Skill-Ordner |
+| `external.state = unreachable` | Netz weg, Ziel weg, oder `SKILLSAFE_OFFLINE` gesetzt | Erreichbarkeit prüfen; fail-closed ist hier gewollt, es wird nichts geraten |
+| `doctor`: „zitierter Satz nicht mehr gefunden" | Die fremde Quelle wurde umformuliert | Beleg prüfen, Anker neu setzen oder Claim zurückziehen. **Kein Release-Blocker.** |
+| `doctor`: „Satz steht jetzt an Position n" | Text davor eingefügt | Nichts Dringendes; `sentence_index` beim nächsten Anfassen nachziehen |
+| Paket-SHA weicht zwischen Rechnern ab | Host-lokale Datei ist ins Archiv gerutscht | Paketinhalt prüfen; `.vault-extern.json` darf nicht enthalten sein |
 
 ## Fallen im Bestand
 

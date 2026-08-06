@@ -81,6 +81,34 @@ python3 scripts/vault.py log lint "Befunde: <n> rot / <n> gelb — <Kurzliste>"
 Wurden dabei Metadaten oder Router geändert:
 `python3 scripts/vault.py release patch` (Gate → Artefakte → VERSION → Log → Manifest).
 
+## Externe Bezugsquellen im doctor-Report
+
+`doctor` führt einen eigenen Abschnitt „Externe Bezugsquellen": je Quelle Art
+und Bindungszustand, und bei gebundenen lokalen Quellen jeden Satzanker gegen
+den heutigen Text.
+
+Die Prüfung ist **hash-first**: Findet `doctor` den Satz-Hash an anderer
+Position, meldet er „verschoben, nicht gebrochen"; findet er ihn gar nicht,
+meldet er Drift. Beides ist **gelb**, nie rot, und blockiert keinen Release.
+
+Das ist Absicht und keine Nachlässigkeit: Der Tresor kontrolliert die fremde
+Quelle nicht. Würde ihre Änderung die eigene Ampel rot färben, hinge die
+Betriebsbereitschaft dieses Bestands an fremden Bytes. Drift ist ein
+Kuratierungsauftrag, keine Störung.
+
+Ebenso bewusst gelb bzw. nur Hinweis: eine **ungebundene** lokale Quelle.
+Sonst wäre jedes frisch entpackte Paket auf jedem neuen Host rot und AD-08
+(reproduzierbarer Ordner) fiele. Fail-closed greift erst bei der Nutzung.
+
+Deutung im Lint-Report:
+
+| Meldung | Was zu tun ist |
+|---|---|
+| `verschoben, nicht gebrochen` | Nichts Dringendes. `sentence_index` beim nächsten Anfassen nachziehen. |
+| `zitierter Satz nicht mehr gefunden` | Beleg prüfen: Formulierung geändert, Abschnitt entfernt oder Aussage überholt. Anker neu setzen oder Claim zurückziehen. |
+| `ist auf diesem Host nicht gebunden` | Normal nach Installation. `extern bind` nur, wenn hier tatsächlich nachgeschlagen werden soll. |
+| `weder belegt noch katalogisiert` | Die Quelle trägt nichts. Entweder verankern, katalogisieren oder aus dem Register nehmen. |
+
 ## Report-Form an den Menschen
 
 ```

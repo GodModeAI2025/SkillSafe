@@ -155,6 +155,33 @@ findet er ihn gar nicht, meldet er Drift. Beides ist **gelb, nie rot** und
 blockiert keinen Release. Der Tresor kontrolliert die fremde Quelle nicht —
 ihre Änderung ist keine Störung dieses Bestands, sondern Kuratierungsarbeit.
 
+## Gemessen, nicht behauptet
+
+Ein Orchestrator ohne Messung ist eine Behauptung. Gegen den mitgelieferten
+Beispielbaum (`beispiel-extern/`, 4 Dokumente), Stand 2026-08-06:
+
+| Kennzahl | Wert |
+|---|---|
+| Positivanfragen | 10 |
+| Top-1-Trefferquote | 100 % |
+| Negativanfragen (ohne richtige Antwort) | 5 |
+| Fehltrefferquote | **0 %** |
+| Abdeckung der richtigen Treffer | ≥ 50 % |
+| Abdeckung der verworfenen Dokumente | 0 % |
+
+Die Negativfälle sind der eigentliche Punkt. Ohne sie misst man nur, wie gern
+ein System antwortet. Und der Nebenbefund taugt als Schwelle: Jeder richtige
+Treffer hatte eine Abdeckung über null, jeder verworfene exakt null.
+
+**Grenze dieser Zahl, ausdrücklich:** Der Beispielbaum hat vier Dokumente, und
+Dokumente wie Anfragen stammen aus derselben Hand. Das misst, ob das Ranking
+tut, was es soll — nicht, wie es sich auf einem gewachsenen Fremdbestand
+schlägt. Deshalb steht die Zahl hier und in den Abnahmekriterien, aber nicht
+auf der Landingpage. Wer den Tresor an ein echtes Korpus hängt, misst neu.
+
+Der Testfall `test_external_routing_quality_stays_above_the_floor` hält eine
+Untergrenze fest, damit die Qualität nicht still absacken kann.
+
 ## Grenzen
 
 * **Der Anker ist kein Ingest.** Soll der Inhalt wirklich Bestand werden, geht

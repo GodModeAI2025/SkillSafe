@@ -546,17 +546,22 @@ alle vier Quellen mit 26 Claims — der Tresor belegt seine eigenen
 Konstruktionsentscheidungen mit seinen eigenen Mitteln und hält seine eigene
 Supersession im Graphen fest, statt die überholte Fassung zu löschen.
 
-## Abnahmekriterien (zuletzt durchgeführt am 2026-07-28, Stand v0.10.0)
+## Abnahmekriterien (zuletzt durchgeführt am 2026-08-06, Stand v0.11.1)
 
-**Positiv:** `validate` und `doctor` grün auf 5 Seiten, 26 Claims und
-4 Quellen · `query OKF`, `query "offenes Wissensformat"` und `query C-0001`
+**Positiv:** `validate` und `doctor` grün auf 6 Seiten, 28 Claims,
+4 Quellen und 2 aufgeführten externen Bezugsquellen · `query OKF`, `query "offenes Wissensformat"` und `query C-0001`
 liefern deterministisch C-0001 · zehn identische Läufe erzeugen
 byteidentisches JSON · Bild-Fixture mit Originalhash, Repräsentation und
 Region liefert ausschließlich den gebundenen Beobachtungs-Claim ·
 `release` ersetzt Manifest zuletzt und rollt injizierte Schreibfehler an
 jeder Position zurück · zwei `.skill`-Archive sind byteidentisch, bestehen
 ZIP-Prüfung und laufen nach Installation unter `.claude/skills/` aus einem
-fremden Projekt-CWD.
+fremden Projekt-CWD · externes Routing gegen `beispiel-extern/`
+(4 Dokumente): 10 Positivanfragen mit Top-1 100 %, 5 Negativanfragen mit
+Fehltrefferquote 0 %, Abdeckung richtiger Treffer ≥ 50 % gegen 0 % bei den
+verworfenen. Diese Stichprobe ist klein und selbst gebaut: Sie zeigt, dass
+zweite Rankingstufe und Abdeckungsschwelle wirken, nicht wie sich das Routing
+auf einem gewachsenen Fremdbestand schlägt.
 
 **Negativ (fail-closed nachgewiesen):** unbekannter Typ oder Begriff,
 Alias-Kollision und `broader`-Zyklus → Abbruch · fehlende Medienrepräsentation,

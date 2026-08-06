@@ -158,5 +158,71 @@ class PackagedVaultTests(unittest.TestCase):
             self.assertIn("ausführbare Datei", str(ausfuehrbar.exception))
 
 
+    def test_binding_never_reaches_the_package_and_never_moves_the_hash(self):
+        """Zweites, unabhaengiges Gate: host-lokale Dateien bleiben draussen.
+
+        Rutscht .vault-extern.json in Manifest ODER Archiv, wird die
+        reproduzierbare Paket-SHA-256 maschinenabhaengig — und check_docs.py
+        schlaegt dann ueberall fehl.
+        """
+        spec = importlib.util.spec_from_file_location(
+            "skillsafe_builder_binding", PACKAGE_BUILDER
+        )
+        builder = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(builder)
+        with tempfile.TemporaryDirectory(prefix="skillsafe-binding-") as temp:
+            skill = Path(temp) / "wissenstresor"
+            shutil.copytree(SOURCE_SKILL, skill)
+            vorher = [relativ for relativ, _ in builder.collect_files(skill)]
+            (skill / ".vault-extern.json").write_text(
+                '{"schema": "skillsafe.bindung/v1", "bindings": [], '
+                '"cache_ttl_seconds": 21600}\n',
+                encoding="utf-8",
+            )
+            nachher = [relativ for relativ, _ in builder.collect_files(skill)]
+            self.assertEqual(vorher, nachher)
+            self.assertNotIn(".vault-extern.json", nachher)
+
+    def test_unbound_external_source_answers_offline_with_exit_code_zero(self):
+        """Ein frisch entpacktes Paket ist ungebunden — und trotzdem gruen."""
+        with tempfile.TemporaryDirectory(prefix="skillsafe-unbound-") as temp:
+            ziel = Path(temp) / "projekt/.claude/skills"
+            ziel.mkdir(parents=True)
+            skill = ziel / "wissenstresor"
+            shutil.copytree(SOURCE_SKILL, skill)
+            # Ein Paket enthaelt die host-lokale Bindung nie; im Arbeitsbaum
+            # kann sie liegen, deshalb hier den Auslieferungszustand herstellen.
+            binding = skill / ".vault-extern.json"
+            if binding.exists():
+                binding.unlink()
+            umgebung = os.environ.copy()
+            umgebung["PYTHONDONTWRITEBYTECODE"] = "1"
+            umgebung["SKILLSAFE_OFFLINE"] = "1"
+
+            def lauf(*args):
+                return subprocess.run(
+                    [sys.executable, "-B", str(skill / "scripts/vault.py"), *args],
+                    cwd=skill, env=umgebung, text=True, stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE, check=False, timeout=30,
+                )
+
+            regulaer = lauf("query", "Was ist OKF?")
+            self.assertEqual(regulaer.returncode, 0, regulaer.stdout + regulaer.stderr)
+            payload = json.loads(regulaer.stdout)
+            self.assertEqual(payload["state"], "candidates_found")
+            self.assertEqual(payload["external"]["state"], "not_requested")
+
+            extern = lauf("query", "--extern", "Was ist OKF?")
+            self.assertEqual(extern.returncode, 0, extern.stdout + extern.stderr)
+            block = json.loads(extern.stdout)["external"]
+            self.assertIn(block["state"],
+                          {"no_external_candidates", "external_candidates_found"})
+            hinweise = " ".join(block["notes"])
+            self.assertTrue(
+                "nicht gebunden" in hinweise or "SKILLSAFE_OFFLINE" in hinweise,
+                hinweise,
+            )
+
+
 if __name__ == "__main__":
     unittest.main()

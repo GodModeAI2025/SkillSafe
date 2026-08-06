@@ -3617,7 +3617,10 @@ def _extern_dokumente(wurzel, anker):
         if p.suffix.lower() != ".md":
             continue
         if not _safe_regular_file_within(p, wurzel):
-            continue
+            # Fail closed statt still überspringen: eine Datei, die wie ein
+            # Dokument heißt, aber keines ist (FIFO, Symlink, Gerätedatei),
+            # ist eine Auffälligkeit und kein Rauschen.
+            return None, f"{relpfad}: keine reguläre Datei"
         if len(ergebnis) >= MAX_EXTERN_DOKUMENTE:
             return None, f"mehr als {MAX_EXTERN_DOKUMENTE} Markdown-Dokumente"
         text, digest, grund = _lies_externes_dokument(wurzel, anker, relpfad)

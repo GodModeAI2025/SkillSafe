@@ -38,3 +38,6 @@ Eintraege nur ueber `python3 scripts/vault.py log <aktion> "<text>"`.
 ## [2026-07-28] release | v0.10.1 — 5 Seiten, 26 Claims, 4 Quellen (patch)
 ## [2026-08-06] extern | abruf https://raw.githubusercontent.com/GodModeAI2025/SkillSafe/main/README.md sha256=cf118096dc60b2b1341d8565b7562aae64ba8c2341f9145836473aaa55c02255 bytes=11800
 ## [2026-08-06] extern | abruf https://raw.githubusercontent.com/GodModeAI2025/SkillSafe/main/BETRIEB.md sha256=f87b27a1949b8e2e3017675c0b2bb17b7c823ce9ebe045e496018c21db90da73 bytes=10573
+## [2026-08-06] release | v0.11.0 — 6 Seiten, 28 Claims, 4 Quellen (minor)
+## [2026-08-06] release | v0.11.1 — 6 Seiten, 28 Claims, 4 Quellen (patch)
+## [2026-08-06] release | v0.11.2 — 6 Seiten, 28 Claims, 4 Quellen (patch)

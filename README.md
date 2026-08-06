@@ -24,7 +24,7 @@ geschützte `dir_fd`-Operationen fail-closed ab.
 📖 **Konzept & Architekturentscheidungen:** [`wissenstresor/KONZEPT.md`](wissenstresor/KONZEPT.md)
 🌐 **Landingpage:** [`index.html`](index.html) (GitHub-Pages-fähig, Source = repo root)
 
-**Aktueller Release: v0.11.0** (Profil `oksv-lite/1.3`) mit Begriffswelten,
+**Aktueller Release: v0.11.2** (Profil `oksv-lite/1.3`) mit Begriffswelten,
 deterministischem Hybrid-Retrieval, geprüften Bild-/PDF-Regionen und einem
 reproduzierbaren `.skill`-Paket für Claude Code und Codex. Der
 Frontmatter-Parser lehnt Verschachtelung fail-closed ab statt sie still
@@ -51,9 +51,10 @@ liest der Tresor ausschließlich Ziele, die namentlich in
 `sources/EXTERN.md` stehen, und protokolliert jeden Abruf. Erreicht wird nie
 etwas, das dort nicht aufgeführt ist.
 
-Abnahme: 68 Tests bestanden · 31 manifestierte Dateien · 33 sichere
+Abnahme: 92 Tests bestanden · 37 manifestierte Dateien · 39 sichere
 Paketeinträge · SHA-256
-`fa88863bf81cea52f6b48added76f4f9768bccf97a25b7048e021f90f7931069`.
+`0ef00756446b9e84aee56c801ea0510de7ce0272cbf517621acf96ee88cce2c5`.
+Dazu 2 aufgeführte externe Bezugsquellen · 2 Satzanker.
 
 Alles läuft mit der Python-Standardbibliothek, gemessen mit CPython 3.9.6 und
 3.13.13; beide bauen dasselbe Paket mit demselben SHA-256. Selbst nachrechnen
@@ -202,7 +203,7 @@ sich. Commit und Push sind kein Teil des Builds.
 ## Demo-Bestand
 
 Der mitgelieferte Demo-Bestand `knowledge/demo-okf/` dokumentiert die
-Herkunft des Tresors mit seinen eigenen Mitteln: 5 Seiten, 26 Claims,
+Herkunft des Tresors mit seinen eigenen Mitteln: 6 Seiten, 28 Claims,
 4 Quellen (Google-OKF-Ankündigung, Karpathys `llm-wiki`-Gist, ein
 Ontologie-Artikel von Iusztin, der Volltext der OKF-Spezifikation v0.2),
 1 Begriffswelt und 9 beleggebundene Begriffe — validiert, indiziert,

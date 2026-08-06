@@ -81,6 +81,18 @@ def ist_stand():
         raise SystemExit(f"Paketbau ist rot:\n{paket}")
     stand["paket_sha"] = re.search(r"sha256: ([0-9a-f]{64})", paket).group(1)
     stand["paket_dateien"] = int(re.search(r"files: (\d+)", paket).group(1))
+
+    # Externe Zaehler stehen bewusst auf einer eigenen stats-Zeile: ein
+    # zusaetzliches Feld in der Kopfzeile haette den Waechter an der eigenen
+    # Erweiterung brechen lassen.
+    treffer = re.search(
+        r"Externe Bezugsquellen: (\d+), Satzanker: (\d+), Kataloge: (\d+)", stats
+    )
+    if not treffer:
+        raise SystemExit(f"stats nennt keine externen Zahlen:\n{stats}")
+    stand["extern"], stand["anker"], stand["kataloge"] = (
+        int(wert) for wert in treffer.groups()
+    )
     return stand
 
 
@@ -129,6 +141,10 @@ def pruefe(stand):
              stand["claims"], "index.html")
     verlange(landing, r"\d+ Seiten / \d+ Claims / (\d+) Quellen", "Quellen (doctor)",
              stand["quellen"], "index.html")
+    verlange(readme, r"(\d+) aufgeführte externe Bezugsquellen",
+             "externe Bezugsquellen", stand["extern"], "README.md")
+    verlange(readme, r"externe Bezugsquellen · (\d+) Satzanker", "Satzanker",
+             stand["anker"], "README.md")
     return abweichungen
 
 

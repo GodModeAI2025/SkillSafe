@@ -2638,6 +2638,13 @@ def _query_base(query, state, *, manifest_digest=None, version=None,
             "page_paths": [],
             # Gegenstück zu page_paths: was ein Mensch AUSSERHALB des Bestands
             # nachlesen müsste. Nur Hinweis, nie Ersatz für "Nicht im Bestand".
+            #
+            # Zwei getrennte Felder, weil sie zwei verschiedene Fragen
+            # beantworten: '…_available' ist das ANGEBOT (gibt es überhaupt
+            # aufgeführte Quellen?) und steht auch ohne --extern, weil der
+            # Antwort-Workflow genau dann entscheiden muss, ob Schritt 4c
+            # existiert. '…_used' ist das ERGEBNIS (wurde live gelesen?).
+            "external_lookup_available": False,
             "external_live_lookup_used": False,
             "external_reason": None,
             "external_document_paths": [],
@@ -3160,6 +3167,8 @@ def build_query_result(snapshot, world=None, limit=8):
             "exhaustive_review_required": not evidence,
             "reason": None if evidence else "no_retrieval_candidates",
             "page_paths": sorted(snapshot["pages"]),
+            "external_lookup_available": bool(
+                snapshot["extern"]["register"]),
             "external_live_lookup_used": False,
             "external_reason": None,
             "external_document_paths": [],
@@ -3914,6 +3923,21 @@ def build_external_result(snapshot, query, quellen_filter=None):
         block["reason"] = (
             f"{rel(EXTERN_REGISTER)} führt keine externe Bezugsquelle. "
             f"Es wird ausschließlich aufgeführtes Material gelesen."
+        )
+        return block
+
+    # Eine nicht aufgeführte Quellen-ID still zu ignorieren wäre der
+    # gefährlichste Fehltreffer überhaupt: ein Tippfehler erzeugte dann einen
+    # glaubwürdig aussehenden Negativbefund („die Quelle wurde durchsucht und
+    # hat nichts hergegeben"). Deshalb fail closed, bevor gerankt wird.
+    unbekannt = sorted(set(quellen_filter or []) - set(register))
+    if unbekannt:
+        block["state"] = "invalid_query"
+        block["live"] = False
+        block["reason"] = (
+            f"Nicht aufgeführte Quelle(n) {unbekannt}. Es wurde nichts "
+            f"durchsucht — dies ist kein Negativbefund. Aufgeführt sind: "
+            f"{sorted(register)}."
         )
         return block
 
@@ -4842,7 +4866,39 @@ def _okf_sources(fm, register, mit_quellen):
     return zeilen
 
 
-def _okf_frontmatter(fm, body, register, concepts, mit_quellen):
+def _okf_extern_sources(fm, extern):
+    """sources-Block für aufgeführte externe Bezugsquellen nach §5.1.
+
+    Ohne diesen Zweig verlässt eine ausschließlich extern belegte Seite den
+    Tresor ohne jede Quellenangabe — belegte Aussagen ohne Beleg, und genau
+    das ist der Kernwert, den der Export nicht verlieren darf.
+
+    Der Bindungspfad aus .vault-extern.json erscheint hier NIEMALS: er ist
+    host-lokal und hat außerhalb dieser Maschine keine Bedeutung.
+    """
+    zeilen = []
+    for xid in fm.get("externe_quellen", []):
+        eintrag = extern.get(xid, {})
+        url = eintrag.get("url")
+        if url:
+            # Ein registriertes https-Präfix ist portabel und öffentlich —
+            # der einzige Fall, in dem eine externe Ressource folgbar ist.
+            resource = url
+        else:
+            titel = eintrag.get("titel") or xid
+            resource = f"external reference {xid}, {titel}, not exported"
+        zeilen.append(f"  - id: {xid}")
+        zeilen.append(f"    resource: {_yaml_scalar(resource)}")
+        if eintrag.get("titel"):
+            zeilen.append(f"    title: {_yaml_scalar(eintrag['titel'])}")
+        if _iso_date(eintrag.get("stand", "")):
+            zeilen.append(f"    last_modified: {eintrag['stand']}")
+        zeilen.append(f"    oksv_trust: {eintrag.get('trust', '?')}")
+        zeilen.append(f"    oksv_external_kind: {eintrag.get('art', '?')}")
+    return zeilen
+
+
+def _okf_frontmatter(fm, body, register, concepts, mit_quellen, extern=None):
     zeilen = ["---", f"type: {_yaml_scalar(fm.get('type', ''))}"]
     if fm.get("title"):
         zeilen.append(f"title: {_yaml_scalar(fm['title'])}")
@@ -4861,7 +4917,8 @@ def _okf_frontmatter(fm, body, register, concepts, mit_quellen):
             "verified: { by: %s, at: %s }"
             % (_yaml_scalar(_okf_actor(fm["geprueft_von"])), fm["geprueft_am"])
         )
-    quellen = _okf_sources(fm, register, mit_quellen)
+    quellen = (_okf_sources(fm, register, mit_quellen)
+               + _okf_extern_sources(fm, extern or {}))
     if quellen:
         zeilen.append("sources:")
         zeilen.extend(quellen)
@@ -4894,7 +4951,7 @@ def _okf_frontmatter(fm, body, register, concepts, mit_quellen):
     return zeilen
 
 
-def _okf_body(seite, register):
+def _okf_body(seite, register, extern=None, anchors=None):
     """Body verbatim, plus Fußnoten nach §5.1 und Beziehungen als Links."""
     ausgabe = []
     for line in seite["body"].split("\n"):
@@ -4910,13 +4967,35 @@ def _okf_body(seite, register):
             text += f"\n- {relation['typ']}: [{_markdown_text(name)}](/{ziel})"
         text += "\n"
 
+    extern = extern or {}
+    anchors = anchors or {}
     verwendet = sorted({claim["quelle"] for claim in seite["claims"]})
     if verwendet:
-        # Das Fußnotenlabel MUSS die S-ID sein, nicht die C-ID: §5.1 nennt
-        # sources[].id als Join-Key in die sources-Liste.
+        # Das Fußnotenlabel MUSS die Quellen-ID sein, nicht die C-ID: §5.1
+        # nennt sources[].id als Join-Key in die sources-Liste.
         text += "\n\n"
         for sid in verwendet:
-            titel = register.get(sid, {}).get("titel") or sid
+            if sid.startswith("X-"):
+                titel = extern.get(sid, {}).get("titel") or sid
+                # Ohne die Anker wäre die Fußnote im Bundle wertlos: der
+                # Satzwortlaut wandert nicht mit, also muss wenigstens der
+                # Zeiger auffindbar bleiben.
+                stellen = sorted({
+                    (anchors.get(sid, {}).get("anchors", {})
+                     .get(claim["anker"], {}).get("document"),
+                     anchors.get(sid, {}).get("anchors", {})
+                     .get(claim["anker"], {}).get("sentence_index"))
+                    for claim in seite["claims"]
+                    if claim["quelle"] == sid and claim.get("anker")
+                })
+                fundstellen = ", ".join(
+                    f"{dokument} Satz {index}"
+                    for dokument, index in stellen if dokument
+                )
+                if fundstellen:
+                    titel = f"{titel} — {fundstellen}"
+            else:
+                titel = register.get(sid, {}).get("titel") or sid
             text += f"[^{sid}]: {titel}\n"
 
     return text.rstrip("\n") + "\n"
@@ -5092,8 +5171,11 @@ def cmd_export(ziel, mit_quellen=False):
         domain = seite["fm"].get("domain", "unbekannt")
         name = Path(rp).name
         kopf = _okf_frontmatter(
-            seite["fm"], seite["body"], register, concepts, mit_quellen)
-        rumpf = _okf_body(seite, register)
+            seite["fm"], seite["body"], register, concepts, mit_quellen,
+            extern=extern_kontext["register"])
+        rumpf = _okf_body(seite, register,
+                          extern=extern_kontext["register"],
+                          anchors=extern_kontext["anchors"])
         dateien[f"{domain}/{name}"] = "\n".join(kopf) + "\n" + rumpf
         domaenen.setdefault(domain, {})[rp] = seite
 

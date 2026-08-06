@@ -1242,5 +1242,35 @@ class VaultSecurityTests(unittest.TestCase):
         self.assertEqual(payload["external"]["hits"], [])
 
 
+    def test_okf_export_carries_external_provenance_but_never_a_binding_path(self):
+        """Eine extern belegte Seite darf den Tresor nicht ohne Beleg verlassen."""
+        seite = self.root / "knowledge/demo-extern/mietminderung.md"
+        if not seite.exists():
+            self.skipTest("Demo-Bestand ohne extern belegte Seite")
+        wurzel = self.work / "extern-handbuch"
+        wurzel.mkdir(exist_ok=True)
+        self.run_cli("extern", "bind", "X-0001", str(wurzel))
+        ziel = self.work / "bundle"
+        result = self.run_cli("export", "--okf", "--out", str(ziel))
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        bundle = (ziel / "demo-extern/mietminderung.md").read_text(encoding="utf-8")
+
+        # Herkunft ist da: Quellen-ID, Deskriptor, Titel und Trust.
+        self.assertIn("  - id: X-0001", bundle)
+        self.assertIn("    resource:", bundle)
+        self.assertIn("    oksv_trust:", bundle)
+        self.assertIn("    oksv_external_kind: markdown-tree", bundle)
+        # Die Fußnote ist mehr als die nackte ID: sie nennt die Fundstelle.
+        self.assertRegex(bundle, r"\[\^X-0001\]: .+ — .+ Satz \d+")
+
+        # Der host-lokale Bindungspfad verlässt den Tresor nie.
+        for datei in ziel.rglob("*"):
+            if datei.is_file():
+                self.assertNotIn(
+                    str(wurzel), datei.read_text(encoding="utf-8"),
+                    f"Bindungspfad im Bundle: {datei}",
+                )
+
+
 if __name__ == "__main__":
     unittest.main()

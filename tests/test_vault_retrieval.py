@@ -796,5 +796,29 @@ Das Bild zeigt eine grüne Produktionsfreigabe.
         self.assertGreater(kleinste_abdeckung, 0)
 
 
+    def test_unknown_source_filter_fails_closed_instead_of_looking_empty(self):
+        """Ein Tippfehler in der Quellen-ID darf keinen Negativbefund erzeugen."""
+        wurzel = self.install_extern_fixture()
+        self.bind_extern(wurzel)
+        self.build_katalog()
+        self.release()
+        result = self.run_cli("query", "--extern", "--source", "X-9999",
+                              "Schimmelbefall")
+        block = json.loads(result.stdout)["external"]
+        self.assertEqual(block["state"], "invalid_query")
+        self.assertEqual(block["hits"], [])
+        self.assertIn("X-9999", block["reason"])
+        self.assertIn("kein Negativbefund", block["reason"])
+
+    def test_external_lookup_offer_is_visible_without_the_flag(self):
+        """Der Antwort-Workflow muss ohne --extern erkennen, ob 4c existiert."""
+        wurzel = self.install_extern_fixture()
+        self.bind_extern(wurzel)
+        self.release()
+        _, payload = self.query("Was ist OKF?")
+        self.assertTrue(payload["fallback"]["external_lookup_available"])
+        self.assertFalse(payload["fallback"]["external_live_lookup_used"])
+
+
 if __name__ == "__main__":
     unittest.main()

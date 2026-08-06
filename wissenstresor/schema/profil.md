@@ -256,7 +256,21 @@ Mögliche Zustände sind:
   Evidenz bleibt leer und `semantic_coverage` bleibt `not_assessed`;
   `fallback.page_paths` nennt den Umfang einer nötigen semantischen
   Vollprüfung;
+  `fallback.external_lookup_available` sagt zusätzlich, ob überhaupt externe
+  Bezugsquellen aufgeführt sind — das Feld steht auch ohne `--extern`, weil
+  der Antwort-Workflow daran erkennt, ob nach der lokalen Vollprüfung noch
+  ein Schritt existiert. `fallback.external_live_lookup_used` sagt danach,
+  ob tatsächlich live gelesen wurde. Zwei Felder, zwei Fragen: Angebot und
+  Ergebnis;
 * `ambiguous` — Alias ist über Begriffswelten mehrdeutig;
+
+Der Block `external` führt eigene Zustände, damit der Top-Level-`state` für
+bestehende Konsumenten eingefroren bleibt: `not_requested`, `not_declared`,
+`not_bound`, `external_candidates_found`, `no_external_candidates`,
+`budget_exceeded`, `unreachable`, `invalid_external_source` und
+`invalid_query`. Der letzte greift, wenn `--source` eine nicht aufgeführte
+ID nennt: Dann wird **nichts** durchsucht, und das Ergebnis ist ausdrücklich
+kein Negativbefund.
 * `invalid_query`, `invalid_vault`, `vault_busy`, `snapshot_changed` —
   fail-closed, immer ohne Evidenz.
 

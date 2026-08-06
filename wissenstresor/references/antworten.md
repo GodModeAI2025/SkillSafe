@@ -47,7 +47,8 @@ Protokoll für den jeweils maßgeblichen Tresor durchlaufen — eine
    Negativbeweis. Erst die vollständige Prüfung dieses manifestierten
    Seitenumfangs erlaubt „Nicht im Bestand".
 4c. **Externer Fallback.** Erst **danach**, und nur wenn
-   `fallback.external_lookup_available` das anbietet:
+   `fallback.external_lookup_available` wahr ist (das Feld steht auch ohne
+   `--extern` im Envelope und sagt, ob überhaupt Quellen aufgeführt sind):
    `python3 scripts/vault.py query --extern "<frage>"`. Das liest aufgeführte
    externe Bezugsquellen live und ist eine bewusste Ausnahme von Regel 2 —
    nie der Default, nie eine Abkürzung um Schritt 4b. Ein externer Treffer

@@ -20,3 +20,6 @@ dist/
 # Local scratch: quarantine is a transient ingest staging area, never a release artifact
 wissenstresor/sources/quarantine/*
 !wissenstresor/sources/quarantine/README.md
+
+# Host-lokale Bindung externer Wurzeln: absolute Pfade dieser Maschine
+wissenstresor/.vault-extern.json

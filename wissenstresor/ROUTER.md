@@ -7,6 +7,11 @@ Treffen Schlagworte mehrerer Domänen zu, ist die Frage eine **Mischfrage**
 und wird als solche gemeldet und pro Domäne getrennt beantwortet.
 Findet der Router nichts, greift Plan B: `python3 scripts/vault.py search <begriff>`.
 
+## demo-extern
+schlagworte: mietminderung, mietmangel, schimmel, schimmelbefall, anzeigepflicht, externe quelle, externe bezugsquelle, satzanker, beispielhandbuch
+seiten:
+- knowledge/demo-extern/mietminderung.md
+
 ## demo-okf
 schlagworte: okf, open knowledge format, frontmatter, yaml, markdown-format, bundle, llm-wiki, llm wiki, karpathy, wissensformat, knowledge catalog, ontologie, pole+o, poleo, knowledge graph, wissensgraph, graphrag, entitaetstypen, subtypen, facts, fakten, preferences, okf v0.2, okf v02, okf 0.2, attested computation, attestierte berechnung, attestierung, attester, executor, receipt, trust tier, trust-tier, vertrauensstufe, provenance, provenienz, credibility signal, glaubwuerdigkeitssignal, stale_after, staleness, usage_count, usage_window, aktorkonvention, human-reviewed, machine-confirmed, supersession, veraltete fassung
 seiten:

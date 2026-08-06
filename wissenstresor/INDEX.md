@@ -3,6 +3,12 @@
 <!-- Generiert durch scripts/vault.py index — NICHT von Hand editieren. -->
 <!-- Manuelle Audit-Map; für Abfragen zuerst vault.py query, dann Kandidatenseiten lesen. -->
 
+## demo-extern
+
+| Seite | Typ | Status | Konfidenz | Stand | Titel |
+|---|---|---|---|---|---|
+| [mietminderung.md](knowledge/demo-extern/mietminderung.md) | konzept | aktiv | mittel | 2026-08-06 | Mietminderung bei Schimmelbefall |
+
 ## demo-okf
 
 | Seite | Typ | Status | Konfidenz | Stand | Titel |

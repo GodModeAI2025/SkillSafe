@@ -23,6 +23,20 @@
   ],
   "knoten": [
     {
+      "begriffe": [],
+      "claims": [
+        "C-0401",
+        "C-0402"
+      ],
+      "domaene": "demo-extern",
+      "id": "knowledge/demo-extern/mietminderung.md",
+      "konfidenz": "mittel",
+      "stand": "2026-08-06",
+      "status": "aktiv",
+      "titel": "Mietminderung bei Schimmelbefall",
+      "typ": "konzept"
+    },
+    {
       "begriffe": [
         "B-0002"
       ],
@@ -127,5 +141,5 @@
       "typ": "konzept"
     }
   ],
-  "profil": "oksv-lite/1.2"
+  "profil": "oksv-lite/1.3"
 }

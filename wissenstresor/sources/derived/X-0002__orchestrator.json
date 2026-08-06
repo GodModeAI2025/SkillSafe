@@ -1,0 +1,63 @@
+{
+  "document_count": 2,
+  "documents": [
+    {
+      "path": "BETRIEB.md",
+      "sentence_count": 104,
+      "sha256": "f87b27a1949b8e2e3017675c0b2bb17b7c823ce9ebe045e496018c21db90da73",
+      "summary": "Release-Kette, Stoerfaelle und Pflege des Bestands.",
+      "tags": [
+        "betrieb",
+        "release",
+        "stoerfall"
+      ],
+      "title": "Betrieb und Uebergabe",
+      "token_count": 1051,
+      "top_tokens": [
+        "nicht",
+        "md",
+        "release",
+        "sie",
+        "ohne",
+        "skill",
+        "tests",
+        "checksum",
+        "erst",
+        "fuer",
+        "wer",
+        "3"
+      ]
+    },
+    {
+      "path": "README.md",
+      "sentence_count": 77,
+      "sha256": "cf118096dc60b2b1341d8565b7562aae64ba8c2341f9145836473aaa55c02255",
+      "summary": "Ueberblick, Regeln, Schnellstart und Grenzen des Tresors.",
+      "tags": [
+        "skillsafe",
+        "wissenstresor",
+        "ueberblick"
+      ],
+      "title": "SkillSafe — der Wissenstresor",
+      "token_count": 954,
+      "top_tokens": [
+        "wissenstresor",
+        "md",
+        "okf",
+        "claude",
+        "skill",
+        "nicht",
+        "v0",
+        "2",
+        "bestand",
+        "kein",
+        "codex",
+        "es"
+      ]
+    }
+  ],
+  "generated_from_sha256": "ededa0cd42dd1f615e9d6eeb538132666e286e49c39b98c80cb49f810674fdb8",
+  "schema": "skillsafe.orchestrator/v1",
+  "segmentation": "satzsegmentierung/v1",
+  "source_id": "X-0002"
+}

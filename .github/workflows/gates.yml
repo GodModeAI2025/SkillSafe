@@ -37,6 +37,12 @@ defaults:
   run:
     shell: bash
 
+# Die Kette geht nie ins Netz. Aufgeführte Netzquellen werden zwar wie interne
+# behandelt, aber ein Gate darf nicht an fremder Verfügbarkeit hängen — sonst
+# misst es das Wetter statt den Bestand. Der Schalter greift vor jedem Socket.
+env:
+  SKILLSAFE_OFFLINE: "1"
+
 jobs:
   gates:
     name: ${{ matrix.os }} / Python ${{ matrix.python }}

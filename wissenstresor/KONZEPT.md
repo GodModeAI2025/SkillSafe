@@ -370,6 +370,13 @@ Abgeglichen wird ausschließlich an Tokengrenzen (`_retrieval_tokens`,
 `_phrase_present`). Ein rohes Substring-`in` gibt es im externen Pfad nicht,
 sonst fände „himmel" ein „schimmel".
 
+Der Katalog ist ausdrücklich **kein Integritätsartefakt**. Prüfsummen trägt er
+nur für lokale Quellen, wo sie überprüfbar bleiben; bei einer Netzquelle sind
+sie verboten, weil ein beweglicher Ref sich nicht pinnen lässt. Ein
+eingefrorener Hash auf ein bewegliches Ziel wäre genau die stille Alterung,
+gegen die AD-10 gebaut ist — nur eine Ebene höher. Integrität kommt von den
+Satzankern und vom Manifest, nicht vom Prefilter.
+
 **Grenze:** Die Trefferqualität hängt an der Struktur fremder Dokumente. Wer
 dort schludert, bekommt schlechtere Treffer; kein Ranking heilt das.
 

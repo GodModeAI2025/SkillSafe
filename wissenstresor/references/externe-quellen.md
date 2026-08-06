@@ -97,7 +97,10 @@ Host rot. Fail-closed greift erst bei der Nutzung.
    `token_count`, `top_tokens`); `title`, `summary` und `tags` sind
    Modellarbeit und bleiben leer im Gerüst. Genau diese Trennlinie ist später
    der Prüfpunkt. Für eine Netzquelle lässt sich kein fremder Baum ablaufen —
-   ihr Katalog wird von Hand gepflegt.
+   ihr Katalog wird von Hand gepflegt und trägt **keine Prüfsummen**:
+   `generated_from_sha256` und `documents[].sha256` müssen dort `null` sein.
+   Ein Hash auf einen beweglichen Ref wäre nach dem nächsten fremden Commit
+   unwahr. Bei einer lokalen Quelle sind beide dagegen Pflicht.
 
 ## Live nachschlagen
 

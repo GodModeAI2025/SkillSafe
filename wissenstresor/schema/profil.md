@@ -427,9 +427,14 @@ gebunden. Eine fehlende Bindung ist **nie** ein Validierungsfehler —
 ungebunden ist der Normalzustand eines frisch entpackten Pakets.
 
 Die Bindungswurzel ist die einzige Stelle im System, an der ein absoluter
-Pfad zulässig ist. Sie muss kanonisch und symlinkfrei sein, darf den Tresor
-weder enthalten noch in ihm liegen, keine andere Wurzel überlappen und keine
-Mount-Grenze überschreiten. Gelesen werden nur reguläre Dateien; Budgets für
+Pfad zulässig ist. Sie wird beim Binden **aufgelöst** und in aufgelöster Form
+gespeichert — nicht abgelehnt, wenn sie über einen Symlink führt: Auf macOS
+ist `/var` selbst ein Symlink auf `/private/var`, und das Betriebssystem
+liefert Temporärpfade so aus. Die tragende Zusage ist nicht „die Eingabe war
+kanonisch", sondern „gearbeitet wird auf einer vollständig aufgelösten Wurzel,
+und darunter wird nie einem Link gefolgt". Sie darf den Tresor weder enthalten
+noch in ihm liegen, keine andere Wurzel überlappen und keine Mount-Grenze
+überschreiten. Gelesen werden nur reguläre Dateien; Budgets für
 Tiefe, Einträge, Dokumentzahl und Bytes werden **gezählt**, nie über eine Uhr
 gestoppt — ein Zeitlimit bräche die Determinismus-Garantie.
 

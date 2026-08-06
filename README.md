@@ -24,7 +24,7 @@ geschützte `dir_fd`-Operationen fail-closed ab.
 📖 **Konzept & Architekturentscheidungen:** [`wissenstresor/KONZEPT.md`](wissenstresor/KONZEPT.md)
 🌐 **Landingpage:** [`index.html`](index.html) (GitHub-Pages-fähig, Source = repo root)
 
-**Aktueller Release: v0.11.4** (Profil `oksv-lite/1.3`) mit Begriffswelten,
+**Aktueller Release: v0.11.6** (Profil `oksv-lite/1.3`) mit Begriffswelten,
 deterministischem Hybrid-Retrieval, geprüften Bild-/PDF-Regionen und einem
 reproduzierbaren `.skill`-Paket für Claude Code und Codex. Der
 Frontmatter-Parser lehnt Verschachtelung fail-closed ab statt sie still
@@ -51,9 +51,9 @@ liest der Tresor ausschließlich Ziele, die namentlich in
 `sources/EXTERN.md` stehen, und protokolliert jeden Abruf. Erreicht wird nie
 etwas, das dort nicht aufgeführt ist.
 
-Abnahme: 95 Tests bestanden · 37 manifestierte Dateien · 39 sichere
+Abnahme: 96 Tests bestanden · 37 manifestierte Dateien · 39 sichere
 Paketeinträge · SHA-256
-`451623614a5699b362fa308306ade774b34b21036d259d30b0b72d2e97d97bce`.
+`c8d82afd21ff20a82d72ff43f99f58507851dc024b1d8d5b946df9ece92bf6b6`.
 Dazu 2 aufgeführte externe Bezugsquellen · 2 Satzanker.
 
 Alles läuft mit der Python-Standardbibliothek, gemessen mit CPython 3.9.6 und

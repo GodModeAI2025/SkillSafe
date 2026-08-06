@@ -1050,7 +1050,7 @@ class VaultSecurityTests(unittest.TestCase):
         (root / "sources/EXTERN.md").write_text(
             self.EXTERN_REGISTER.format(ziel=ziel), encoding="utf-8")
 
-    def test_external_root_must_be_absolute_canonical_and_symlink_free(self):
+    def test_external_root_must_be_absolute_and_free_of_dotdot(self):
         self.install_extern_register()
         wurzel = self.extern_wurzel()
         for unsicher, fragment in (
@@ -1061,11 +1061,26 @@ class VaultSecurityTests(unittest.TestCase):
                 result = self.run_cli("extern", "bind", "X-0001", unsicher)
                 self.assertNotEqual(result.returncode, 0, result.stdout)
                 self.assertIn(fragment, result.stdout)
+
+    def test_symlinked_root_is_resolved_and_stored_as_its_target(self):
+        """Aufloesen statt ablehnen — aber sichtbar, nicht still.
+
+        Eine fruehere Fassung verlangte eine schon kanonische Wurzel. Das war
+        auf macOS unbrauchbar, weil dort /var ein Symlink auf /private/var ist
+        und das Betriebssystem Temporaerpfade so ausliefert. Gebunden und
+        gespeichert wird deshalb der aufgeloeste Pfad.
+        """
+        self.install_extern_register()
+        wurzel = self.extern_wurzel()
         link = self.work / "extern-link"
         os.symlink(str(wurzel), str(link))
         result = self.run_cli("extern", "bind", "X-0001", str(link))
-        self.assertNotEqual(result.returncode, 0, result.stdout)
-        self.assertIn("Symlink", result.stdout)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        bindung = json.loads(
+            (self.root / ".vault-extern.json").read_text(encoding="utf-8"))
+        gespeichert = bindung["bindings"][0]["root"]
+        self.assertEqual(gespeichert, str(wurzel.resolve()))
+        self.assertNotEqual(gespeichert, str(link))
 
     def test_external_root_and_vault_must_not_contain_each_other(self):
         self.install_extern_register()

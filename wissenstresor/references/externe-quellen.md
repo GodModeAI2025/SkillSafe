@@ -63,9 +63,10 @@ Host rot. Fail-closed greift erst bei der Nutzung.
 
 2. **Binden** (nur lokale Quellen):
    `python3 scripts/vault.py extern bind X-0001 /absoluter/pfad`
-   Die Wurzel muss absolut, kanonisch und symlinkfrei sein, darf den Tresor
-   weder enthalten noch in ihm liegen und keine andere gebundene Wurzel
-   überlappen. `extern list` zeigt den Zustand aller Quellen.
+   Die Wurzel muss absolut und frei von `..` sein, darf den Tresor weder
+   enthalten noch in ihm liegen und keine andere gebundene Wurzel überlappen.
+   Führt der Pfad über einen Symlink, wird er aufgelöst und in aufgelöster
+   Form gespeichert — sichtbar, nicht still. `extern list` zeigt den Zustand aller Quellen.
 
 3. **Sätze ansehen.**
    `python3 scripts/vault.py anchor-template X-0001 pfad/im/baum.md`

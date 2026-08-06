@@ -43,3 +43,5 @@ Eintraege nur ueber `python3 scripts/vault.py log <aktion> "<text>"`.
 ## [2026-08-06] release | v0.11.2 — 6 Seiten, 28 Claims, 4 Quellen (patch)
 ## [2026-08-06] release | v0.11.3 — 6 Seiten, 28 Claims, 4 Quellen (patch)
 ## [2026-08-06] release | v0.11.4 — 6 Seiten, 28 Claims, 4 Quellen (patch)
+## [2026-08-06] release | v0.11.5 — 6 Seiten, 28 Claims, 4 Quellen (patch)
+## [2026-08-06] release | v0.11.6 — 6 Seiten, 28 Claims, 4 Quellen (patch)

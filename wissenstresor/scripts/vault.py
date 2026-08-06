@@ -3533,14 +3533,22 @@ def _resolve_external_root(roh):
         return None, None, "Bindungswurzel muss ein absoluter Pfad sein"
     if ".." in kandidat.parts:
         return None, None, "'..' ist in der Bindungswurzel verboten"
-    if _first_alias_component(kandidat, Path(kandidat.anchor)) is not None:
-        return None, None, "Symlink/Reparse-Point im Pfad zur Bindungswurzel"
     try:
         aufgeloest = kandidat.resolve(strict=True)
     except OSError as exc:
         return None, None, f"Bindungswurzel nicht lesbar — {exc}"
-    if aufgeloest != kandidat:
-        return None, None, "Bindungswurzel ist nicht kanonisch"
+    # Bewusst AUFLÖSEN statt kanonische Eingabe zu verlangen. Eine frühere
+    # Fassung lehnte jede nicht schon kanonische Wurzel ab; das machte den
+    # Tresor auf macOS unbrauchbar, weil dort /var selbst ein Symlink auf
+    # /private/var ist und das Betriebssystem Temporärpfade so ausliefert.
+    # Die Prüfung war zu streng für das, was sie schützen sollte.
+    #
+    # Die tragende Zusage ist nicht „die Eingabe war kanonisch", sondern „wir
+    # arbeiten auf einer vollständig aufgelösten Wurzel und folgen darunter
+    # nie einem Link": _walk_tree_no_links_within folgt keinem Alias, jedes
+    # Öffnen nutzt O_NOFOLLOW, und der (st_dev, st_ino)-Anker fällt auf, wenn
+    # jemand die Wurzel unter der Hand austauscht. Gebunden und gespeichert
+    # wird der aufgelöste Pfad, damit nichts still umgeleitet wird.
     try:
         status = os.lstat(str(aufgeloest))
     except OSError as exc:

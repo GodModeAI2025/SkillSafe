@@ -820,5 +820,57 @@ Das Bild zeigt eine grüne Produktionsfreigabe.
         self.assertFalse(payload["fallback"]["external_live_lookup_used"])
 
 
+    def test_catalog_hashes_only_where_they_can_stay_true(self):
+        """Netzkatalog ohne Pruefsummen, lokaler Katalog mit — beide Richtungen.
+
+        Ein Hash auf einen beweglichen Ref ist nach dem naechsten fremden
+        Commit unwahr und nur noch endlos nachziehbar. Eine Regel, die nur
+        eine Richtung prueft, ist keine.
+        """
+        wurzel = self.install_extern_fixture()
+        self.bind_extern(wurzel)
+        katalog_pfad = self.root / "sources/derived/X-0001__orchestrator.json"
+        lokal = self.build_katalog()
+
+        # Lokale Quelle: Hash fehlt -> Fehler.
+        ohne = json.loads(json.dumps(lokal))
+        ohne["generated_from_sha256"] = None
+        ohne["documents"][0]["sha256"] = None
+        katalog_pfad.write_text(
+            json.dumps(ohne, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8")
+        result = self.run_cli("validate")
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertIn("64-stelliger SHA-256 erwartet", result.stdout)
+
+        # Netzquelle: Hash vorhanden -> Fehler.
+        (self.root / "sources/EXTERN.md").write_text(
+            "# Register\n\n"
+            "| ID | Titel | Art | Ziel | Stand/Version | Bindungsschlüssel | Trust | Rechte |\n"
+            "|---|---|---|---|---|---|---|---|\n"
+            "| X-0001 | Netzquelle | markdown-tree | https://example.invalid/pfad/ "
+            "| fortlaufend | testhandbuch | T3 | frei |\n",
+            encoding="utf-8")
+        katalog_pfad.write_text(
+            json.dumps(lokal, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8")
+        result = self.run_cli("validate")
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertIn("laesst sich nicht pinnen", result.stdout)
+
+        # Netzquelle: Hashes auf null -> gruen.
+        katalog_pfad.write_text(
+            json.dumps(ohne, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8")
+        alle_null = json.loads(json.dumps(ohne))
+        for dok in alle_null["documents"]:
+            dok["sha256"] = None
+        katalog_pfad.write_text(
+            json.dumps(alle_null, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8")
+        result = self.run_cli("validate")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+
 if __name__ == "__main__":
     unittest.main()

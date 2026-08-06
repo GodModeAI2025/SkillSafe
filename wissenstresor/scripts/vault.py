@@ -1584,8 +1584,21 @@ def parse_orchestrators(extern_register):
                 f"— ein fremder Tresor bringt seine Claims schon mit"
             )
             continue
-        if not isinstance(data.get("generated_from_sha256"), str) or not HASH_RE.fullmatch(
-                data.get("generated_from_sha256", "")):
+        # Ein Katalog behauptet nichts, was er nicht halten kann. Bei einer
+        # Netzquelle zeigt das Ziel auf einen beweglichen Ref; ein dort
+        # eingefrorener Hash ist nach dem naechsten fremden Commit unwahr und
+        # nur noch endlos nachziehbar. Deshalb: bei Netzquellen MUSS er fehlen,
+        # bei lokalen Quellen MUSS er da sein — der Baum ist dort greifbar.
+        # Die Regel wirkt in beide Richtungen, sonst ist sie keine.
+        ist_netzquelle = bool(extern_register[xid].get("url"))
+        wurzel_hash = data.get("generated_from_sha256")
+        if ist_netzquelle:
+            if wurzel_hash is not None:
+                errors.append(
+                    f"{rp}.generated_from_sha256: muss bei einer Netzquelle "
+                    f"null sein — ein beweglicher Ref laesst sich nicht pinnen"
+                )
+        elif not isinstance(wurzel_hash, str) or not HASH_RE.fullmatch(wurzel_hash):
             errors.append(f"{rp}.generated_from_sha256: 64-stelliger SHA-256 erwartet")
         dokumente = data.get("documents")
         if not isinstance(dokumente, list) or not dokumente:
@@ -1618,8 +1631,13 @@ def parse_orchestrators(extern_register):
                 errors.append(f"{label}.path: {pfad!r} ist doppelt")
                 continue
             gesehen.add(pfad)
-            if not isinstance(dok.get("sha256"), str) or not HASH_RE.fullmatch(
-                    dok.get("sha256", "")):
+            dok_hash = dok.get("sha256")
+            if ist_netzquelle:
+                if dok_hash is not None:
+                    errors.append(
+                        f"{label}.sha256: muss bei einer Netzquelle null sein"
+                    )
+            elif not isinstance(dok_hash, str) or not HASH_RE.fullmatch(dok_hash):
                 errors.append(f"{label}.sha256: 64-stelliger SHA-256 erwartet")
             _plain_text(dok.get("title"), f"{label}.title", errors, maximum=300)
             _plain_text(dok.get("summary"), f"{label}.summary", errors,
@@ -4001,7 +4019,9 @@ def build_external_result(snapshot, query, quellen_filter=None):
                 f"— 'vault.py orchestrator-template {xid}' erzeugt das Gerüst"
             )
             continue
-        wurzeln.append([xid, katalog["meta"]["generated_from_sha256"]])
+        # Bei einer Netzquelle ist der Wurzel-Hash bewusst None; dann geht der
+        # Bindungsschluessel in den Fingerprint, nicht eine erfundene Zahl.
+        wurzeln.append([xid, katalog["meta"]["generated_from_sha256"] or "netz"])
         # Stufe 1 ist nur Prefilter: der Index wird nie roh geladen, sondern
         # gefiltert, und nur die besten Kandidaten werden überhaupt geöffnet.
         vorauswahl = sorted(

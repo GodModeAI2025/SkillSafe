@@ -394,7 +394,21 @@ Schema `skillsafe.orchestrator/v1`, nur für `markdown-tree`. Der Katalog ist
 ```
 
 `document_count` muss `len(documents)` entsprechen — bewusst redundant, damit
-eine abgeschnittene Datei auffällt. Alle Zahlenfelder sind nachrechenbar und
+eine abgeschnittene Datei auffällt.
+
+**Prüfsummen nur dort, wo sie wahr bleiben können.** `generated_from_sha256`
+und `documents[].sha256` sind bei einer **lokalen** Quelle Pflicht: Der Baum
+ist greifbar, der Hash ist überprüfbar. Bei einer **Netzquelle** müssen beide
+`null` sein. Ein registriertes Präfix zeigt auf einen beweglichen Ref; ein dort
+eingefrorener Hash ist nach dem nächsten fremden Commit unwahr und nur noch
+endlos nachziehbar — also eine Zahl im Bestand, die etwas Falsches behauptet
+und dabei richtig aussieht. Ein Katalog behauptet nichts, was er nicht halten
+kann. `validate` erzwingt die Regel in **beide** Richtungen; eine Regel, die
+nur eine Richtung prüft, ist keine.
+
+Das kostet nichts: Der Katalog ist ausschließlich Prefilter, Stufe 2 rechnet
+immer gegen den jetzt gelesenen Text, und die Drift-Erkennung läuft über die
+Satzanker, nicht über den Katalog. Alle Zahlenfelder sind nachrechenbar und
 kommen aus dem Script; `title`, `summary` und `tags` sind Modellarbeit. Genau
 diese Trennlinie ist der Prüfpunkt.
 

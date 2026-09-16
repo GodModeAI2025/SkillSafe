@@ -231,6 +231,23 @@ PROMPT_INJECTION_RE = re.compile(
     r"system\s+prompt|developer\s+message|<\s*system\s*>)",
     re.IGNORECASE,
 )
+# Zugangsdaten im ausgelieferten Wissen. Bewusst wenige, präzise Formen statt
+# einer Entropie-Heuristik: ein Fehlalarm blockiert validate und damit jeden
+# Release, also zählt jede Form nur, wenn sie praktisch nie zufällig in Prosa
+# vorkommt. Ein Tresor wird kopiert, paketiert und exportiert; was einmal im
+# Paket steckt, ist nicht mehr zurückzuholen.
+SECRET_RE = re.compile(
+    r"(?:-----BEGIN (?:[A-Z]+ )*PRIVATE KEY-----"
+    r"|\b(?:AKIA|ASIA)[0-9A-Z]{16}\b"
+    r"|\bgh[pousr]_[A-Za-z0-9]{36,}"
+    r"|\bgithub_pat_[A-Za-z0-9_]{40,}"
+    r"|\bsk-(?:ant-|proj-)?[A-Za-z0-9_-]{32,}"
+    r"|\bxox[abprs]-[A-Za-z0-9-]{20,}"
+    r"|\bAIza[0-9A-Za-z_-]{35}\b"
+    r"|\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}"
+    r"|\b[a-z][a-z0-9+.-]*://[^/\s:@<>\"'`]+:[^/\s:@<>\"'`]+@)"
+)
+SECRET_SUFFIXE = {".md", ".json", ".yaml"}
 RETRIEVAL_STOPWORDS = {
     "aber", "als", "auch", "auf", "aus", "bei", "das", "dem", "den", "der",
     "des", "die", "ein", "eine", "einer", "eines", "für", "hat", "ich", "im",
@@ -731,6 +748,34 @@ def _skill_fremdartefakte():
         elif status.st_mode & 0o111:
             ergebnis.append((p, "Ausführungsbit ist gesetzt"))
     return sorted(ergebnis, key=lambda eintrag: rel(eintrag[0]))
+
+
+def _skill_geheimnisse():
+    """Zugangsdaten in manifestierten Textdateien finden.
+
+    Rückgabe: Liste (Pfad, Zeilennummer, Formbeschreibung). Der Treffer selbst
+    wird nie ausgegeben — die Meldung soll das Geheimnis nicht in Log, CI-Ausgabe
+    oder Chatverlauf weitertragen. Medien werden nicht dekodiert (AD-07); die
+    Engine selbst ist ausgenommen, weil sie die Muster definiert.
+    """
+    ergebnis = []
+    for p in _walk_tree_no_links(ROOT):
+        if (_is_path_alias(p) or not _tracked_path(p)
+                or p.suffix.lower() not in SECRET_SUFFIXE
+                or not _safe_regular_file(p)):
+            continue
+        try:
+            text = read(p)
+        except (OSError, UnicodeError):
+            # Nicht lesbarer Text fällt an anderer Stelle von validate auf.
+            continue
+        for nummer, zeile in enumerate(text.split("\n"), start=1):
+            treffer = SECRET_RE.search(zeile)
+            if treffer:
+                form = ("Zugangsdaten in URL" if "://" in treffer.group(0)
+                        else f"Schlüsselform {treffer.group(0)[:4]}…")
+                ergebnis.append((p, nummer, form))
+    return sorted(ergebnis, key=lambda eintrag: (rel(eintrag[0]), eintrag[1]))
 
 
 def iter_pages():
@@ -2319,6 +2364,10 @@ def cmd_validate(still=False):
         for p, grund in _skill_fremdartefakte():
             fehler.append(f"{rel(p)}: {grund} — der Tresor liefert Wissen aus, "
                           f"keinen ausführbaren Inhalt")
+        for p, zeile, form in _skill_geheimnisse():
+            fehler.append(f"{rel(p)}:{zeile}: mögliches Geheimnis ({form}) — "
+                          f"Zugangsdaten gehören nicht in ein portables Artefakt; "
+                          f"Quelle schwärzen und neu registrieren")
     except OSError as exc:
         fehler.append(f"Tresorbaum kann nicht vollständig geprüft werden — {exc}")
     for p in _quarantine_payloads():

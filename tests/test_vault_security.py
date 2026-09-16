@@ -223,6 +223,41 @@ class VaultSecurityTests(unittest.TestCase):
         os.chmod(self.root / "knowledge/demo-okf/okf.md", 0o755)
         self.assert_validate_fails("Ausführungsbit ist gesetzt")
 
+    def test_secrets_in_shipped_text_are_rejected_without_echo(self):
+        """Ein Zugangsdatum im Paket ist nicht mehr zurückzuholen."""
+        # Zusammengesetzt, damit weder dieses Repository noch Push-Schutz-
+        # Scanner ein vollständiges Muster im Quelltext sehen.
+        schluessel = "AKIA" + "Q7XW3M" + "PLN2RZT4KV"
+        url = "https" + "://leser:" + "geheim123" + "@wiki.example.org/api"
+        for relative, alt, neu, geheim in (
+            ("knowledge/demo-okf/okf.md", "## Kontext und Grenzen",
+             f"Zugang: {schluessel}\n\n## Kontext und Grenzen", schluessel),
+            ("references/lint.md", "## Protokoll",
+             f"Endpunkt {url}\n\n## Protokoll", "geheim123"),
+            ("sources/derived/X-0001__anchors.json", "{",
+             '{"notiz": "-----BEGIN ' + 'RSA PRIVATE KEY-----",', "BEGIN"),
+        ):
+            with self.subTest(relative=relative):
+                root = self.new_vault()
+                self.replace_text(relative, alt, neu, root=root)
+                result = self.run_cli("validate", root=root)
+                ausgabe = result.stdout + result.stderr
+                self.assertNotEqual(result.returncode, 0, ausgabe)
+                self.assertIn(f"{relative}:", ausgabe)
+                self.assertIn("mögliches Geheimnis", ausgabe)
+                self.assertNotIn(geheim, ausgabe)
+
+    def test_secret_screen_ignores_ordinary_prose_and_links(self):
+        self.replace_text(
+            "knowledge/demo-okf/okf.md", "## Kontext und Grenzen",
+            "Siehe https://example.org/a:b und git@github.com:org/repo.git "
+            "sowie risk-management-and-knowledge-sharing-guidelines.\n\n"
+            "## Kontext und Grenzen",
+        )
+        self.run_cli("checksum")
+        result = self.run_cli("validate")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_review_fields_are_validated_fail_closed(self):
         """geprueft_von/geprueft_am: Paar, Grammatik, Kalendertag, Injection."""
         anker = "type: konzept"

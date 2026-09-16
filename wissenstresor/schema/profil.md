@@ -121,6 +121,17 @@ fail-closed ab. `tools/build_skill_package.py` führt dieselbe Allowlist
 unabhängig ein zweites Mal, damit der Paketbau nicht von dem Script abhängt,
 das er verpackt.
 
+Ebenso fail-closed prüft `validate` alle manifestierten `.md`-, `.json`- und
+`.yaml`-Dateien auf Zugangsdaten: private Schlüsselblöcke, Cloud- und
+Plattform-Token in ihren festen Präfixformen, JWTs und URLs mit Benutzer und
+Passwort. Die Muster sind bewusst eng statt heuristisch, denn jeder Treffer
+blockiert den Release. Gemeldet werden Datei, Zeile und Form, **nie der
+Treffer selbst**, damit das Geheimnis nicht über Log oder CI-Ausgabe
+weiterwandert. Liegt es in einer Rohquelle, wird die Quelle geschwärzt und
+neu registriert (neuer Hash); ein Wissensinhalt, der ein Zugangsdatum
+braucht, gehört nicht in einen portablen Tresor. Medien werden dabei nicht
+dekodiert.
+
 ## Claim-Grammatik
 
 ```text

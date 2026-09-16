@@ -24,13 +24,16 @@ geschützte `dir_fd`-Operationen fail-closed ab.
 📖 **Konzept & Architekturentscheidungen:** [`wissenstresor/KONZEPT.md`](wissenstresor/KONZEPT.md)
 🌐 **Landingpage:** [`index.html`](index.html) (GitHub-Pages-fähig, Source = repo root)
 
-**Aktueller Release: v0.11.10** (Profil `oksv-lite/1.3`) mit Begriffswelten,
+**Aktueller Release: v0.11.11** (Profil `oksv-lite/1.3`) mit Begriffswelten,
 deterministischem Hybrid-Retrieval, geprüften Bild-/PDF-Regionen und einem
 reproduzierbaren `.skill`-Paket für Claude Code und Codex. Der
 Frontmatter-Parser lehnt Verschachtelung fail-closed ab statt sie still
 umzubauen, und Validierung wie Paketbau führen unabhängig voneinander eine
 Allowlist erlaubter Dateiarten: kein zweites Script, kein Archiv, kein
-gesetztes Ausführungsbit. Der Demo-Bestand hat die OKF-Spezifikation v0.2
+gesetztes Ausführungsbit. Seit v0.11.11 hält `validate` außerdem
+Zugangsdaten fail-closed aus dem Artefakt (Schlüsselblöcke, Token-Präfixe,
+JWTs, URLs mit Passwort) und nennt dabei Datei und Zeile, nie den Treffer.
+Der Demo-Bestand hat die OKF-Spezifikation v0.2
 aufgenommen und dabei seine eigene Supersession belegt, statt die überholte
 Fassung zu löschen. Seiten können optional festhalten, wer ihre Claims
 gegengeprüft hat und wann; daraus leitet die Engine ein Trust-Tier nach
@@ -51,9 +54,9 @@ liest der Tresor ausschließlich Ziele, die namentlich in
 `sources/EXTERN.md` stehen, und protokolliert jeden Abruf. Erreicht wird nie
 etwas, das dort nicht aufgeführt ist.
 
-Abnahme: 97 Tests bestanden · 37 manifestierte Dateien · 39 sichere
+Abnahme: 99 Tests bestanden · 37 manifestierte Dateien · 39 sichere
 Paketeinträge · SHA-256
-`1bb52696c88285a936df21d274b56c7dcc1dd201a404816699f7bfe332cfd95e`.
+`a8f939eba016975aaa0f810fd2de17bde7bf9a897204f0448fbf09e30643e8f2`.
 Dazu 2 aufgeführte externe Bezugsquellen · 2 Satzanker.
 
 Alles läuft mit der Python-Standardbibliothek, gemessen mit CPython 3.9.6 und

@@ -241,13 +241,36 @@ SECRET_RE = re.compile(
     r"|\b(?:AKIA|ASIA)[0-9A-Z]{16}\b"
     r"|\bgh[pousr]_[A-Za-z0-9]{36,}"
     r"|\bgithub_pat_[A-Za-z0-9_]{40,}"
-    r"|\bsk-(?:ant-|proj-)?[A-Za-z0-9_-]{32,}"
+    r"|(?<![\w-])sk-(?:ant-|proj-)?[A-Za-z0-9_-]{32,}"
     r"|\bxox[abprs]-[A-Za-z0-9-]{20,}"
     r"|\bAIza[0-9A-Za-z_-]{35}\b"
     r"|\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}"
     r"|\b[a-z][a-z0-9+.-]*://[^/\s:@<>\"'`]+:[^/\s:@<>\"'`]+@)"
 )
 SECRET_SUFFIXE = {".md", ".json", ".yaml"}
+# Dokumentation zeigt Zugangsdaten oft als Muster: ghp_xxxx…, sk-proj-XXXX…,
+# den AWS-Doku-Schlüssel …EXAMPLE, das Beispiel-JWT von jwt.io oder
+# postgres://user:password@host. Solche Platzhalter sind kein Geheimnis und
+# dürfen den Release nicht blockieren.
+SECRET_BEISPIEL_SIGNATUREN = {"SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"}
+SECRET_URL_PLATZHALTER = {
+    "pass", "passwd", "password", "passwort", "pw", "pwd", "secret", "geheim",
+    "token", "changeme",
+}
+
+
+def _secret_platzhalter(fund):
+    """Ob ein Musterfund erkennbar ein Doku-Platzhalter statt eines Geheimnisses ist."""
+    if "://" in fund:
+        passwort = fund.rsplit("@", 1)[0].split("://", 1)[1].split(":", 1)[1]
+        return (passwort.lower() in SECRET_URL_PLATZHALTER
+                or passwort[:1] in {"$", "{", "%", "*"}
+                or len(set(passwort.lower())) == 1)
+    if "example" in fund.lower() or fund.rsplit(".", 1)[-1] in SECRET_BEISPIEL_SIGNATUREN:
+        return True
+    # Längster Abschnitt des Rumpfs aus höchstens zwei Zeichen (xxxx, XXXX, 0000).
+    rumpf = max(re.split(r"[_.-]", fund[4:]), key=len)
+    return len(rumpf) >= 12 and len(set(rumpf.lower())) <= 2
 RETRIEVAL_STOPWORDS = {
     "aber", "als", "auch", "auf", "aus", "bei", "das", "dem", "den", "der",
     "des", "die", "ein", "eine", "einer", "eines", "für", "hat", "ich", "im",
@@ -770,7 +793,8 @@ def _skill_geheimnisse():
             # Nicht lesbarer Text fällt an anderer Stelle von validate auf.
             continue
         for nummer, zeile in enumerate(text.split("\n"), start=1):
-            treffer = SECRET_RE.search(zeile)
+            treffer = next((t for t in SECRET_RE.finditer(zeile)
+                            if not _secret_platzhalter(t.group(0))), None)
             if treffer:
                 form = ("Zugangsdaten in URL" if "://" in treffer.group(0)
                         else f"Schlüsselform {treffer.group(0)[:4]}…")

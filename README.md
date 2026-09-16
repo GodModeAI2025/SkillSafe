@@ -56,7 +56,7 @@ etwas, das dort nicht aufgeführt ist.
 
 Abnahme: 99 Tests bestanden · 37 manifestierte Dateien · 39 sichere
 Paketeinträge · SHA-256
-`a8f939eba016975aaa0f810fd2de17bde7bf9a897204f0448fbf09e30643e8f2`.
+`cb758138d50106ed1b9a6dca459a25d86e46a20d0c18db55e1f2c3a002f846f1`.
 Dazu 2 aufgeführte externe Bezugsquellen · 2 Satzanker.
 
 Alles läuft mit der Python-Standardbibliothek, gemessen mit CPython 3.9.6 und

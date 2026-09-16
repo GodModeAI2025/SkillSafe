@@ -251,7 +251,11 @@ class VaultSecurityTests(unittest.TestCase):
         self.replace_text(
             "knowledge/demo-okf/okf.md", "## Kontext und Grenzen",
             "Siehe https://example.org/a:b und git@github.com:org/repo.git "
-            "sowie risk-management-and-knowledge-sharing-guidelines.\n\n"
+            "sowie risk-management-and-knowledge-sharing-guidelines.\n"
+            "Doku-Muster: postgres://user:password@localhost/db, "
+            "https://bot:${TOKEN}@ci.example.org, AKIA" + "IOSFODNN7EXAMPLE, "
+            "gh" + "p_" + "x" * 36 + ", sk-" + "proj-" + "X" * 40 + ", "
+            "task-sk-" + "abcdefghijklmnopqrstuvwxyz0123456789.\n\n"
             "## Kontext und Grenzen",
         )
         self.run_cli("checksum")

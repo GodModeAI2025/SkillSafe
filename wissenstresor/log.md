@@ -49,3 +49,5 @@ Eintraege nur ueber `python3 scripts/vault.py log <aktion> "<text>"`.
 ## [2026-08-06] release | v0.11.8 — 6 Seiten, 28 Claims, 4 Quellen (patch)
 ## [2026-08-06] release | v0.11.9 — 6 Seiten, 28 Claims, 4 Quellen (patch)
 ## [2026-08-06] release | v0.11.10 — 6 Seiten, 28 Claims, 4 Quellen (patch)
+## [2026-09-16] note | validate prueft manifestierte Textdateien fail-closed auf Zugangsdaten (Schluesselbloecke, Token-Praefixe, JWT, URL mit Passwort); Meldung nennt Datei, Zeile und Form, nie den Treffer (schema/profil.md, Dateiarten im Tresor)
+## [2026-09-16] release | v0.11.11 — 6 Seiten, 28 Claims, 4 Quellen (patch)

@@ -3779,6 +3779,7 @@ def _hole_https(url, praefix, *, opener=None):
     keine Auth-Header, keine Cookies. Ein Redirect, das das Präfix verlässt,
     ist ein Abbruch und kein Umweg.
     """
+    import http.client
     import ssl
     import urllib.error
     import urllib.request
@@ -3814,13 +3815,21 @@ def _hole_https(url, praefix, *, opener=None):
                 aktuell = ziel
                 continue
             return None, f"HTTP {exc.code}"
-        except (urllib.error.URLError, OSError, ValueError) as exc:
+        except (urllib.error.URLError, OSError, ValueError,
+                http.client.HTTPException) as exc:
             return None, f"nicht erreichbar — {exc}"
-        with antwort:
-            endgueltig = getattr(antwort, "url", aktuell) or aktuell
-            if not endgueltig.startswith(praefix):
-                return None, "Weiterleitung verlässt das registrierte Präfix"
-            rohdaten = antwort.read(MAX_EXTERN_BYTES_JE_DATEI + 1)
+        # Ein Abruf kann auch NACH den Headern scheitern: die Verbindung
+        # reißt ab, das Zeitlimit greift beim Lesen, der Rumpf bleibt
+        # unvollständig. Das ist ein Abruffehler wie jeder andere — ein Grund
+        # für die Notizen, keine Ausnahme, die die Abfrage ohne JSON beendet.
+        try:
+            with antwort:
+                endgueltig = getattr(antwort, "url", aktuell) or aktuell
+                if not endgueltig.startswith(praefix):
+                    return None, "Weiterleitung verlässt das registrierte Präfix"
+                rohdaten = antwort.read(MAX_EXTERN_BYTES_JE_DATEI + 1)
+        except (OSError, http.client.HTTPException) as exc:
+            return None, f"Abruf abgebrochen — {exc}"
         if len(rohdaten) > MAX_EXTERN_BYTES_JE_DATEI:
             return None, f"größer als {MAX_EXTERN_BYTES_JE_DATEI} Byte"
         return rohdaten, None
@@ -4012,9 +4021,19 @@ def _lese_fremden_tresor(wurzel, anker):
         return None, f"knowledge/ ist nicht lesbar — {exc}"
     dokumente = []
     for p in baum:
-        if p.suffix.lower() != ".md" or not _safe_regular_file_within(p, wurzel):
+        if p.suffix.lower() != ".md":
             continue
         relpfad = _rel_zu(p, wurzel)
+        if not _safe_regular_file_within(p, wurzel):
+            # Fail closed statt still überspringen, wie beim Katalog-Gerüst:
+            # ein Symlink, ein Hardlink oder eine Sonderdatei, die wie ein
+            # Dokument heißt, ist im Skill-Artefakt verboten. Übersprungen
+            # sähe das Ergebnis vollständig aus, obwohl ein Dokument fehlt —
+            # ein Negativbefund über etwas, das nie gelesen wurde.
+            return None, (
+                f"{relpfad}: kein einfach verlinktes reguläres Dokument "
+                f"(Symlink, Hardlink oder Sonderdatei)"
+            )
         text, _, grund = _lies_externes_dokument(wurzel, anker, relpfad)
         if grund:
             return None, f"{relpfad}: {grund}"
@@ -4089,8 +4108,9 @@ def build_external_result(snapshot, query, quellen_filter=None):
     # oder "unreachable" (die Quelle hätte gelesen werden sollen, aber es kam
     # kein Dokument an). Daraus entsteht unten der Zustand.
     ungelesen = []
-    # Quellen, aus denen gelesen wurde, aber nicht alles Geöffnete: auch das
-    # ist eine Lücke, und sie gehört in den Grund statt nur in die Notizen.
+    # Quellen, aus denen gelesen wurde, aber nicht alles Katalogisierte: ein
+    # Dokument war nicht lesbar, oder Stufe 1 hat es gar nicht geöffnet. Auch
+    # das ist eine Lücke, und sie gehört in den Grund statt nur in die Notizen.
     teilweise = []
     # Fail closed ohne Teilergebnis: (zustand, grund), sobald ein fremder
     # Tresor nicht vertrauenswürdig ist oder ein gezähltes Budget sprengt.
@@ -4142,6 +4162,11 @@ def build_external_result(snapshot, query, quellen_filter=None):
             if grund:
                 abbruch = ("invalid_external_source", f"{xid}: {grund}")
                 break
+            # Das Rezept des Fingerprints gehört zu extern-zweistufig/v1 und
+            # bleibt unverändert: jede Quelle, für die die Suche geöffnet
+            # wurde, geht mit ihrem Stand ein — auch wenn daraus am Ende kein
+            # Dokument kam. Lücken stehen im Grund, nicht im Fingerprint.
+            wurzeln.append([xid, fremd["manifest_sha256"]])
             if not fremd["documents"]:
                 nicht_gelesen(
                     "unreachable",
@@ -4149,7 +4174,6 @@ def build_external_result(snapshot, query, quellen_filter=None):
                     f"knowledge/",
                 )
                 continue
-            wurzeln.append([xid, fremd["manifest_sha256"]])
             for dok in fremd["documents"]:
                 dokumentpfade.append(f"{xid}:{dok['path']}")
                 bestand = _bestand_score(dok["text"], query_norm, tokens)
@@ -4167,6 +4191,11 @@ def build_external_result(snapshot, query, quellen_filter=None):
                 f"— 'vault.py orchestrator-template {xid}' erzeugt das Gerüst",
             )
             continue
+        # Bei einer Netzquelle ist der Wurzel-Hash bewusst None; dann steht
+        # im Fingerprint "netz" und keine erfundene Zahl. Die Quelle geht ein,
+        # sobald die Suche für sie geöffnet wird — das Rezept von
+        # extern-zweistufig/v1, siehe oben beim fremden Tresor.
+        wurzeln.append([xid, katalog["meta"]["generated_from_sha256"] or "netz"])
         # Stufe 1 ist nur Prefilter: der Index wird nie roh geladen, sondern
         # gefiltert, und nur die besten Kandidaten werden überhaupt geöffnet.
         vorauswahl = sorted(
@@ -4174,6 +4203,7 @@ def build_external_result(snapshot, query, quellen_filter=None):
              for dok in katalog["documents"]),
             key=lambda eintrag: (-eintrag[0], eintrag[1]),
         )[:MAX_EXTERN_STUFE1]
+        ungeoeffnet = len(katalog["documents"]) - len(vorauswahl)
         ttl = bindung["cache_ttl_seconds"]
         gelesen_hier, fehler_hier = 0, 0
         for katalog_score, relpfad, dok in vorauswahl:
@@ -4206,10 +4236,17 @@ def build_external_result(snapshot, query, quellen_filter=None):
                 f"{xid}: {fehler_hier} von {len(vorauswahl)} aus dem Katalog "
                 f"geöffneten Dokumenten nicht lesbar"
             )
-        # Nur eine Quelle, aus der wirklich gelesen wurde, geht in den
-        # Fingerprint ein. Bei einer Netzquelle ist der Wurzel-Hash bewusst
-        # None; dann steht dort "netz" und keine erfundene Zahl.
-        wurzeln.append([xid, katalog["meta"]["generated_from_sha256"] or "netz"])
+        if ungeoeffnet:
+            # Auch die Vorauswahl ist eine Lücke: was Stufe 1 nicht öffnet,
+            # hat Stufe 2 nie gesehen. Ein Negativbefund über einen großen
+            # Katalog gilt nur für die geöffneten Dokumente — und sagt das.
+            text = (
+                f"{xid}: {ungeoeffnet} von {len(katalog['documents'])} "
+                f"katalogisierten Dokumenten nicht geöffnet (Stufe 1 öffnet "
+                f"höchstens {MAX_EXTERN_STUFE1})"
+            )
+            block["notes"].append(text)
+            teilweise.append(text)
 
     # Jeder Abruf steht im Log — auch dann, wenn die Suche gleich darauf
     # fail-closed abbricht. Das Herkunftsprotokoll hängt nicht am Ergebnis.
@@ -4233,9 +4270,10 @@ def build_external_result(snapshot, query, quellen_filter=None):
         return block
 
     gelesen = sorted(set(dokumentpfade))
-    # Alles, was hätte gelesen werden sollen und nicht gelesen wurde: ganze
-    # Quellen und einzelne Dokumente. Fehlt dieser Zusatz im Grund, wurde
-    # jedes geöffnete Dokument auch gelesen.
+    # Alles Aufgeführte, das nicht gelesen wurde: ganze Quellen, einzelne
+    # nicht lesbare Dokumente und was Stufe 1 nicht geöffnet hat. Fehlt
+    # dieser Zusatz im Grund, wurde jedes katalogisierte Dokument jeder
+    # berücksichtigten Quelle gelesen.
     luecken = [text for _, text in ungelesen] + teilweise
     offen = "; ".join(luecken)
     if not gelesen:

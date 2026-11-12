@@ -111,8 +111,12 @@ gefunden").
 Ohne `--extern` verlässt **kein Byte** den Skill-Ordner, weder zur Platte noch
 ins Netz. Das Flag macht am Aufruf sichtbar, dass hier bewusst eine Ausnahme
 von Regel 2 (Vertrauen zur Abfragezeit) gemacht wird. Es gehört an das Ende
-des Antworten-Workflows, nicht an den Anfang: erst `no_candidates`, dann die
-vollständige Prüfung von `fallback.page_paths`, dann erst extern.
+des Antworten-Workflows, nicht an den Anfang: erst der lokale Bestand, dann
+— bei `no_candidates` oder bei Kandidaten, die die Frage nicht decken — die
+vollständige Prüfung von `fallback.page_paths`, dann erst extern. Wann der
+Schritt fällig ist, regelt allein `references/antworten.md`, Schritt 4c: Dort
+ist er Pflicht, sobald die Vollprüfung die Frage nicht deckt und Quellen
+aufgeführt sind.
 
 Das Ranking `extern-zweistufig/v1` arbeitet in zwei Stufen:
 
@@ -149,25 +153,34 @@ kein Negativbefund ist:
 
 | Zustand | Ursache | Was zu tun ist |
 |---|---|---|
-| `not_bound` | Jede berücksichtigte Quelle ist lokal und auf diesem Host nicht brauchbar gebunden | `extern bind`, wenn hier nachgeschlagen werden soll |
+| `not_bound` | Jede berücksichtigte Quelle ist lokal und auf diesem Host nicht brauchbar gebunden | Der Nutzer bindet mit `extern bind`, wenn hier nachgeschlagen werden soll |
 | `unreachable` | Etwas hätte lesbar sein sollen, aber es kam kein Dokument an: `SKILLSAFE_OFFLINE` gesetzt, Abruf fehlgeschlagen, Datei aus dem Katalog nicht lesbar, kein Katalog | Ursache je Quelle steht in `reason`; Erreichbarkeit prüfen oder Katalog erzeugen |
-| `budget_exceeded` | Ein fremder Tresor sprengt unter `knowledge/` ein gezähltes Budget (Verzeichnistiefe, Zahl der Einträge) | `reason` nennt Pfad und Grenze; prüfen, was dort liegt und nicht hingehört |
-| `invalid_external_source` | Ein fremder Tresor besteht die Manifestprüfung nicht | Fremden Bestand nicht verwenden, bis er wieder stimmt |
+| `budget_exceeded` | Ein fremder Tresor sprengt unter `knowledge/` ein gezähltes Budget (Verzeichnistiefe, Zahl der Einträge) | `reason` nennt die Grenze, bei der Tiefe auch den Pfad; prüfen, was dort liegt und nicht hingehört |
+| `invalid_external_source` | Ein fremder Tresor ist nicht vertrauenswürdig lesbar: Manifest stimmt nicht, oder ein Dokument ist unlesbar, verlinkt, zu groß oder kein UTF-8 | Fremden Bestand nicht verwenden, bis er wieder stimmt |
 
 Bei gemischten Ursachen gewinnt `unreachable` vor `not_bound`. In allen vier
 Fällen ist `live` falsch, `hits` leer und `external_fingerprint` `null`: Ein
 Fingerprint bezeugt ein Ergebnis, und hier gibt es keines.
+
+Die rechte Spalte richtet sich an den Menschen, der den Host betreibt. Ein
+Agent, der gerade eine Frage beantwortet, bindet nicht selbst und schaltet
+nichts um; er weist die Lage in der Antwort aus (`references/antworten.md`,
+Schritt 4c).
 
 Der Fehler, den diese Trennung verhindert, ist derselbe wie bei einer
 vertippten Quellen-ID: „die Quelle wurde durchsucht und hat nichts
 hergegeben" klingt glaubwürdig, auch wenn kein Byte gelesen wurde. Ein
 frisch entpacktes Paket ohne Netz ist genau dieser Fall — und der Normalfall.
 
-Auch ein Ergebnis reicht nur so weit wie das Gelesene. Wurde eine Quelle
-gelesen und eine andere nicht, bleibt es bei `no_external_candidates` oder
-`external_candidates_found`, aber `reason` trägt den Zusatz „Nicht gelesen"
-mit den ausgelassenen Quellen und Dokumenten. Fehlt der Zusatz, wurde jedes
-geöffnete Dokument gelesen.
+Auch ein Ergebnis reicht nur so weit wie das Gelesene. Bleibt etwas
+Aufgeführtes ungelesen, bleibt es bei `no_external_candidates` oder
+`external_candidates_found`, aber `reason` trägt den Zusatz „Nicht gelesen".
+Er nennt jede Quelle, aus der nichts gelesen wurde, zählt Dokumente, die
+nicht lesbar waren (welche, steht in `notes`), und zählt, was Stufe 1 gar
+nicht geöffnet hat: Sie öffnet je Quelle höchstens 24 Katalogeinträge, und
+bei einem Katalogtext, der auf die Anfrage nicht passt, sind das schlicht die
+alphabetisch ersten. Fehlt der Zusatz, wurde jedes katalogisierte Dokument
+jeder berücksichtigten Quelle gelesen.
 
 ## Was bei der Abfrage sichtbar wird
 

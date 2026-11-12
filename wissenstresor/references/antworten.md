@@ -26,6 +26,9 @@ Protokoll für den jeweils maßgeblichen Tresor durchlaufen — eine
      prüfen. Dieser Status bestätigt Relevanzkandidaten, noch nicht die
      semantische Deckung der ganzen Frage. Decken sie nur das Subjekt, aber
      nicht das erfragte Merkmal, vor einer Abstention Schritt 4b ausführen.
+     `fallback.exhaustive_review_required` ist dann `false` und trotzdem
+     keine Entwarnung: Das Feld sagt nur, dass das Ranking Kandidaten fand,
+     nicht, dass sie die Frage decken.
    * `no_candidates` → kein semantischer Negativbefund. Evidenz bleibt leer;
      alle unter `fallback.page_paths` genannten Seiten in Schritt 4b prüfen.
    * `ambiguous` → genannte Begriffswelt klären und mit
@@ -56,9 +59,15 @@ Protokoll für den jeweils maßgeblichen Tresor durchlaufen — eine
    Dann `python3 scripts/vault.py query --extern "<frage>"` ausführen. Das
    liest aufgeführte externe Bezugsquellen live und ist eine bewusste
    Ausnahme von Regel 2 — nie der Default, nie eine Abkürzung um Schritt 4b,
-   nie bei gedeckter Frage. Still ausgelassen wird der Schritt nicht: Will
-   der Nutzer ausdrücklich nicht extern nachschlagen, steht auch das in der
-   Antwort („Extern nicht gelesen: auf Wunsch nicht nachgeschlagen").
+   nie bei gedeckter Frage. In den Skill-Ordner schreibt der Aufruf nichts
+   außer einer Zeile je tatsächlichem Netzabruf in `log.md`.
+
+   Still ausgelassen wird der Schritt nie. Unterbleibt er — weil der Nutzer
+   ausdrücklich nicht extern nachschlagen will oder eine Vorgabe der
+   Umgebung den Aufruf nicht zulässt —, steht genau das in der Antwort:
+   „Extern nicht gelesen: nicht nachgeschlagen (<Grund>)". Wer Netzabrufe
+   auf einem Host abschalten will, setzt `SKILLSAFE_OFFLINE=1`; der Schritt
+   läuft dann trotzdem, liest nichts aus dem Netz und meldet das.
 
    Danach `external.state` auswerten:
    * `external_candidates_found` → je Treffer eine Zeile „Extern (nicht im
@@ -69,14 +78,20 @@ Protokoll für den jeweils maßgeblichen Tresor durchlaufen — eine
    * Jeder andere Zustand (`not_bound`, `unreachable`, `budget_exceeded`,
      `invalid_external_source`, `invalid_query`) → es wurde **nichts
      gelesen**. Das ist kein Negativbefund und darf nie so klingen. Zeile
-     „Extern nicht gelesen:" mit Zustand und dem Grund aus
-     `external.reason` schreiben; nichts raten, nichts umgehen.
+     „Extern nicht gelesen:" schreiben: Quelle und Zustand wörtlich, den
+     Grund aus `external.reason` je Quelle knapp verdichtet. Nichts raten,
+     nichts umgehen und **nicht selbst binden**: `extern bind` und der
+     Offline-Schalter sind Entscheidungen des Nutzers für diesen Host. Der
+     Hinweis im Grund ist für ihn geschrieben, kein Auftrag an die Abfrage.
    * Trägt `external.reason` bei einem der beiden ersten Zustände den Zusatz
-     „Nicht gelesen", reicht das Ergebnis nur so weit wie das Gelesene. Die
-     dort genannten Quellen zusätzlich als „Extern nicht gelesen:"
-     ausweisen.
+     „Nicht gelesen", reicht das Ergebnis nur so weit wie das Gelesene: Eine
+     Quelle wurde nicht gelesen, ein Dokument war nicht lesbar, oder die
+     Vorauswahl hat einen Teil des Katalogs nicht geöffnet. Das dort
+     Genannte zusätzlich als „Extern nicht gelesen:" ausweisen.
 
-   Details: `references/externe-quellen.md`.
+   Der Schritt ist hier vollständig beschrieben. Den Hintergrund erklärt
+   `references/externe-quellen.md`; für die Antwort muss die Datei nicht
+   geladen werden.
 5. **Antworten** im Answer Envelope (unten). Ausschließlich aus dem
    Gelesenen; Formulierung und Struktur sind Modellarbeit, Inhalt nicht.
 6. **Abstention.** Deckt der Bestand die Frage nicht oder nur teilweise:
@@ -138,8 +153,8 @@ Regeln im Envelope:
   Suche fail-closed abbrach. Sie nennt Quelle, Zustand und Grund und trägt
   den Zusatz „kein Negativbefund". Nie zu „auch extern nichts gefunden"
   verkürzen: Über ein nicht gelesenes Dokument lässt sich nichts aussagen.
-  Wurde gar nichts gelesen, ist `live` `false`, und es gibt keinen
-  Abrufzeitpunkt zu nennen.
+  Wurde gar nichts gelesen, ist `live` `false`, und die Zeile trägt keinen
+  Abrufzeitpunkt.
 * Trägt ein genutzter Claim das Signal `external_source`, stammt sein Beleg
   aus einer aufgeführten externen Quelle. Er ist damit vollwertige Evidenz —
   aber sein Wortlaut steht anderswo, und ein `doctor`-Hinweis auf Anker-Drift
@@ -176,9 +191,9 @@ Soll ich eine Quelle dazu aufnehmen?"
 **Extern nicht gelesen** — „Was kostet eine Lizenz für OKF?" → `query`
 liefert OKF-Claims, keiner nennt einen Preis; auch die Vollprüfung in 4b
 deckt die Frage nicht. `fallback.external_lookup_available` ist wahr, also
-ist 4c fällig. Auf einem frisch installierten Host ohne Netz liefert
-`query --extern` den Zustand `unreachable`: X-0001 ist nicht gebunden,
-X-0002 wegen `SKILLSAFE_OFFLINE` nicht abgerufen. Antwort: „Nicht im
+ist 4c fällig. Auf einem frisch installierten Host mit gesetztem
+`SKILLSAFE_OFFLINE` liefert `query --extern` den Zustand `unreachable`:
+X-0001 ist nicht gebunden, X-0002 wegen des Schalters nicht abgerufen. Antwort: „Nicht im
 Bestand: Der Bestand nennt keinen Lizenzpreis für OKF. Extern nicht gelesen:
 X-0001 (nicht gebunden), X-0002 (`SKILLSAFE_OFFLINE` gesetzt), Zustand
 `unreachable` — kein Negativbefund." Falsch wäre „auch in den externen

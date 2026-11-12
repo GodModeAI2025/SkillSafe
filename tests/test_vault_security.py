@@ -1243,6 +1243,56 @@ class VaultSecurityTests(unittest.TestCase):
         self.assertIsNone(daten)
         self.assertIn(vault.EXTERN_OFFLINE_ENV, grund)
 
+    def test_fetch_that_breaks_after_the_headers_is_a_reason_not_an_exception(self):
+        """Ein Abruf kann auch im Rumpf scheitern — das ist ein Grund, kein Traceback.
+
+        Vorher fing _hole_https nur Fehler beim Oeffnen. Riss die Verbindung
+        beim Lesen ab, lief die Ausnahme bis zur Abfrage durch, und statt
+        'unreachable' kam kein JSON-Dokument heraus.
+        """
+        import http.client
+
+        vault = self.load_vault(self.root, "abbruch-im-rumpf")
+        # Der Abruf ist ersetzt; der Schalter darf den Test nicht vorwegnehmen.
+        vault._netz_erlaubt = lambda: True
+        praefix = "https://example.invalid/"
+
+        class Antwort:
+            url = praefix + "x.md"
+
+            def __init__(self, fehler):
+                self.fehler = fehler
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def read(self, anzahl):
+                raise self.fehler
+
+        for fehler in (
+            TimeoutError("The read operation timed out"),
+            ConnectionResetError("Connection reset by peer"),
+            http.client.IncompleteRead(b"nur ein Teil"),
+        ):
+            with self.subTest(fehler=type(fehler).__name__):
+                daten, grund = vault._hole_https(
+                    praefix + "x.md", praefix,
+                    opener=lambda anfrage, timeout, f=fehler: Antwort(f))
+                self.assertIsNone(daten)
+                self.assertIn("Abruf abgebrochen", grund)
+
+        # Dasselbe beim Oeffnen: eine kaputte Statuszeile ist keine OSError.
+        def kaputte_statuszeile(anfrage, timeout):
+            raise http.client.BadStatusLine("kaputt")
+
+        daten, grund = vault._hole_https(
+            praefix + "x.md", praefix, opener=kaputte_statuszeile)
+        self.assertIsNone(daten)
+        self.assertIn("nicht erreichbar", grund)
+
     def test_no_unverified_ssl_context_anywhere(self):
         quelle = (self.root / "scripts/vault.py").read_text(encoding="utf-8")
         # 'verify=False' waere ein falscher Treffer: cmd_checksum hat einen
@@ -1333,6 +1383,199 @@ class VaultSecurityTests(unittest.TestCase):
         self.assertIn("Verzeichnistiefe", block["reason"])
         self.assertIn("kein Negativbefund", block["reason"])
         # Fail closed ohne Teilergebnis, wie beim Katalog-Geruest.
+        self.assertEqual(block["hits"], [])
+        self.assertFalse(block["live"])
+        self.assertIsNone(block["external_fingerprint"])
+        self.assertFalse(payload["fallback"]["external_live_lookup_used"])
+        self.assertEqual(payload["fallback"]["external_document_paths"], [])
+
+    VAULT_ZEILE = (
+        "| {xid} | Fremdtresor | skillsafe-vault | - "
+        "| 2026-08-06, Scope: projekt | {key} | T3 | frei |\n"
+    )
+
+    def install_fremdtresor_register(self):
+        """Register mit genau einem fremden Tresor als X-0001."""
+        self.install_extern_register()
+        (self.root / "sources/EXTERN.md").write_text(
+            self.EXTERN_REGISTER.format(ziel="-").replace(
+                "markdown-tree", "skillsafe-vault").replace(
+                "2026-08-06", "2026-08-06, Scope: projekt"),
+            encoding="utf-8",
+        )
+
+    def extern_cli(self, *args):
+        result = self.run_cli("query", "--extern", *args)
+        self.assertNotIn("Traceback", result.stderr)
+        return json.loads(result.stdout)
+
+    def test_budget_exception_stays_an_oserror_for_every_caller(self):
+        """Der eigene Typ darf keinen bestehenden Aufrufer aus dem Tritt bringen.
+
+        orchestrator-template faengt den Baumlauf als OSError. Waere die neue
+        Ausnahme keine mehr, endete das Katalog-Geruest bei einem zu tiefen
+        Baum im Traceback statt in seinem JSON.
+        """
+        vault = self.load_vault(self.root, "budget-typ")
+        self.assertTrue(issubclass(vault.BudgetUeberschritten, OSError))
+        self.install_extern_register()
+        wurzel = self.extern_wurzel()
+        tief = wurzel
+        for nummer in range(vault.MAX_EXTERN_TIEFE + 2):
+            tief = tief / f"t{nummer}"
+        tief.mkdir(parents=True)
+        self.run_cli("extern", "bind", "X-0001", str(wurzel))
+        result = self.run_cli("orchestrator-template", "X-0001")
+        self.assertNotIn("Traceback", result.stderr)
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["state"], "budget_exceeded")
+        self.assertIn("Verzeichnistiefe", payload["errors"][0])
+
+    def test_every_counted_walk_budget_is_budget_exceeded(self):
+        """Tiefe und Eintragszahl: beide Budgets, derselbe Zustand."""
+        self.install_fremdtresor_register()
+        fremd = self.new_vault()
+        self.run_cli("extern", "bind", "X-0001", str(fremd))
+        release = self.run_cli("release", "patch")
+        self.assertEqual(release.returncode, 0, release.stdout + release.stderr)
+        for name, wert, fragment in (
+            ("MAX_EXTERN_TIEFE", 0, "Verzeichnistiefe"),
+            ("MAX_EXTERN_EINTRAEGE", 3, "Verzeichniseinträge"),
+        ):
+            with self.subTest(budget=name):
+                # Das Budget wird im Prozess verkleinert, statt zwanzigtausend
+                # Dateien anzulegen; gezaehlt wird derselbe Baumlauf.
+                vault = self.load_vault(self.root, f"budget-{name.lower()}")
+                setattr(vault, name, wert)
+                snapshot, fehler = vault._load_released_query_snapshot("OKF")
+                self.assertIsNone(fehler, fehler)
+                block = vault.build_external_result(snapshot, "OKF")
+                self.assertEqual(block["state"], "budget_exceeded", block)
+                self.assertIn(fragment, block["reason"])
+                self.assertIn("kein Negativbefund", block["reason"])
+                self.assertFalse(block["live"])
+                self.assertEqual(block["hits"], [])
+                self.assertIsNone(block["external_fingerprint"])
+
+    def test_unreadable_foreign_knowledge_is_a_state_not_a_traceback(self):
+        """Ein Baumlauf, der scheitert, ohne ein Budget zu sprengen."""
+        self.install_fremdtresor_register()
+        fremd = self.new_vault()
+        self.run_cli("extern", "bind", "X-0001", str(fremd))
+        release = self.run_cli("release", "patch")
+        self.assertEqual(release.returncode, 0, release.stdout + release.stderr)
+        vault = self.load_vault(self.root, "knowledge-unlesbar")
+
+        # Als root greift kein chmod; der Lesefehler wird deshalb an der
+        # Stelle erzeugt, an der ihn das Betriebssystem melden wuerde.
+        def unlesbar(start, basis, **budgets):
+            raise OSError("knowledge: Verzeichnis kann nicht gelesen werden")
+
+        # Erst den eigenen Bestand laden: auch dessen Manifestprüfung läuft
+        # über den Baumlauf, und die soll hier unberührt bleiben.
+        snapshot, fehler = vault._load_released_query_snapshot("OKF")
+        self.assertIsNone(fehler, fehler)
+        vault._walk_tree_no_links_within = unlesbar
+        block = vault.build_external_result(snapshot, "OKF")
+        self.assertEqual(block["state"], "invalid_external_source", block)
+        self.assertIn("knowledge/ ist nicht lesbar", block["reason"])
+        self.assertIn("kein Negativbefund", block["reason"])
+        self.assertFalse(block["live"])
+
+    def test_empty_foreign_vault_is_unreachable_never_a_negative_finding(self):
+        """Der urspruengliche Fehler auf dem Tresor-Pfad: nichts gelesen, kein Befund."""
+        self.install_fremdtresor_register()
+        leer = self.work / "leerer-tresor"
+        leer.mkdir()
+        (leer / "VERSION").write_text("1.0.0\n", encoding="utf-8")
+        digest = hashlib.sha256((leer / "VERSION").read_bytes()).hexdigest()
+        (leer / "MANIFEST.sha256").write_text(
+            f"{digest}  VERSION\n", encoding="utf-8")
+        self.run_cli("extern", "bind", "X-0001", str(leer))
+        release = self.run_cli("release", "patch")
+        self.assertEqual(release.returncode, 0, release.stdout + release.stderr)
+        payload = self.extern_cli("OKF")
+        block = payload["external"]
+        self.assertEqual(block["state"], "unreachable", block)
+        self.assertIn("enthält kein Dokument", block["reason"])
+        self.assertIn("kein Negativbefund", block["reason"])
+        self.assertNotIn("gelesen: 0", block["reason"])
+        self.assertFalse(block["live"])
+        self.assertEqual(block["hits"], [])
+        self.assertIsNone(block["external_fingerprint"])
+        self.assertFalse(payload["fallback"]["external_live_lookup_used"])
+        self.assertEqual(payload["fallback"]["external_document_paths"], [])
+
+    def test_linked_document_in_a_foreign_vault_fails_closed(self):
+        """Ein verlinktes Dokument wird nicht still uebersprungen.
+
+        Vorher fiel es aus der Suche, ohne dass der Block es sagte: aus einem
+        Treffer wurde ein Negativbefund ueber ein Dokument, das nie gelesen
+        wurde. Links sind im Skill-Artefakt ohnehin verboten.
+        """
+        self.install_fremdtresor_register()
+        release = self.run_cli("release", "patch")
+        self.assertEqual(release.returncode, 0, release.stdout + release.stderr)
+        for art in ("symlink", "hardlink"):
+            with self.subTest(art=art):
+                fremd = self.new_vault()
+                original = fremd / "knowledge/demo-okf/okf.md"
+                kopie = fremd / "knowledge/demo-okf/zweitname.md"
+                if art == "symlink":
+                    os.symlink("okf.md", str(kopie))
+                else:
+                    os.link(str(original), str(kopie))
+                bind = self.run_cli("extern", "bind", "X-0001", str(fremd))
+                self.assertEqual(bind.returncode, 0, bind.stdout + bind.stderr)
+                payload = self.extern_cli("OKF")
+                block = payload["external"]
+                self.assertEqual(block["state"], "invalid_external_source", block)
+                self.assertIn("kein einfach verlinktes reguläres Dokument",
+                              block["reason"])
+                self.assertEqual(block["hits"], [])
+                self.assertFalse(block["live"])
+
+    def test_abort_discards_what_other_sources_already_read(self):
+        """Fail closed heisst: auch das schon Gelesene geht nicht ein.
+
+        X-0001 ist ein lesbarer Baum mit einem Treffer, X-0002 ein
+        manipulierter fremder Tresor. Der Abbruch darf weder Treffer noch
+        gelesene Pfade noch einen Fingerprint uebrig lassen.
+        """
+        self.install_extern_register()
+        wurzel = self.extern_wurzel()
+        register = self.root / "sources/EXTERN.md"
+        register.write_text(
+            register.read_text(encoding="utf-8")
+            + self.VAULT_ZEILE.format(xid="X-0002", key="fremdtresor"),
+            encoding="utf-8",
+        )
+        fremd = self.new_vault()
+        (fremd / "knowledge/demo-okf/okf.md").write_text(
+            "manipuliert\n", encoding="utf-8")
+        self.run_cli("extern", "bind", "X-0001", str(wurzel))
+        self.run_cli("extern", "bind", "X-0002", str(fremd))
+        geruest = self.run_cli("orchestrator-template", "X-0001")
+        self.assertEqual(geruest.returncode, 0, geruest.stdout + geruest.stderr)
+        katalog = json.loads(geruest.stdout)
+        for dok in katalog["documents"]:
+            dok["title"] = "Minderung"
+        (self.root / "sources/derived/X-0001__orchestrator.json").write_text(
+            json.dumps(katalog, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        release = self.run_cli("release", "patch")
+        self.assertEqual(release.returncode, 0, release.stdout + release.stderr)
+
+        # Fuer sich genommen liefert der Baum den Treffer ...
+        allein = self.extern_cli("--source", "X-0001", "Schimmelbefall")
+        self.assertEqual(
+            allein["external"]["state"], "external_candidates_found")
+        # ... zusammen mit dem manipulierten Tresor bleibt nichts davon.
+        payload = self.extern_cli("Schimmelbefall")
+        block = payload["external"]
+        self.assertEqual(block["state"], "invalid_external_source", block)
         self.assertEqual(block["hits"], [])
         self.assertFalse(block["live"])
         self.assertIsNone(block["external_fingerprint"])
@@ -1453,6 +1696,8 @@ class VaultSecurityTests(unittest.TestCase):
         self.assertEqual(block["state"], "invalid_external_source")
         self.assertEqual(block["hits"], [])
         self.assertFalse(block["live"])
+        self.assertIsNone(block["external_fingerprint"])
+        self.assertEqual(block.get("documents_read", []), [])
         self.assertIn(
             f"extern | abruf {self.NETZ_PRAEFIX}a.md",
             (self.root / "log.md").read_text(encoding="utf-8"),

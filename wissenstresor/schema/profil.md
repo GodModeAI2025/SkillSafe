@@ -302,20 +302,22 @@ Top-Level-`state`; ein externer Zustand ändert ihn nie.
 **Nur zwei dieser Zustände sind Ergebnisse**, und beide setzen voraus, dass
 mindestens ein externes Dokument tatsächlich gelesen wurde. Jeder andere
 Zustand heißt: Es wurde nichts gelesen. Das ist ausdrücklich **kein
-Negativbefund**, und `reason` sagt es wörtlich. Ein Block, der nach
+Negativbefund**. Wo eine Suche verlangt war und trotzdem nichts gelesen
+wurde — `invalid_query`, `not_bound`, `unreachable`, `budget_exceeded`,
+`invalid_external_source` —, sagt `reason` es wörtlich. Ein Block, der nach
 „durchsucht und nichts gefunden" aussieht, obwohl kein Dokument geöffnet
 wurde, wäre ein Fehltreffer, der nicht als Fehler auffällt.
 
 | Zustand | Wann | Dokument gelesen |
 |---|---|---|
-| `not_requested` | Abfrage ohne `--extern` | nein |
+| `not_requested` | Abfrage ohne `--extern`, oder sie scheitert, bevor ein Snapshot geladen ist (leere Frage, `--limit` außerhalb der Grenzen, `invalid_vault`, `vault_busy`, `snapshot_changed`) | nein |
 | `not_declared` | `sources/EXTERN.md` führt keine Quelle | nein |
 | `invalid_query` | `--source` nennt eine nicht aufgeführte ID | nein |
 | `not_bound` | Jede berücksichtigte Quelle ist eine lokale Quelle ohne brauchbare Bindung auf diesem Host | nein |
 | `unreachable` | Mindestens eine berücksichtigte Quelle hätte gelesen werden sollen, aber es kam kein Dokument an — etwa eine Netzquelle bei gesetztem `SKILLSAFE_OFFLINE` oder mit fehlgeschlagenem Abruf, eine gebundene Quelle ohne lesbares Dokument oder ohne Katalog | nein |
 | `budget_exceeded` | Ein fremder Tresor überschreitet ein gezähltes Budget (Verzeichnistiefe oder Zahl der Einträge) | verworfen |
-| `invalid_external_source` | Ein fremder Tresor besteht die Nachrechnung seines Manifests nicht | verworfen |
-| `no_external_candidates` | Gelesen, und kein gelesenes Dokument enthält einen Anfragebegriff | ja |
+| `invalid_external_source` | Ein fremder Tresor ist nicht vertrauenswürdig lesbar: sein Manifest besteht die Nachrechnung nicht, oder eines seiner Dokumente lässt sich nicht lesen (unlesbar, verlinkt, zu groß, kein UTF-8) | verworfen |
+| `no_external_candidates` | Gelesen, und kein gelesenes Dokument erreicht die Abdeckungsschwelle des Rankings | ja |
 | `external_candidates_found` | Gelesen, mindestens ein Treffer | ja |
 
 „Berücksichtigt" sind alle aufgeführten Quellen oder, mit `--source`, die
@@ -336,21 +338,26 @@ Vier Angaben hängen an derselben Tatsache und widersprechen einander nie:
 * `fallback.external_document_paths` nennt genau diese Dokumente als
   `X-nnnn:pfad` und ist sonst leer.
 * `external_fingerprint` bezeugt ein Ergebnis und ist in jedem anderen
-  Zustand `null`. Er entsteht aus Algorithmus, normalisierter Anfrage,
-  Treffern und den Ständen der Quellen, aus denen tatsächlich gelesen wurde;
-  eine Quelle ohne gelesenes Dokument bezeugt nichts.
+  Zustand `null`. Sein Rezept gehört zu `extern-zweistufig/v1` und ist
+  unverändert: Algorithmus, normalisierte Anfrage, Treffer und der Katalog-
+  bzw. Manifeststand jeder Quelle, für die die Suche geöffnet wurde. Lücken
+  im Gelesenen stehen im `reason`, nicht im Fingerprint.
 
-Ein Ergebnis reicht genau so weit wie das Gelesene. Stufe 1 öffnet je Quelle
-höchstens 24 Katalogeinträge, und `reason` nennt bei `no_external_candidates`
-die Zahl der gelesenen Dokumente. Blieb etwas ungelesen, das hätte gelesen
-werden sollen — eine ganze Quelle oder ein einzelnes Dokument —, steht das
-bei beiden Ergebniszuständen als Zusatz „Nicht gelesen" im `reason` und nicht
-nur in `notes`. Fehlt der Zusatz, wurde jedes geöffnete Dokument gelesen.
+Ein Ergebnis reicht genau so weit wie das Gelesene, und `reason` nennt bei
+`no_external_candidates` die Zahl der gelesenen Dokumente. Blieb etwas
+Aufgeführtes ungelesen, steht das bei beiden Ergebniszuständen als Zusatz
+„Nicht gelesen" im `reason` und nicht nur in `notes`. Drei Arten von Lücken
+gibt es: eine ganze Quelle wurde nicht gelesen; einzelne Dokumente aus dem
+Katalog waren nicht lesbar (gezählt im `reason`, einzeln benannt in `notes`);
+oder Stufe 1 hat sie gar nicht geöffnet, weil sie je Quelle höchstens 24
+Katalogeinträge öffnet. Fehlt der Zusatz, wurde jedes katalogisierte Dokument
+jeder berücksichtigten Quelle gelesen.
 
-Zustände, `live` und die Fingerprint-Regel gehören zu diesem Query-Vertrag,
-nicht zum Ranking. `extern-zweistufig/v1` benennt allein die Rechenvorschrift
-für Treffer: Solange dieselben gelesenen Dokumente und dieselbe Anfrage
-dieselben Treffer und Scores ergeben, bleibt die Nummer.
+Zustände, `live` und die Regel, wann es einen Fingerprint gibt, gehören zu
+diesem Query-Vertrag, nicht zum Ranking. `extern-zweistufig/v1` benennt die
+Rechenvorschrift für Treffer und das Rezept des Fingerprints: Solange
+dieselben gelesenen Dokumente und dieselbe Anfrage dieselben Treffer, Scores
+und denselben Fingerprint ergeben, bleibt die Nummer.
 
 ## Externe Bezugsquellen (`sources/EXTERN.md`)
 

@@ -1036,8 +1036,32 @@ Das Bild zeigt eine grüne Produktionsfreigabe.
             ["X-0001:handbuch/miete.md"],
         )
 
-    def test_fingerprint_covers_only_sources_that_were_read(self):
-        """Eine Quelle ohne gelesenes Dokument bezeugt nichts."""
+    @staticmethod
+    def fingerprint_nach_rezept(wurzeln, frage_norm, treffer):
+        """Das Rezept von extern-zweistufig/v1, hier ein zweites Mal ausgeschrieben.
+
+        Bewusst dupliziert: aendert jemand in der Engine, was in den
+        Fingerprint eingeht, muss dieser Test rot werden — sonst waere
+        "bytegleich zum alten Stand" eine Behauptung ohne Waechter.
+        """
+        return hashlib.sha256(json.dumps(
+            {"algorithm": "extern-zweistufig/v1",
+             "roots": sorted(wurzeln),
+             "query": frage_norm,
+             "hits": [[t["source_id"], t["document"], t["sentence_index"],
+                       t["score"]] for t in treffer]},
+            ensure_ascii=False, sort_keys=True, separators=(",", ":"),
+        ).encode("utf-8")).hexdigest()
+
+    def test_fingerprint_recipe_is_pinned_and_gaps_do_not_change_it(self):
+        """Luecken stehen im Grund, nicht im Fingerprint.
+
+        Eine Quelle, fuer die die Suche geoeffnet wurde, geht mit ihrem
+        Katalogstand in den Fingerprint ein — auch wenn am Ende kein Dokument
+        aus ihr lesbar war. So war es vor der Trennung von "nicht gelesen" und
+        "nichts gefunden", und so bleibt es: das Rezept zu aendern hiesse, die
+        Nummer extern-zweistufig/v1 zu aendern.
+        """
         wurzel = self.install_extern_fixture()
         zweite = Path(self.tempdir.name) / "extern-zweites-handbuch"
         (zweite / "handbuch").mkdir(parents=True)
@@ -1052,26 +1076,113 @@ Das Bild zeigt eine grüne Produktionsfreigabe.
         )
         self.bind_extern(wurzel)
         self.bind_extern(zweite, "X-0003")
-        self.build_katalog()
-        self.build_katalog("X-0003")
+        erster = self.build_katalog()["generated_from_sha256"]
+        zweiter = self.build_katalog("X-0003")["generated_from_sha256"]
         self.release()
 
         beide = self.extern_payload("Schimmelbefall")["external"]
         self.assertEqual(beide["state"], "external_candidates_found")
         self.assertIsNone(beide["reason"])
+        self.assertEqual(
+            beide["external_fingerprint"],
+            self.fingerprint_nach_rezept(
+                [["X-0001", erster], ["X-0003", zweiter]],
+                "schimmelbefall", beide["hits"]),
+        )
+
+        # X-0003 bleibt gebunden und katalogisiert, sein Dokument ist weg:
+        # dieselben Treffer, derselbe Fingerprint — und die Luecke im Grund.
+        (zweite / "handbuch/anderes.md").unlink()
+        mit_luecke = self.extern_payload("Schimmelbefall")["external"]
+        self.assertEqual(mit_luecke["state"], "external_candidates_found")
+        self.assertEqual(mit_luecke["hits"], beide["hits"])
+        self.assertEqual(
+            mit_luecke["external_fingerprint"], beide["external_fingerprint"])
+        self.assertIn("Nicht gelesen", mit_luecke["reason"])
+        self.assertIn("X-0003", mit_luecke["reason"])
+
+        # Ein bewusst gefilterter Lauf hat eine andere Wurzelmenge.
         nur_erste = self.extern_payload(
             "--source", "X-0001", "Schimmelbefall")["external"]
-        self.assertNotEqual(
-            beide["external_fingerprint"], nur_erste["external_fingerprint"])
-
-        # X-0003 bleibt gebunden und katalogisiert, sein Dokument ist weg.
-        (zweite / "handbuch/anderes.md").unlink()
-        ohne_zweite = self.extern_payload("Schimmelbefall")["external"]
-        self.assertEqual(ohne_zweite["state"], "external_candidates_found")
-        self.assertIn("X-0003", ohne_zweite["reason"])
         self.assertEqual(
-            ohne_zweite["external_fingerprint"], nur_erste["external_fingerprint"])
+            nur_erste["external_fingerprint"],
+            self.fingerprint_nach_rezept(
+                [["X-0001", erster]], "schimmelbefall", nur_erste["hits"]),
+        )
+        self.assertNotEqual(
+            nur_erste["external_fingerprint"], beide["external_fingerprint"])
 
+    def test_published_two_stage_scores_stay_true(self):
+        """README, KONZEPT und Landingpage nennen diese Zahlen woertlich.
+
+        60 gegen 78 in Stufe 1, 460 gegen 152 in Stufe 2: aendert sich die
+        Rechenvorschrift, sind die veroeffentlichten Zahlen falsch und
+        extern-zweistufig/v1 ist nicht mehr dasselbe Ranking.
+        """
+        if not (self.root / "sources/derived/X-0001__orchestrator.json").exists():
+            self.skipTest("Demo-Bestand ohne externen Katalog")
+        wurzel = REPOSITORY / "beispiel-extern"
+        if not wurzel.is_dir():
+            self.skipTest("Beispielbaum fehlt")
+        ziel = Path(self.tempdir.name) / "beispiel-extern"
+        shutil.copytree(wurzel, ziel)
+        self.bind_extern(ziel)
+        block = self.extern_payload(
+            "--source", "X-0001", "Minderung Mangel Wohnung")["external"]
+        self.assertEqual(
+            [(h["document"], h["score_catalog"], h["score_inventory"],
+              h["coverage_percent"]) for h in block["hits"]],
+            [("handbuch/mietminderung.md", 60, 460, 100),
+             ("handbuch/schiffshypothek.md", 78, 152, 33)],
+        )
+        self.assertEqual([h["score"] for h in block["hits"]], [460, 152])
+
+    def test_documents_the_prefilter_never_opened_are_named_as_a_gap(self):
+        """Was Stufe 1 nicht oeffnet, hat Stufe 2 nie gesehen.
+
+        Passt der Katalogtext auf keine Anfrage, oeffnet die Vorauswahl die
+        alphabetisch ersten Dokumente. Steht der Begriff nur in einem
+        spaeteren, bleibt es bei 'nichts gefunden' — aber der Grund sagt,
+        dass der Befund nur fuer die geoeffneten Dokumente gilt.
+        """
+        anzahl = 30
+        inhalt = {
+            f"d{nummer:02d}.md": f"# Dokument {nummer}\n\nAllgemeiner Fuelltext.\n"
+            for nummer in range(anzahl)
+        }
+        inhalt[f"d{anzahl - 1:02d}.md"] = (
+            "# Letztes\n\nErheblicher Schimmelbefall ist ein Mangel.\n")
+        wurzel = self.install_extern_fixture(inhalt)
+        self.bind_extern(wurzel)
+        katalog = self.build_katalog()
+        # Der Katalogtext soll auf keine Anfrage passen: ein schludrig
+        # gepflegter Katalog, wie ihn ein fremder Baum mitbringen kann.
+        for dok in katalog["documents"]:
+            dok["title"], dok["top_tokens"] = "Allgemeines", []
+        (self.root / "sources/derived/X-0001__orchestrator.json").write_text(
+            json.dumps(katalog, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        self.release()
+
+        payload = self.extern_payload("Schimmelbefall")
+        block = payload["external"]
+        gelesen = payload["fallback"]["external_document_paths"]
+        ungeoeffnet = anzahl - len(gelesen)
+        self.assertGreater(ungeoeffnet, 0, "Die Vorauswahl hat nichts begrenzt")
+        self.assertNotIn(f"X-0001:d{anzahl - 1:02d}.md", gelesen)
+        self.assertEqual(block["state"], "no_external_candidates")
+        self.assertIn(f"gelesen: {len(gelesen)}", block["reason"])
+        self.assertIn(
+            f"{ungeoeffnet} von {anzahl} katalogisierten Dokumenten nicht geöffnet",
+            block["reason"],
+        )
+        self.assertIn("gilt nur für die gelesenen Dokumente", block["reason"])
+
+        # Auch ein Treffer aus der Vorauswahl verschweigt den Rest nicht.
+        treffer = self.extern_payload("Fuelltext")["external"]
+        self.assertEqual(treffer["state"], "external_candidates_found")
+        self.assertIn("nicht geöffnet", treffer["reason"])
 
     def test_catalog_hashes_only_where_they_can_stay_true(self):
         """Netzkatalog ohne Pruefsummen, lokaler Katalog mit — beide Richtungen.

@@ -24,7 +24,7 @@ geschützte `dir_fd`-Operationen fail-closed ab.
 📖 **Konzept & Architekturentscheidungen:** [`wissenstresor/KONZEPT.md`](wissenstresor/KONZEPT.md)
 🌐 **Landingpage:** [`index.html`](index.html) (GitHub-Pages-fähig, Source = repo root)
 
-**Aktueller Release: v0.11.12** (Profil `oksv-lite/1.3`) mit Begriffswelten,
+**Aktueller Release: v0.11.13** (Profil `oksv-lite/1.3`) mit Begriffswelten,
 deterministischem Hybrid-Retrieval, geprüften Bild-/PDF-Regionen und einem
 reproduzierbaren `.skill`-Paket für Claude Code und Codex. Der
 Frontmatter-Parser lehnt Verschachtelung fail-closed ab statt sie still
@@ -59,11 +59,14 @@ gefunden**: Liest `query --extern` kein einziges Dokument, weil eine Quelle
 auf diesem Host nicht gebunden oder nicht erreichbar ist, meldet der Tresor
 das als eigenen Zustand (`not_bound`, `unreachable`) und ausdrücklich nicht
 als Negativbefund. Vorher sah ein frisch entpacktes Paket ohne Netz so aus,
-als sei gesucht und nichts gefunden worden.
+als sei gesucht und nichts gefunden worden. v0.11.13 hält die Trennung auch
+dort durch, wo ein Abruf erst beim Lesen abbricht, ein fremder Tresor
+verlinkte Dokumente enthält oder die Vorauswahl einen Teil des Katalogs gar
+nicht öffnet.
 
-Abnahme: 112 Tests bestanden · 37 manifestierte Dateien · 39 sichere
+Abnahme: 121 Tests bestanden · 37 manifestierte Dateien · 39 sichere
 Paketeinträge · SHA-256
-`5eb5226f9baf7a1d079f5fc33d9f2a624e2fb87a6db30ff5f0e5de9c6e5e8dcc`.
+`772b34d560cf150f7b2a56ca48d224e75d7bddc18eacf21bb57e9a00577b4b7b`.
 Dazu 2 aufgeführte externe Bezugsquellen · 2 Satzanker.
 
 Alles läuft mit der Python-Standardbibliothek, gemessen mit CPython 3.9.6 und
@@ -347,7 +350,9 @@ SKILLSAFE_OFFLINE=1 python3 scripts/vault.py query --extern "himmel"
 Genau so sieht ein frisch entpacktes Paket ohne Netz aus: der Normalfall, und
 bis v0.11.11 meldete er fälschlich `no_external_candidates`. Wird nur ein
 Teil gelesen, bleibt es beim Ergebniszustand, aber der Grund nennt unter
-„Nicht gelesen" jede ausgelassene Quelle. Der Befund reicht so weit wie das
+„Nicht gelesen" jede Lücke: ausgelassene Quellen, nicht lesbare Dokumente
+und was die Vorauswahl der ersten Stufe nicht geöffnet hat (sie öffnet je
+Quelle höchstens 24 Katalogeinträge). Der Befund reicht so weit wie das
 Gelesene, nicht weiter.
 
 Protokoll und Grenzen im Detail:

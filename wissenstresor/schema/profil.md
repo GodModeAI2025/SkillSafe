@@ -404,7 +404,9 @@ kann `strong` sein, wenn sie nur bekannte Wörter benutzt.
 (eigener Begriffstreffer, ID, Phrase, Definition); Kontext ist, wer nur über
 seine Seite hereinkam. `coverage.omitted_pages` nennt bis zu 20 Seiten, deren
 direkte Kandidaten dem Limit zum Opfer fielen und die nicht unter `pages`
-stehen.
+stehen; gibt es mehr, ist `coverage.omitted_pages_truncated` wahr. Eine leere
+Liste bei `omitted_direct` größer null heißt: Jeder gekürzte direkte Kandidat
+liegt auf einer Seite, die ohnehin unter `pages` steht und ganz gelesen wird.
 
 **Kontext weicht, Treffer nie.** Trägt die Auswahl einen Fragebegriff nicht,
 rückt der beste gekürzte Kandidat nach, der ihn selbst trägt, und verdrängt

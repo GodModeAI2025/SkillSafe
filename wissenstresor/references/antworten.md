@@ -38,31 +38,47 @@ Protokoll für den jeweils maßgeblichen Tresor durchlaufen — eine
 
    | Stärke | Heißt | Was zu tun ist |
    |---|---|---|
-   | `strong` | Jeder Inhaltsbegriff ist exakt, als Wortform oder über einen kuratierten Begriff getroffen | Kandidaten lesen und antworten. Decken sie die Frage nicht, Schritt 4b. |
-   | `partial` | Ein Begriff oder eine ID trägt, aber `unmatched` oder `partial` ist nicht leer | Die ungetroffenen Begriffe ansehen. Ist darunter das, wonach gefragt wird: höchstens zweimal mit anderer Wortwahl neu abfragen, danach Schritt 4b. |
-   | `weak` | Nur Wortteil- oder Zufallstreffer | Schritt 4b ist Pflicht. Die Kandidaten sind Fingerzeige, keine Antwort. |
-   | `none` | Kein Kandidat | Schritt 4b ist Pflicht. |
+   | `strong` | Jeder Inhaltsbegriff ist exakt, als Wortform oder über einen kuratierten Begriff getroffen | Weiter mit Schritt 3 und 4: Kandidaten lesen und antworten. Decken sie die Frage nicht, Schritt 4b. |
+   | `partial` | Ein Begriff oder eine ID trägt, aber `unmatched` oder `partial` ist nicht leer | Weiter mit Schritt 3 und 4. Steht unter den ungetroffenen Begriffen das, wonach gefragt wird, danach Schritt 4b. |
+   | `weak` | Nur Wortteil- oder Zufallstreffer | Schritt 4 entfällt, direkt zu Schritt 4b. Die Kandidaten sind Fingerzeige, keine Antwort. |
+   | `none` | Kein Kandidat | Schritt 4 entfällt, direkt zu Schritt 4b. |
 
    Bei `weak` und `none` steht zusätzlich
-   `fallback.exhaustive_review_required: true`. `partial` in
-   `query_terms` heißt: nur als Teil eines zusammengesetzten Worts gefunden.
+   `fallback.exhaustive_review_required: true`. Die Vollsichtung legt dann
+   ohnehin jeden Claim vor; die Kandidatenseiten vorher zu lesen wäre
+   dieselbe Arbeit zweimal. `partial` in `query_terms` heißt: nur als Teil
+   eines zusammengesetzten Worts gefunden.
 
-   Meldet `coverage.candidates.omitted_direct` mehr als null, hat das Limit
-   Treffer abgeschnitten: mit `--limit 20` erneut abfragen oder die Seiten
-   aus `coverage.omitted_pages` zusätzlich lesen. Ein gekürzter Treffer ist
-   kein gelesener Treffer.
+   **Umformulieren ist erlaubt, nie verlangt.** Wer bei `partial` vermutet,
+   dass der Bestand ein anderes Wort für dieselbe Sache benutzt, darf
+   höchstens zweimal mit anderer Wortwahl neu abfragen. Das spart bei großen
+   Beständen die Vollsichtung, ersetzt sie aber nicht: Für ein „Nicht im
+   Bestand" zählt allein die Quittung aus Schritt 4b.
+
+   **Gekürzte Treffer.** Maßgeblich ist `coverage.omitted_pages`. Stehen
+   dort Seiten, hat das Limit Treffer auf Seiten abgeschnitten, die sonst
+   niemand läse: diese Seiten in Schritt 4 zusätzlich lesen. Ist die Liste
+   leer, liegen alle gekürzten Treffer auf Seiten, die ohnehin unter `pages`
+   stehen und in Schritt 4 ganz gelesen werden; dann ist nichts weiter zu
+   tun, auch wenn `coverage.candidates.omitted_direct` größer als null ist.
+   Ein zweiter Aufruf mit `--limit` (höchstens 20) ist dafür nicht nötig.
+   Meldet `coverage.omitted_pages_truncated` wahr, reicht die Liste nicht
+   aus: dann Schritt 4b.
 3. **Domänen trennen.** Berühren die gelieferten Seiten mehrere Domänen,
    **Mischfrage** melden und den Antwortkern pro Domäne getrennt schreiben.
    Nie Inhalte still über Domänengrenzen hinweg verschmelzen.
-4. **Kandidaten lesen.** Genau die in `pages` genannten Kandidatenseiten lesen.
+4. **Kandidaten lesen.** Genau die in `pages` genannten Kandidatenseiten
+   lesen, dazu die unter `coverage.omitted_pages`. Nach einer Vollsichtung
+   sind es die Seiten aus `pages` ihrer Quittung.
    Kurzfassung und Claims gelten als wahr (Regel 2); Fundstellen werden
    zitiert, nicht erneut gegen Rohquelle oder Medienrepräsentation geprüft.
    `media` liefert nur die validierte Region/Position, niemals OCR-Text als
    eigene Evidenz.
-4b. **Vollsichtung — die Bedeutungssuche.** Pflicht bei `weak` und `none`,
-   und immer, bevor irgendein Teil der Frage als „Nicht im Bestand"
-   ausgewiesen wird. Hier liest das Modell jeden Claim und urteilt nach
-   Bedeutung; das Script sorgt dafür, dass keiner fehlt.
+4b. **Vollsichtung — die Bedeutungssuche.** Pflicht bei `weak` und `none`
+   (dort anstelle von Schritt 4), und immer, bevor irgendein Teil der Frage
+   als „Nicht im Bestand" ausgewiesen wird. Hier liest das Modell jeden
+   Claim und urteilt nach Bedeutung; das Script sorgt dafür, dass keiner
+   fehlt.
 
    ```
    python3 scripts/vault.py sweep "<frage>"              # Plan: Zahl der Stapel
@@ -134,6 +150,15 @@ Extern (nicht im Bestand): <X-nnnn, Dokument, Satzposition, Abrufzeitpunkt>
 Regeln im Envelope:
 
 * Jede Kernaussage referenziert mindestens eine Claim-ID.
+* **Registerangaben sind keine Evidenz.** Der Block `source` eines Belegs
+  (Titel, Stand, Trust und Rechte der Quelle) sagt, woher ein Claim stammt,
+  nicht was der Bestand über den Gegenstand der Frage weiß. Eine Frage nach
+  Lizenz, Rechten, Herausgeber oder Aktualität wird deshalb nie aus diesen
+  Angaben beantwortet, sondern nur aus Claims; trägt sie kein Claim, lautet
+  die Antwort „Nicht im Bestand". Dasselbe gilt für `matched_labels`,
+  Begriffsbenennungen und Tags.
+* Der Stand in einer Belegzeile ist der `stand` der Seite des Claims
+  (`pages[].stand`), nicht der Stand der Quelle (`source.stand`).
 * Die Zeile „Sichtung:" steht immer dann, wenn eine Vollsichtung lief, und
   sie ist Pflicht neben jedem „Nicht im Bestand". Bei eingeschränktem
   Umfang nennt sie ihn („Sichtung: Domäne demo-okf, 26 von 28 Claims") und

@@ -29,7 +29,7 @@ geschützte `dir_fd`-Operationen fail-closed ab.
 📖 **Konzept & Architekturentscheidungen:** [`wissenstresor/KONZEPT.md`](wissenstresor/KONZEPT.md)
 🌐 **Landingpage:** [`index.html`](index.html) (GitHub-Pages-fähig, Source = repo root)
 
-**Aktueller Release: v0.12.0** (Profil `oksv-lite/1.3`) mit Begriffswelten,
+**Aktueller Release: v0.12.1** (Profil `oksv-lite/1.3`) mit Begriffswelten,
 deterministischem Hybrid-Retrieval, geprüften Bild-/PDF-Regionen und einem
 reproduzierbaren `.skill`-Paket für Claude Code und Codex. Der
 Frontmatter-Parser lehnt Verschachtelung fail-closed ab statt sie still
@@ -70,9 +70,16 @@ die nur über ein Hilfsverb oder einen Wortteil trifft, liefert weiterhin
 die Vollsichtung. Und Fingerabdrücke aus `hybrid-local/v1` gelten nicht mehr,
 weil das Ranking ein anderes ist.
 
+v0.12.1 lässt die Engine unverändert und schärft den Antworten-Vertrag an vier
+Stellen, an denen ein frischer Agent im Praxistest hängen blieb: Bei `weak` und
+`none` ersetzt die Vollsichtung das Lesen der Kandidatenseiten, statt es zu
+verdoppeln; für gekürzte Treffer zählt `coverage.omitted_pages`; Umformulieren
+ist erlaubt und nie verlangt; und Registerangaben einer Quelle (Titel, Stand,
+Trust, Rechte) sind keine Evidenz.
+
 Abnahme: 130 Tests bestanden · 37 manifestierte Dateien · 39 sichere
 Paketeinträge · SHA-256
-`449669f9a19a080d9e19d9a87d3841db0f0738870cc5d75994d50ae64f9e057e`.
+`a9f7a880a36f592bf24ef9b2267710902473da09c59b111f2722b9cb51d7ca4e`.
 Dazu 2 aufgeführte externe Bezugsquellen · 2 Satzanker.
 
 Alles läuft mit der Python-Standardbibliothek, gemessen mit CPython 3.9.6 und

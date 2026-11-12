@@ -29,7 +29,7 @@ geschützte `dir_fd`-Operationen fail-closed ab.
 📖 **Konzept & Architekturentscheidungen:** [`wissenstresor/KONZEPT.md`](wissenstresor/KONZEPT.md)
 🌐 **Landingpage:** [`index.html`](index.html) (GitHub-Pages-fähig, Source = repo root)
 
-**Aktueller Release: v0.13.0** (Profil `oksv-lite/1.3`) mit Begriffswelten,
+**Aktueller Release: v0.14.0** (Profil `oksv-lite/1.3`) mit Begriffswelten,
 deterministischem Hybrid-Retrieval, geprüften Bild-/PDF-Regionen und einem
 reproduzierbaren `.skill`-Paket für Claude Code und Codex. Der
 Frontmatter-Parser lehnt Verschachtelung fail-closed ab statt sie still
@@ -60,15 +60,17 @@ liest der Tresor ausschließlich Ziele, die namentlich in
 etwas, das dort nicht aufgeführt ist.
 
 Neu in v0.12.0 ist die **Bedeutungssuche ohne Bedeutungsindex**. Das Ranking
-(`hybrid-local/v2`) kennt Wortformen und sagt bei jeder Abfrage, welche
-Wörter der Frage es nicht erkannt hat. Hat es zu wenig erkannt, legt `sweep`
-dem Modell jeden Claim vor und prüft die Quittung; „Nicht im Bestand" gibt es
-nur noch mit vollständiger Quittung. Für bestehende Nutzung ändert sich
-zweierlei, und beides soll hier stehen statt im Kleingedruckten: Eine Frage,
-die nur über ein Hilfsverb oder einen Wortteil trifft, liefert weiterhin
-`candidates_found`, verlangt aber über `fallback.exhaustive_review_required`
-die Vollsichtung. Und Fingerabdrücke aus `hybrid-local/v1` gelten nicht mehr,
-weil das Ranking ein anderes ist.
+(`hybrid-local/v2`, seit v0.14.0 `v3`) kennt Wortformen und sagt bei jeder
+Abfrage, welche Wörter der Frage es nicht erkannt hat. Hat es zu wenig
+erkannt, legt `sweep` dem Modell jeden Claim vor und prüft die Quittung;
+„Nicht im Bestand" gibt es nur noch mit vollständiger Quittung. Für
+bestehende Nutzung ändert sich dreierlei, und das soll hier stehen statt im
+Kleingedruckten: Eine Frage, die bisher nur über ein Hilfsverb traf, liefert
+jetzt `no_candidates` statt `candidates_found`, weil Funktionswörter nicht
+mehr zählen. Eine Frage, die nur über einen Wortteil trifft, liefert
+weiterhin `candidates_found`, verlangt aber über
+`fallback.exhaustive_review_required` die Vollsichtung. Und Fingerabdrücke
+aus `hybrid-local/v1` gelten nicht mehr, weil das Ranking ein anderes ist.
 
 v0.12.1 lässt die Engine unverändert und schärft den Antworten-Vertrag an vier
 Stellen, an denen ein frischer Agent im Praxistest hängen blieb: Bei `weak` und
@@ -89,9 +91,22 @@ die Quittung aufnimmt und dass der externe Fallback eine Option bleibt, keine
 Pflicht. Rangfolge, Punktzahlen, Trefferstärke und Fingerabdrücke sind
 unverändert; das Profil bleibt `hybrid-local/v2`.
 
-Abnahme: 132 Tests bestanden · 37 manifestierte Dateien · 39 sichere
+v0.14.0 ist das Ergebnis eines Reviews, der Fehler suchen sollte und zwei
+schwere fand. Beide lagen dort, wo das eigene Gold nicht hinsieht. Nannte
+eine Frage zwei kuratierte Begriffe, konnte die Seite des einen das Limit
+füllen und die des anderen fehlen, und das Ergebnis hieß trotzdem `strong`.
+Und ein Füllwort konnte über seine Wortform einen Begriff benennen („sich"
+die „Sicherung") und damit die Pflicht-Vollsichtung abschalten. Das neue
+Ranking `hybrid-local/v3` behebt beides und drei kleinere Fehler derselben
+Art; Fingerabdrücke aus v2 gelten deshalb nicht mehr. Dazu: Das Siegel der
+Vollsichtung unterscheidet jetzt auch Fragen, die sich nur in einem Operator
+oder in „ß" gegen „ss" unterscheiden. Und mit `tools/antwort_check.py` lässt
+sich nachrechnen, ob ein Agent dem Antworten-Vertrag wirklich gefolgt ist;
+die Protokolle der Messläufe liegen unter `tests/e2e/`.
+
+Abnahme: 157 Tests bestanden · 37 manifestierte Dateien · 39 sichere
 Paketeinträge · SHA-256
-`83f32c9b501060f7183ee3f3d770dd37bf241791dfca7a10e19a29a2398c2e3a`.
+`f5fafde10f3000c6456f10711915934435971c1455aa599cabcef1a6baffa939`.
 Dazu 2 aufgeführte externe Bezugsquellen · 2 Satzanker.
 
 Alles läuft mit der Python-Standardbibliothek, gemessen mit CPython 3.9.6 und
@@ -159,7 +174,8 @@ python3 scripts/vault.py query "Kann ich bei nassen Wänden die Miete kürzen?"
 # coverage.query_terms.unmatched = [kuerzen, nassen, waenden]
 # fallback.exhaustive_review_required = true
 
-# 2. Plan der Vollsichtung: wie viele Stapel
+# 2. Plan der Vollsichtung: wie viele Stapel (entbehrlich, die Zahl steht
+#    schon in fallback.sweep.batches der Abfrage)
 python3 scripts/vault.py sweep "Kann ich bei nassen Wänden die Miete kürzen?"
 
 # 3. Jeden Stapel lesen und sein Siegel notieren
@@ -207,8 +223,56 @@ Die Kontrolle fand beim ersten Durchlauf außerdem einen Fehler in einer frisch
 gebauten Regel, den die eigenen Fragen nicht zeigten: Füllwörter verdrängten
 einen richtigen Treffer aus der Auswahl. Damals standen 17 statt 18 in der
 Zeile; seit der Korrektur ist sie nicht mehr blind gemessen. Die Zeile
-„Vorher" ist ein einmaliger Messwert vom 12. November 2026 und nicht mehr
-nachrechenbar, weil es das alte Ranking nicht mehr gibt.
+„Vorher" ist ein einmaliger Messwert vom 12. November 2026; nachrechnen lässt
+sie sich nur am Stand vor v0.12.0 (Commit `7a49193`), weil es das alte Ranking
+im heutigen Stand nicht mehr gibt.
+
+### Was diese Zahlen nicht zeigten
+
+Von den 84 Fragen erreichen nur zwei überhaupt `strong`. Die rechte Spalte
+prüft das harte Gate also kaum, und genau dort fand der Review zwei Wege, auf
+denen `strong` log (siehe oben, v0.14.0). Beide sind behoben und stehen jetzt
+als eigene Tests da, darunter alle 72 Paarfragen aus je zwei
+Vorzugsbenennungen: `strong` gibt es nur, wenn beide Begriffe in der Ausgabe
+vertreten sind. An der Tabelle hat das nichts geändert, und das ist der
+Punkt: Eine Zahl, die einen Fehler nie maß, bleibt gleich, wenn er behoben
+ist.
+
+### Ende zu Ende: Folgt ein Modell dem Verfahren?
+
+Das misst kein Gold. Zwölf frische Agenten bekamen je einen entpackten
+Skill-Ordner und Nutzerfragen im Wortlaut, ohne Erklärung des Verfahrens.
+Ausgewertet hat ein Werkzeug, das dem Agenten nichts glaubt: Es liest aus dem
+Protokoll nur Frage, Antworttext und Quittungseinträge und fährt jede Quittung
+erneut gegen die Engine.
+
+| Lauf | Stand | Fragen | mit Claim | gefunden | Ranking verfehlt | trotzdem gefunden | negativ | abgelehnt | Verstöße |
+|---|---|---|---|---|---|---|---|---|---|
+| Ende zu Ende, Runde 1 | v0.12.1 | 32 | 24 | 24 | 19 | 19 | 8 | 8 | **0** |
+| Ende zu Ende, Runde 2 | v0.13.0 | 12 | 8 | 8 | 8 | 8 | 4 | 4 | **0** |
+
+*mit Claim:* Fragen, zu denen ein Claim im Bestand steht · *Ranking verfehlt:*
+davon solche, deren Claim das Ranking nicht lieferte · *negativ:* Fragen, die
+der Bestand nicht beantwortet · *Verstöße:* „Nicht im Bestand" ohne
+vollständige Quittung, ausgelassene Pflicht-Vollsichtung, ungültige Quittung,
+erfundene Claim-ID, übersehener Claim.
+
+Alle 27 Fragen, deren Claim das Ranking verfehlte, wurden über die
+Vollsichtung gefunden; alle 12 Negativfragen wurden mit gültiger Quittung
+abgelehnt. In Runde 2 liefen sechs Sichtungen über drei Stapel. Was das nicht
+zeigt: wie sorgfältig ein Modell einen Bestand mit 189 Stapeln liest. Die
+Messung gilt für 28 Claims und Agenten eines Modells.
+
+Die Protokolle liegen in [`tests/e2e/`](tests/e2e/LIESMICH.md). Ihre Siegel
+gelten für den Stand, an den sie gebunden sind, und lassen sich dort
+nachrechnen:
+
+```bash
+mkdir -p /tmp/stand-runde-1
+git archive 0d9f5dd wissenstresor | tar -x -C /tmp/stand-runde-1
+python3 tools/antwort_check.py --vault /tmp/stand-runde-1/wissenstresor \
+    --antworten tests/e2e/runde-1.json
+```
 
 ### Den eigenen Bestand messen
 
@@ -236,6 +300,15 @@ wörtlich im Bestand, bricht es ab. Ein Gold, das der Bestand kennt, misst nur
 noch, ob er sich selbst wiederfindet. Was eine Verfehlung behebt, ist ein
 Alias oder ein Tag in der Sprache der Fragenden, nie die Frage selbst — siehe
 [`references/begriffswelten.md`](wissenstresor/references/begriffswelten.md).
+
+Ob ein Agent mit dem eigenen Bestand dem Verfahren folgt, prüft das zweite
+Werkzeug. Es braucht ein Protokoll mit Frage, Antworttext und den an
+`--receipt` übergebenen Einträgen; das Format steht in
+[`tests/e2e/LIESMICH.md`](tests/e2e/LIESMICH.md):
+
+```bash
+python3 tools/antwort_check.py --vault <tresor> --antworten <protokoll.json>
+```
 
 ## Die sechs eisernen Regeln
 
@@ -267,8 +340,8 @@ SkillSafe/
 ├── BETRIEB.md             Betriebs- und Übergabewissen (Release, Störfälle, CI)
 ├── .github/workflows/     CI-Kette: validate, verify, doctor, Tests, Paketbau
 ├── beispiel-extern/       Demo eines externen Markdown-Baums (kein Teil des Skills)
-├── tools/                 deterministischer Paketbau, Zahlenwächter und Recall-Messung
-├── tests/                 Sicherheits-, Retrieval- und Portabilitätstests; Messfragen unter gold/
+├── tools/                 deterministischer Paketbau, Zahlenwächter, Recall-Messung, Antwort-Prüfung
+├── tests/                 Sicherheits-, Retrieval- und Portabilitätstests; Messfragen unter gold/, Messläufe unter e2e/
 └── wissenstresor/         der Skill selbst — das eigentliche Artefakt
     ├── SKILL.md           Motor: Vertrag für das Modell
     ├── KONZEPT.md          Architektur- und Entscheidungsdokument
@@ -440,7 +513,8 @@ python3 scripts/vault.py query --extern "Minderung Mangel Wohnung"
 
 Ohne `--extern` verlässt **kein Byte** den Skill-Ordner, weder zur Platte noch
 ins Netz. Das Flag gehört ans Ende des Antwort-Workflows: erst der lokale
-Bestand, dann die vollständige Fallback-Prüfung, dann extern.
+Bestand, dann die Vollsichtung mit Quittung, dann extern, und auch das nur,
+wenn der Mensch es verlangt oder ihm zugestimmt hat.
 
 Das Ranking läuft in zwei Stufen, und die zweite entscheidet:
 

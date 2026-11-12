@@ -91,7 +91,7 @@ haette "Miete" nicht zur "Mietminderung" gefuehrt, solange "Minderung" nirgends
 allein steht, also gerade in kleinen Bestaenden nichts gefunden. Ersatz:
 Kopf-/Schwanz-Abgleich mit Mindestlaenge vier auf beiden Seiten der Naht,
 schwach gewichtet, nie ein Anker. Preis: gelegentliche Zufallstreffer
-("after" in "dauerhafter"), sichtbar am Grund compound:.
+("Fall" in "Schimmelbefall"), sichtbar am Grund compound:.
 
 ## [2026-11-12] Verbformen auf -t und Partizipien in wortform/v1 — verworfen
 Ein -t zu streichen fuehrt "bestaetigt" zu "bestaetigen", aber auch "Recht"
@@ -114,17 +114,40 @@ Traeger herein und verdraengten einen Definitions-Claim von Rang 6. Gefunden
 hat das erst die blind geschriebene Kontrollgruppe, nicht die eigenen Fragen.
 Ersatz: Es weicht nur reiner Kontext, nie ein Claim mit eigenem Treffer.
 
-## [2026-11-12] Begriffs-Fingerzeig von 30 auf 10 Punkte senken — verworfen
+## [2026-11-12] Begriffs-Fingerzeig von 30 auf 10 Punkte senken — erst verworfen, in hybrid-local/v3 umgesetzt
 Im Ende-zu-Ende-Test fiel auf, dass sieben Claims einer Seite mit bloss
 gestreifter Benennung (concept-page:partial, 30 Punkte) zwei Claims mit
 eigenem Wortteil-Treffer (12) aus dem Limit draengten. Geprueft wurde die
 Senkung auf 10, also unter jeden eigenen Treffer: auf den 28 Fragen der Gruppe
 'entwicklung' ohne jede Wirkung (19 direkt gefunden, 9 in der Pflicht, in
-beiden Faellen). Ohne messbaren Nutzen kein Profilwechsel, denn jede Aenderung
-an den Gewichten hebt die Profilnummer und verbraucht die Kontrollgruppe. Der
-beobachtete Fall war 'weak', die Vollsichtung also ohnehin Pflicht, und die
-Kuerzung stand in coverage.candidates. Erneut pruefen erst an einem Bestand,
-der gross genug ist, dass das Limit ueberhaupt etwas entscheidet.
+beiden Faellen). Ohne messbaren Nutzen schien ein Profilwechsel nicht
+gerechtfertigt, und so stand es in v0.13.0. Der Review hat am selben Tag den
+Nutzen nachgewiesen, den die eigenen Fragen nicht zeigten: Bei 7 von 42
+Abfragen mit exaktem Treffer fehlte dieser Treffer, weil die gestreifte
+Begriffsseite das Limit fuellte ("Wissen verdichten": drei Claims nur mit
+concept-page:partial vor C-0301 mit token:wissen). Da hybrid-local/v3 wegen
+zweier schwererer Fehler ohnehin faellig war, liegt der Fingerzeig jetzt bei
+10. Lehre: "auf den eigenen Fragen ohne Wirkung" ist kein Befund ueber die
+Aenderung, sondern ueber die Fragen.
+
+## [2026-11-12] Geschwister eines Treffers als Fueller vor den Graph-Nachbarn — verworfen
+Der Review wies darauf hin, dass seit v2 die Geschwister-Claims einer
+Trefferseite keine Kandidaten mehr sind, die Claims ihrer Graph-Nachbarn aber
+schon (graph:one-hop, 5 Punkte); bei "C-0001" fuellen fremde Seiten die
+Evidenz. Geprueft wurde ein Fueller page-sibling mit 6 Punkten. Er kostete auf
+der Gruppe 'entwicklung' einen Treffer (18 statt 19 von 28, Seitentreffer 21
+statt 22): Der Graph-Nachbar brachte dort die Seite mit dem gesuchten Claim
+herein, die Geschwister verdraengten sie. Verworfen. Die Geschwister liest der
+Antworten-Workflow ohnehin, weil die Trefferseite unter pages steht.
+
+## [2026-11-12] Kompositum-Traeger nachruecken lassen — verworfen
+Nachruecken darf nur, wer den Fragebegriff als Wort oder Wortform traegt. Ein
+Wortteil-Treffer ("Miete" in "Mietminderung") bleibt bei "Miete OKF" auch mit
+Limit 20 abgeschnitten, obwohl Kontext weichen koennte. Die Lockerung wurde
+nicht umgesetzt: Wortteil-Treffer sind zu oft Zufall, und jeder nachgerueckte
+verdraengt einen Kontext-Claim einer direkt getroffenen Begriffsseite. Die
+Kuerzung bleibt gemeldet (unmatched, omitted_pages). Die Einschraenkung steht
+seit v0.14.0 in schema/profil.md; vorher war sie undokumentiert.
 
 ## [2026-11-12] Trefferstaerke ueber alle Claims der gezeigten Seiten rechnen — verworfen
 Die Seitengruende (pages[].reasons) nennen auch Treffer in Claims, die das

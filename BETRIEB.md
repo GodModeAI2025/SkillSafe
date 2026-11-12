@@ -26,11 +26,15 @@ das WSL; ohne sie bricht `release` fail-closed ab, statt unsicher zu schreiben.
 > `checksum` oder `release` aussagekräftig.**
 
 `tests/test_packaged_vault.py` ruft `doctor`, und `doctor` wird bei jeder
-geänderten manifestierten Datei rot. Gemessen: eine einzige angehängte
-Kommentarzeile in `vault.py` ergibt `2 failed, 66 passed`. Nach `checksum`
-wieder `68 passed`. Seit v0.12.0 misst auch die Klasse `RecallGateTests` in
-`tests/test_vault_recall.py` den eingecheckten Skill; sie scheitert in
-demselben Fenster schon beim Aufbau, weil `query` dann `invalid_vault` liefert.
+geänderten manifestierten Datei rot. Gemessen mit v0.14.0: Eine einzige
+angehängte Kommentarzeile in `vault.py` ergibt vier Fehlschläge und einen
+Fehler. Drei Fehlschläge liegen in `tests/test_packaged_vault.py`, einer in
+`tests/test_vault_retrieval.py` (die Messung des externen Routings liest den
+eingecheckten Skill), und der Fehler ist der Aufbau der Klasse
+`RecallGateTests` in `tests/test_vault_recall.py`: Sie misst ebenfalls den
+eingecheckten Skill, `query` liefert dort `invalid_vault`, und ihre Tests
+laufen dann nicht. Alle übrigen Tests laufen durch und werden berichtet.
+Nach `checksum` ist alles wieder grün.
 
 Wer das nicht weiß, hält ein intaktes Projekt für kaputt und sucht an der
 falschen Stelle.
@@ -210,13 +214,25 @@ dreht. Die Untergrenzen beider Gruppen stehen als `MIN_RECALL` in
 `tests/test_vault_recall.py`.
 
 **Wer am Ranking dreht** — Gewichte, Funktionswörter, Wortform-Regeln,
-Schwellen der Trefferstärke —, hebt die Profilnummer (`hybrid-local/v3`),
-misst neu und zieht die Messtabelle in `README.md` und `index.html` nach;
-`check_docs.py` vergleicht beide mit der echten Ausgabe. Wer dabei die Gruppe
-`kontrolle` zum Einstellen benutzt, hat sie verbraucht. Dann braucht es einen
-neuen Kontrollsatz, wieder von jemandem, der weder die Engine noch die alten
-Fragen gesehen hat. Genau so ist am 12. November 2026 der Fehler in der
-Nachrück-Regel gefunden worden, den die eigenen Fragen nicht zeigten.
+Schwellen der Trefferstärke —, hebt die Profilnummer (als Nächstes
+`hybrid-local/v4`), misst neu und zieht die Messtabelle in `README.md` und
+`index.html` nach; `check_docs.py` vergleicht beide mit der echten Ausgabe.
+Wer dabei die Gruppe `kontrolle` zum Einstellen benutzt, hat sie verbraucht.
+Dann braucht es einen neuen Kontrollsatz, wieder von jemandem, der weder die
+Engine noch die alten Fragen gesehen hat. Genau so ist am 12. November 2026
+der Fehler in der Nachrück-Regel gefunden worden, den die eigenen Fragen
+nicht zeigten.
+
+**Was das Gold nicht prüft.** Von den 84 Fragen erreichen zwei `strong`; das
+harte Gate wird von ihnen kaum berührt. Die beiden schweren Fehler, die
+`hybrid-local/v3` behoben hat, fand deshalb kein Messlauf, sondern ein
+Review, der sie gezielt nachstellte: zwei kuratierte Begriffe in einer Frage,
+und ein Funktionswort, das über seine Wortform einen Begriff benennt. Beide
+änderten an der Messtabelle nichts. Wer am Ranking arbeitet, braucht also
+beides: die Messung für die Güte und gezielte Tests für jeden Weg, auf dem
+`strong` lügen könnte. Für den zweiten Zweck gibt es in
+`tests/test_vault_recall.py` unter anderem die Reihe über alle Paare von
+Vorzugsbenennungen.
 
 **Eine Verfehlung beheben.** Liefert eine naheliegende Frage `weak` oder
 `none`, ist das zunächst richtig: Die Vollsichtung findet den Claim. Lohnt
@@ -236,6 +252,50 @@ das Modell in der Vollsichtung den richtigen Claim auswählt, ist Urteil und
 steht in keiner dieser Zahlen. Und 84 Fragen gegen 28 Claims sind eine kleine,
 selbst gebaute Stichprobe.
 
+## Ende zu Ende messen
+
+Ob ein Modell dem Antworten-Vertrag folgt, zeigt nur ein Lauf mit einem
+Agenten, der nichts kennt als den Skill-Ordner. Das Rezept:
+
+1. Den Skill als Paket bauen und in einen leeren Ordner entpacken, je Agent
+   eine eigene Kopie. Kein Repository daneben, keine Tests, kein Gold.
+2. Dem Agenten nur sagen, wo der Skill liegt, und ihm Fragen im Wortlaut
+   geben. Nichts über Vollsichtung, Quittung oder Messung. Zurückgeben soll er
+   je Frage den Antworttext und die Einträge, die er an `sweep --receipt`
+   übergeben hat.
+3. Daraus ein Protokoll schreiben (Format in `tests/e2e/LIESMICH.md`) und
+   auswerten:
+
+```bash
+python3 tools/antwort_check.py --vault <tresor> --antworten <protokoll.json>
+```
+
+Das Werkzeug glaubt dem Agenten nichts. Es fragt die Trefferstärke jeder
+Frage neu ab, fährt jede Quittung erneut gegen die Engine und liest zitierte
+Claim-IDs aus dem Antworttext. Ein Verstoß ist: „Nicht im Bestand" ohne
+vollständige Quittung, eine ausgelassene Pflicht-Vollsichtung, eine ungültige
+Quittung, eine Zeile „Sichtung:" mit anderen Zahlen oder einer fremden
+Kennung, eine erfundene Claim-ID und, wenn das Protokoll `erwartet` führt,
+ein übersehener Claim. Exit 1 bei einem Verstoß, 2 bei unbrauchbarem
+Protokoll oder falschem Stand.
+
+**Siegel gelten für ihren Stand.** Nach jedem Release sind alte Quittungen
+ungültig. Ein Protokoll, das aufgehoben werden soll, braucht deshalb den
+Block `stand` mit dem Manifest-Digest; nachgerechnet wird gegen den Tresor
+dieses Commits (`git archive <commit> wissenstresor`). Die beiden Messläufe
+vom 12. November 2026 liegen so unter `tests/e2e/`. Ihre Zahlen stehen in
+`README.md` und `index.html`, und `check_docs.py` bindet sie an den Block
+`ergebnis` der Protokolle.
+
+**Die Anmerkungen sind die halbe Messung.** Die Agenten der beiden Läufe
+sollten zusätzlich in einem Satz sagen, was am Vertrag unklar war. Daraus
+kamen die Korrekturen in v0.13.0 und v0.14.0, darunter ein falscher Satz, den
+erst ein Agent bemerkte. Wer den Vertrag ändert, lässt ihn danach lesen.
+
+**Was diese Messung nicht sagt.** 44 Fragen, ein Bestand mit einem Stapel,
+Agenten eines Modells. Sie zeigt, dass das Verfahren befolgbar ist, nicht wie
+sorgfältig ein Modell 189 Stapel liest.
+
 ## Störfälle
 
 **`recall_check.py` ist rot.** Die Meldung nennt das Gate. *Stille
@@ -247,6 +307,19 @@ gegenüber dem letzten grünen Stand kippen; meist hat ein Release Tags oder
 Aliase entfernt. *Leck:* Eine Goldfrage steht wörtlich im Skill-Ordner, die
 Meldung nennt die Datei. *Claim wird nicht vorgelegt:* Das Gold nennt eine
 C-ID, die es im Bestand nicht mehr gibt.
+
+**`antwort_check.py` ist rot.** Exit 2 heißt, dass gar nicht geprüft wurde:
+Das Protokoll ist unbrauchbar, liegt im Skill-Ordner oder ist an einen
+anderen Stand gebunden; dann gegen den Tresor des genannten Commits prüfen.
+Exit 1 nennt je Antwort den Verstoß. *Quittung nicht gültig:* fast immer eine
+abweichende Schreibung der Frage oder ein fehlendes `sweep_args` im Protokoll
+(`--size`, `--domain`). *Vollsichtung war Pflicht* oder *„Nicht im Bestand"
+ohne Quittung:* Der Agent hat abgekürzt. Bevor man das dem Modell anlastet,
+`references/antworten.md` an der Stelle lesen, an der er abgebogen ist: In
+den Messläufen gab es keinen Verstoß, aber jede Unsicherheit, die ein Agent
+meldete, ging auf eine Lücke im Text zurück. *Erwarteter
+Claim nicht gefunden:* die Antwort lesen. Entweder hat der Agent den Claim
+übersehen, oder das Protokoll erwartet den falschen.
 
 **`.vault-release.lock` liegt herum.** Der Lock bleibt nur bei einem
 unvollständigen Rollback liegen; ein gewöhnlicher Abbruch räumt ihn selbst weg.
@@ -311,7 +384,11 @@ Ohne `--extern` verlässt kein Byte den Skill-Ordner. Wer das Flag
 gewohnheitsmäßig setzt, hat den Tresor faktisch in eine Live-Suche über einen
 ungefrorenen Baum verwandelt und Regel 2 (Vertrauen zur Abfragezeit)
 ausgehebelt. Es gehört ans Ende des Antwort-Workflows: erst der lokale
-Bestand, dann die vollständige Fallback-Prüfung, dann extern.
+Bestand, dann die Vollsichtung mit Quittung, dann extern, und auch das nur,
+wenn der Mensch das Nachschlagen verlangt oder ihm zugestimmt hat. Im
+Ende-zu-Ende-Lauf riefen sieben von acht Agenten `--extern` von sich aus auf,
+solange der Vertrag das offenließ; mit Netz wäre jeder dieser Aufrufe ein
+Abruf samt Zeile in `log.md` gewesen.
 
 `SKILLSAFE_OFFLINE=1` schaltet jeden Netzabruf hart ab, vor dem ersten Socket.
 Die CI-Kette setzt die Variable global — ein Gate darf nicht an fremder

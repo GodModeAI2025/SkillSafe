@@ -112,9 +112,9 @@ Der OKF-Export steht bewusst **nicht** in dieser Tabelle: kein Workflow ruft ihn
 | `index` | `INDEX.md` deterministisch neu erzeugen |
 | `graph` | `graph/graph.json` aus Frontmatter-Relationen ableiten |
 | `query "<frage>" [--world BW-nnnn] [--limit n]` | Manifestgebundenes Hybrid-Retrieval; genau ein JSON-Dokument |
-| `query … --extern [--source X-nnnn]` | Zusätzlich aufgeführte externe Quellen live lesen (Fallback, nie Default) |
+| `query … --extern [--source X-nnnn]` | Zusätzlich aufgeführte externe Quellen live lesen (Fallback, nie Default, nur wenn der Mensch es verlangt oder zustimmt) |
 | `sweep "<frage>" [--batch n \| --receipt …] [--size n] [--domain d] [--page p]` | Vollsichtung: jeden Claim in Stapeln vorlegen und die Quittung prüfen; einzige Grundlage für „Nicht im Bestand" |
-| `search <begriff…>` | Erschöpfende Lexik-Suche (Plan B; kein semantischer Negativbeweis) |
+| `search <begriff…>` | Erschöpfende Lexik-Suche (Hilfe bei Synonymen; kein Negativbeweis, den trägt nur `sweep`) |
 | `media-template S-nnnn` | Nicht schreibendes JSON-Gerüst für registriertes Bild/PDF |
 | `extern list \| bind X-nnnn <pfad> \| unbind X-nnnn` | Aufgeführte Bezugsquellen zeigen und lokal binden |
 | `anchor-template X-nnnn <dokument>` | Sätze eines externen Dokuments mit Index und Digest |

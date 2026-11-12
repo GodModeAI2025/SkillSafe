@@ -249,13 +249,13 @@
         <p class="sub">Belegtes Wissen aus Text, Bildern und PDFs — als Skill, nicht als Server.</p>
         <p class="tagline-en">Für Claude Code und Codex: kontrollierte Begriffswelten, reproduzierbares Hybrid-Retrieval, eine Bedeutungssuche mit Quittung, Wissensgraph-Kontext und geprüfte Bildfundstellen — lokal, nachvollziehbar und ohne Embeddings.</p>
         <div class="cta-row">
-          <a class="btn btn-primary" href="#funktionen">Was v0.13.0 kann</a>
+          <a class="btn btn-primary" href="#funktionen">Was v0.14.0 kann</a>
           <a class="btn btn-ghost" href="#regeln">Die sechs Regeln</a>
           <a class="btn btn-ghost" href="wissenstresor/KONZEPT.md">Konzept lesen</a>
           <a class="btn btn-ghost" href="https://github.com/GodModeAI2025/SkillSafe">GitHub</a>
         </div>
       </div>
-      <div class="stamp"><span><b>VALIDATE</b>0 Fehler<br>6 Seiten · 28 Claims<br>v0.13.0</span></div>
+      <div class="stamp"><span><b>VALIDATE</b>0 Fehler<br>6 Seiten · 28 Claims<br>v0.14.0</span></div>
     </div>
   </section>
 
@@ -348,7 +348,20 @@
       </div>
       <p class="lede reveal" style="margin-top:20px;">Die mittlere Zeile ist geschönt, denn an diesen Fragen wurde eingestellt. Die untere ist die ehrliche: 56 Fragen von einem zweiten Agenten, der nur die Claims kannte und ihren Wortlaut mit Absicht mied. Das Ranking allein findet dort ein Drittel. Es ist eine Abkürzung für Fragen in der Sprache des Bestands, Bedeutung findet erst das Lesen. Entscheidend ist die rechte Spalte: Keine Verfehlung bleibt still, und die Vollsichtung legt in jedem Fall alle 28 Claims vor.</p>
       <p class="lede reveal" style="margin-top:20px;">Die Kontrolle hat sich schon beim ersten Durchlauf bezahlt gemacht. Sie fand einen Fehler in einer frisch gebauten Regel, den die eigenen Fragen nicht zeigten: Füllwörter verdrängten einen richtigen Treffer aus der Auswahl. Damals standen 17 statt 18 direkt gefundene Fragen in der Zeile; seit der Korrektur ist sie nicht mehr blind gemessen.</p>
-      <p class="lede reveal" style="margin-top:20px;">Zwei Grenzen gehören dazu. Die Quittung belegt, dass jeder Stapel für genau diesen Stand und diese Frage ausgegeben und beurteilt wurde, nicht wie sorgfältig. Und die Vollsichtung kostet Lesearbeit im Verhältnis zum Bestand: im Demo-Bestand ein Stapel, bei 7.500 Claims 189. Die Zahlen stammen aus einer kleinen, selbst gebauten Stichprobe. Für einen eigenen Bestand misst <code>tools/recall_check.py</code> mit eigenen Fragen nach, und die liegen außerhalb des Skills, sonst misst man nur, ob der Bestand sich selbst wiederfindet. Begründung und Messung stehen in <a href="wissenstresor/KONZEPT.md">KONZEPT.md</a> unter AD-14.</p>
+      <p class="lede reveal" style="margin-top:20px;">Was die Tabelle nicht zeigte, fand ein Review. Nur zwei der 84 Fragen erreichen überhaupt <code>strong</code>, die rechte Spalte prüft das harte Gate also kaum. Genau dort lagen zwei Fehler: Bei zwei kuratierten Begriffen in einer Frage konnte die Seite des einen das Limit füllen und die des anderen fehlen, und ein Füllwort konnte über seine Wortform einen Begriff benennen („sich" die „Sicherung") und damit die Pflicht-Vollsichtung abschalten. Beide sind im Ranking <code>hybrid-local/v3</code> behoben und stehen als eigene Tests da. An der Tabelle hat das nichts geändert: Eine Zahl, die einen Fehler nie maß, bleibt gleich, wenn er behoben ist.</p>
+      <p class="lede reveal" style="margin-top:20px;">Bleibt die Frage, ob ein Modell dem Verfahren überhaupt folgt. Das misst kein Fragenkatalog. Zwölf frische Agenten bekamen je einen entpackten Skill-Ordner und Nutzerfragen im Wortlaut, ohne Erklärung des Verfahrens. Ausgewertet hat <code>tools/antwort_check.py</code>, das dem Agenten nichts glaubt: Es liest aus dem Protokoll nur Frage, Antworttext und Quittungseinträge und fährt jede Quittung erneut gegen die Engine.</p>
+      <div class="reveal" style="overflow-x:auto; margin-top:20px;">
+        <table class="sources messung">
+          <thead><tr><th>Lauf</th><th>Fragen</th><th>gefunden</th><th>Sichtung</th><th>abgelehnt</th><th>Verstöße</th></tr></thead>
+          <tbody>
+            <tr><td>Runde 1</td><td>32</td><td>24</td><td>19</td><td>8</td><td>0</td></tr>
+            <tr><td>Runde 2</td><td>12</td><td>8</td><td>8</td><td>4</td><td>0</td></tr>
+          </tbody>
+        </table>
+        <p class="legende"><b>gefunden:</b> Fragen, deren Claim in der Antwort steht, in beiden Runden alle (24 von 24, 8 von 8). <b>Sichtung:</b> davon erst über die Vollsichtung gefunden, weil das Ranking den Claim verfehlte. <b>abgelehnt:</b> Fragen ohne Antwort im Bestand, mit gültiger Quittung als „Nicht im Bestand" ausgewiesen. <b>Verstöße:</b> Abstention ohne vollständige Quittung, ausgelassene Pflicht-Vollsichtung, erfundener oder übersehener Claim.</p>
+      </div>
+      <p class="lede reveal" style="margin-top:20px;">In der zweiten Runde liefen sechs Sichtungen über drei Stapel. Die Protokolle liegen unter <a href="tests/e2e/LIESMICH.md">tests/e2e/</a>; ihre Siegel gelten für den Stand, an den sie gebunden sind, und lassen sich dort nachrechnen. Was die Messung nicht zeigt: wie sorgfältig ein Modell einen Bestand mit 189 Stapeln liest.</p>
+      <p class="lede reveal" style="margin-top:20px;">Zwei Grenzen gehören dazu. Die Quittung belegt, dass jeder Stapel für genau diesen Stand und diese Frage ausgegeben und beurteilt wurde, nicht wie sorgfältig. Und die Vollsichtung kostet Lesearbeit im Verhältnis zum Bestand: im Demo-Bestand ein Stapel, bei 7.500 Claims 189. Die Zahlen stammen aus einer kleinen, selbst gebauten Stichprobe. Für einen eigenen Bestand misst <code>tools/recall_check.py</code> mit eigenen Fragen nach, und die liegen außerhalb des Skills, sonst misst man nur, ob der Bestand sich selbst wiederfindet. Ob ein Agent dabei dem Verfahren folgt, prüft <code>tools/antwort_check.py</code>. Begründung und Messung stehen in <a href="wissenstresor/KONZEPT.md">KONZEPT.md</a> unter AD-14.</p>
     </div>
   </section>
 
@@ -424,7 +437,7 @@
         <pre>{
   "schema": "skillsafe.query/v1",
   "state": "candidates_found",
-  "retrieval": "hybrid-local/v2",
+  "retrieval": "hybrid-local/v3",
   "coverage": {"match_strength": "strong", "query_terms": {"content": ["okf"], "matched": ["okf"], "partial": [], "unmatched": []}, "semantic_coverage": "not_assessed"},
   "concepts": {"matched": [{"id": "B-0001", "match": "exact", "preferred": "Open Knowledge Format"}]},
   "evidence": [
@@ -528,7 +541,7 @@
 
 <footer>
   <div class="wrap-wide">
-    <span>SkillSafe v0.13.0 · Apache License 2.0 · Motor bleibt stabil, Treibstoff ist flüchtig.</span>
+    <span>SkillSafe v0.14.0 · Apache License 2.0 · Motor bleibt stabil, Treibstoff ist flüchtig.</span>
     <span><a href="README.md">README</a> · <a href="BETRIEB.md">Betrieb</a> · <a href="wissenstresor/KONZEPT.md">Konzept</a> · <a href="wissenstresor/SKILL.md">Skill-Vertrag</a> · <a href="https://godmodeai2025.github.io/MarkZimmermann/" target="_blank" rel="noopener">Impressum</a></span>
   </div>
 </footer>

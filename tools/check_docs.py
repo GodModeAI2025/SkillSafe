@@ -15,6 +15,7 @@ Exit 0, wenn alles übereinstimmt, sonst 1 mit einer Liste der Abweichungen.
 """
 
 import importlib.util
+import json
 import re
 import subprocess
 import tempfile
@@ -27,6 +28,7 @@ SKILL = REPOSITORY / "wissenstresor"
 README = REPOSITORY / "README.md"
 LANDING = REPOSITORY / "index.html"
 RECALL_TOOL = REPOSITORY / "tools" / "recall_check.py"
+E2E_ORDNER = REPOSITORY / "tests" / "e2e"
 # Zeilenbeschriftung der veröffentlichten Messtabelle je Fragengruppe.
 RECALL_ZEILEN = {
     "entwicklung": "Jetzt, eigene Fragen",
@@ -66,6 +68,27 @@ def recall_stand():
             [zeile for zeile in zeilen if zeile["gruppe"] == gruppe])
         werte[gruppe] = (zahl["gesamt"], zahl["treffer"], zahl["pflicht"],
                          zahl["hinweis"], zahl["still"])
+    return werte
+
+
+def e2e_stand():
+    """Die Zahlen der Ende-zu-Ende-Läufe, aus den Protokollen unter tests/e2e/.
+
+    Nachrechnen lassen sie sich nur gegen den Stand, an den ihre Siegel
+    gebunden sind (tests/e2e/LIESMICH.md). Hier wird deshalb nicht neu
+    gemessen, sondern gebunden: Was README und Landingpage nennen, muss dem
+    'ergebnis' entsprechen, das tools/antwort_check.py zum Messzeitpunkt in
+    das Protokoll geschrieben hat.
+    """
+    werte = {}
+    for datei in sorted(E2E_ORDNER.glob("runde-*.json")):
+        daten = json.loads(datei.read_text(encoding="utf-8"))
+        ergebnis = daten["ergebnis"]
+        werte[int(daten["runde"])] = tuple(ergebnis[feld] for feld in (
+            "antworten", "positiv", "positiv_gefunden", "vom_ranking_verfehlt",
+            "davon_gefunden", "negativ", "negativ_korrekt", "verstoesse"))
+    if not werte:
+        raise SystemExit(f"Unter {E2E_ORDNER} liegt kein Protokoll runde-*.json")
     return werte
 
 
@@ -126,6 +149,8 @@ def ist_stand():
     )
     for gruppe, werte in recall_stand().items():
         stand[f"recall_{gruppe}"] = werte
+    for runde, werte in e2e_stand().items():
+        stand[f"e2e_runde_{runde}"] = werte
     return stand
 
 
@@ -201,6 +226,22 @@ def pruefe(stand):
                        f"Messwerte {gruppe!r}", erwartet, "README.md")
         verlange_zeile(landing, "<td>" + re.escape(beschriftung) + "</td>" + zellen,
                        f"Messwerte {gruppe!r}", erwartet, "index.html")
+
+    # Ende-zu-Ende-Läufe. README führt alle acht Zahlen je Runde, die
+    # Landingpage fünf davon: Fragen, gefunden, davon nach verfehltem Ranking,
+    # korrekt abgelehnt, Verstöße. Dort heißt die Zeile nur "Runde n", damit
+    # die Tabelle auf einem Telefon nicht umbricht.
+    acht = (r" \| v[0-9.]+" + r" \| (\d+)" * 7 + r" \| \*\*(\d+)\*\* \|")
+    for schluessel in sorted(key for key in stand if key.startswith("e2e_runde_")):
+        runde = schluessel.rsplit("_", 1)[1]
+        werte = stand[schluessel]
+        beschriftung = f"Ende zu Ende, Runde {runde}"
+        verlange_zeile(readme, r"\| " + re.escape(beschriftung) + acht,
+                       f"Ende-zu-Ende-Runde {runde}", werte, "README.md")
+        verlange_zeile(landing, f"<td>Runde {runde}</td>" + zellen,
+                       f"Ende-zu-Ende-Runde {runde}",
+                       (werte[0], werte[2], werte[4], werte[6], werte[7]),
+                       "index.html")
     return abweichungen
 
 

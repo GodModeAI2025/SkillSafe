@@ -1,0 +1,205 @@
+{
+ "schema": "skillsafe.antwort-protokoll/v1",
+ "hinweis": "Ende-zu-Ende-Messung vom 2026-11-12, Runde 2. Vier frische Agenten, je drei Fragen; die Agenten 3 und 4 mit vorgegebener Stapelgröße 10 (drei Stapel). Jeder Agent bekam nur den entpackten Skill-Ordner und die Fragen im Wortlaut. Die Siegel gelten ausschließlich für den Stand unter 'stand': nachprüfen lässt sich das Protokoll mit tools/antwort_check.py gegen den Tresor dieses Commits (siehe tests/e2e/LIESMICH.md). 'ergebnis' ist die Ausgabe des Werkzeugs zum Messzeitpunkt.",
+ "runde": 2,
+ "agenten": 4,
+ "stand": {
+  "version": "0.13.0",
+  "manifest_sha256": "cf9150766eec9ed98edb06f4c6dfa55cc1600c6c8b32edb219c9f95b9206c30b",
+  "commit": "3896b9f"
+ },
+ "ergebnis": {
+  "antworten": 12,
+  "davon_gefunden": 8,
+  "negativ": 4,
+  "negativ_korrekt": 4,
+  "ohne_verstoss": 12,
+  "pflicht_vollsichtung": 11,
+  "positiv": 8,
+  "positiv_gefunden": 8,
+  "quittungen": 12,
+  "quittungen_gueltig": 12,
+  "verstoesse": 0,
+  "vom_ranking_verfehlt": 8
+ },
+ "antworten": [
+  {
+   "id": "B1F1",
+   "art": "positiv",
+   "frage": "Woran wird ein einzelner Eintrag eindeutig erkannt – bekommt jeder eine eigene Kennnummer?",
+   "erwartet": [
+    "C-0002"
+   ],
+   "sweep_args": [],
+   "quittung": [
+    "1:b0ef4424f0065429=C-0001,C-0002,C-0301,C-0302,C-0309,C-0310"
+   ],
+   "antwort": "Am Dateipfad – eine eigene Kennnummer nennt der Bestand dafür nicht. Dem „Eintrag“ entspricht im Bestand am ehesten das Konzept im Open Knowledge Format (OKF): Für OKF v0.1 hält er fest, dass jede Datei genau ein Konzept beschreibt (C-0001) und dass der Dateipfad die Identität des Konzepts ist (C-0002). Die maßgebliche Fassung OKF v0.2 behält die Grundform – ein Verzeichnisbaum von Markdown-Dateien mit YAML-Frontmatter – und kennt `type` als einziges stets erforderliches Feld (C-0301); eine Kennnummer ist dort also jedenfalls kein Pflichtfeld.\n\nEine Kennung kommt im Bestand bei Quellenangaben vor: Ein Eintrag der v0.2-Liste `sources` hat das Pflichtfeld `resource`, `id` ist dort nur eine optionale Angabe (C-0302). Im Profil dieses Tresors ist das gleichnamige Feld dagegen eine flache Liste registrierter S-IDs (C-0310, eigene Einordnung).\n\nBelege:\n- C-0002 (S-0001, Abschnitt \"How it works\", Wortlaut) — Stand 2026-07-28, Seite zu v0.1 mit Status veraltet\n- C-0001 (S-0001, Abschnitt \"How it works\", Wortlaut) — Stand 2026-07-28, Seite zu v0.1 mit Status veraltet\n- C-0301 (S-0004, §3, §4, §4.1 und §11, Wortlaut) — Stand 2026-07-28\n- C-0302 (S-0004, §5.1, Wortlaut) — Stand 2026-07-28\n- C-0309 (S-0004, §12, §13 und §13.1, Wortlaut) — Stand 2026-07-28\n- C-0310 (S-0004, §5 und §13.2, Auslegung) — Stand 2026-07-28, eigene Einordnung\n\nStand: 2026-07-28; Konfidenz: hoch\nHinweise: Die Aussage zur Identität (C-0001, C-0002) steht auf der Seite „Open Knowledge Format (OKF)“ zur Fassung v0.1, die im Bestand als veraltet geführt wird. Maßgeblich ist die Nachfolgeseite „Open Knowledge Format v0.2“, die sie ersetzt: v0.2 löst v0.1 ab und benennt ausdrücklich zwei Bruchstellen, `timestamp` → `generated.at` und „# Citations“ → `sources` (C-0309); die Identität gehört nicht dazu. Einen eigenen Claim zur Identität enthält die v0.2-Seite nicht; laut Kontextabschnitt der überholten Seite bleiben C-0001 bis C-0005 gültig und werden von v0.2 inhaltlich bestätigt. Beide Seiten sind von niemandem gegengeprüft (Trust-Tier unverified); die Konfidenz „hoch“ ist damit eine Kuratierungsentscheidung ohne Gegenprüfung. Für die Pflege: Unter der Wortwahl der Frage lieferte das Ranking C-0002 nicht, gefunden hat ihn erst die Vollsichtung – dem Bestand fehlt dafür ein Alias.\nNicht im Bestand: ob ein Konzept zusätzlich eine eigene Kennnummer erhält – der Bestand nennt als Identität den Dateipfad, enthält aber keine Aussage zu einer Kennnummer je Konzept. Sollte mit „Eintrag“ ein Eintrag dieses Tresors selbst gemeint sein (Seite oder Claim): Dazu, wie der Tresor sie kennzeichnet, liegt kein Claim vor.\nSichtung: 28 von 28 Claims, Quittung 3df8788aba9d"
+  },
+  {
+   "id": "B1F2",
+   "art": "positiv",
+   "frage": "Stockflecken an den Wänden zu Hause – monatliche Zahlung kürzen erlaubt?",
+   "erwartet": [
+    "C-0401"
+   ],
+   "sweep_args": [],
+   "quittung": [
+    "1:c8f70a2ebf96d404=C-0401,C-0402"
+   ],
+   "antwort": "Gelesen als Frage nach einer Mietminderung wegen Schimmels in der Wohnung: Laut Bestand ja, sofern der Befall erheblich ist. Nach dem Beispielhandbuch X-0001 – einer unbestätigten Quelle mit Trust T3, keine Rechtsauskunft – ist erheblicher Schimmelbefall in Wohnräumen ein Mangel, der zur Mietminderung berechtigt (C-0401). Der Mangel ist dem Vermieter unverzüglich anzuzeigen (C-0402).\n\nBelege:\n- C-0401 (X-0001, A-0004, Wortlaut) — Stand 2026-08-06, externe Bezugsquelle\n- C-0402 (X-0001, A-0007, Wortlaut) — Stand 2026-08-06, externe Bezugsquelle\n\nStand: 2026-08-06; Konfidenz: mittel\nHinweise: „Stockflecken“ und „monatliche Zahlung kürzen“ stehen in keinem Claim; ich habe sie als Schimmelbefall und Mietminderung gelesen. Die Quelle X-0001 ist laut Seite ein erfundenes Beispielhandbuch; Geltungsbereich der Seite ist die Demonstration satzweiser externer Belege, nicht das Mietrecht. Der Wortlaut beider Sätze steht in der externen Quelle, nicht im Tresor, und die Seite ist von niemandem gegengeprüft (Trust-Tier unverified). Für die Pflege: Das Ranking fand unter dieser Wortwahl nichts, gefunden hat die Claims erst die Vollsichtung – dem Bestand fehlt dafür ein Alias.\nNicht im Bestand: ab wann Schimmelbefall „erheblich“ ist und ob Stockflecken diese Schwelle erreichen.\nSichtung: 28 von 28 Claims, Quittung c8529915c684"
+  },
+  {
+   "id": "B1F3",
+   "art": "negativ",
+   "frage": "Um wie viel Prozent darf die Miete bei Schimmelbefall gemindert werden?",
+   "erwartet": [],
+   "sweep_args": [],
+   "quittung": [
+    "1:4fcb5428815b1626=C-0401,C-0402"
+   ],
+   "antwort": "Einen Prozentsatz nennt der Bestand nicht. Gedeckt ist nur das Ob: Nach dem Beispielhandbuch X-0001 – einer unbestätigten Quelle mit Trust T3, keine Rechtsauskunft – ist erheblicher Schimmelbefall in Wohnräumen ein Mangel, der zur Mietminderung berechtigt (C-0401); der Mangel ist dem Vermieter unverzüglich anzuzeigen (C-0402).\n\nBelege:\n- C-0401 (X-0001, A-0004, Wortlaut) — Stand 2026-08-06, externe Bezugsquelle\n- C-0402 (X-0001, A-0007, Wortlaut) — Stand 2026-08-06, externe Bezugsquelle\n\nStand: 2026-08-06; Konfidenz: mittel\nHinweise: Die Quelle X-0001 ist laut Seite ein erfundenes Beispielhandbuch; Geltungsbereich der Seite ist die Demonstration satzweiser externer Belege, nicht das Mietrecht. Der Wortlaut beider Sätze steht in der externen Quelle, nicht im Tresor, und die Seite ist von niemandem gegengeprüft (Trust-Tier unverified).\nNicht im Bestand: um wie viel Prozent oder in welcher Höhe die Miete bei Schimmelbefall gemindert werden darf. Der Bestand sagt, dass erheblicher Schimmelbefall zur Mietminderung berechtigt, enthält aber keine Angabe zur Höhe; eine Zahl aus Allgemeinwissen ergänze ich nicht.\nSichtung: 28 von 28 Claims, Quittung 80d71a978115\n\nSoll ich eine Quelle dazu aufnehmen? Auf Wunsch versuche ich vorher ein Nachschlagen in den aufgeführten externen Bezugsquellen; ein Treffer dort wäre ein benannter Hinweis, kein Beleg aus dem Bestand."
+  },
+  {
+   "id": "B2F1",
+   "art": "positiv",
+   "frage": "Wie führe ich das Änderungsprotokoll so, dass ich es per Kommandozeile nach einem bestimmten Tag durchsuchen kann?",
+   "erwartet": [
+    "C-0102"
+   ],
+   "sweep_args": [],
+   "quittung": [
+    "1:fb7b2cc09f1dc47a=C-0003,C-0102"
+   ],
+   "antwort": "Führe das Protokoll chronologisch und stelle jedem Eintrag sein Datum als Präfix voran. Laut S-0002 (unbestätigte Webquelle, Trust T3) erhält das Log im LLM-Wiki-Muster genau solche Einträge: chronologisch und über das Datums-Präfix grep-bar (C-0102). Die Einträge eines bestimmten Tages findest du dann auf der Kommandozeile, indem du mit grep nach dem Datums-Präfix dieses Tages suchst; „Tag“ lese ich dabei als Kalendertag. Als Ort dafür sieht OKF (beschrieben für v0.1) eine log.md-Datei für die chronologische Änderungshistorie vor, als optionalen Bestandteil eines Bundles (C-0003).\n\nBelege:\n- C-0102 (S-0002, Gist-Text, Wortlaut) — Stand 2026-07-04\n- C-0003 (S-0001, Abschnitt „How it works“, Wortlaut) — Stand 2026-07-28\n\nStand: 2026-07-04; Konfidenz: mittel\nHinweise: C-0003 steht auf der Seite okf.md, die OKF v0.1 beschreibt und den Status „veraltet“ trägt. Maßgeblich ist die Nachfolgeseite okf-v02.md (OKF v0.2), die sie ersetzt; sie enthält zum Protokoll keinen eigenen Claim, und laut Kontextabschnitt von okf.md bleiben C-0001 bis C-0005 gültig. Keine der genutzten Seiten ist von einem Menschen gegengeprüft (Trust-Tier unverified); bei okf.md und okf-v02.md steht die Konfidenz „hoch“ also ohne Gegenprüfung.\nNicht im Bestand: das genaue Format des Datums-Präfixes und damit ein fertig ausgeschriebener Suchbefehl (der Bestand nennt nur das Prinzip); außerdem eine Regel für Schlagwörter im Protokoll, falls mit „Tag“ ein Schlagwort gemeint war.\nSichtung: 28 von 28 Claims, Quittung 1c29b624e91b\n\nSoll ich prüfen, ob die Quelle S-0002 das genaue Format hergibt, und es dann als Claim aufnehmen?"
+  },
+  {
+   "id": "B2F2",
+   "art": "negativ",
+   "frage": "Wann erscheint OKF v1.0?",
+   "erwartet": [],
+   "sweep_args": [],
+   "quittung": [
+    "1:4cce6ff36a23b43e=C-0004,C-0309"
+   ],
+   "antwort": "Nicht im Bestand. Der Tresor enthält keine Aussage dazu, wann (oder ob) eine Version 1.0 von OKF erscheint; einen Termin kann ich deshalb nicht nennen.\n\nWas der Bestand zum Versionsstand sagt: Google bezeichnet OKF v0.1 als Ausgangspunkt und nicht als fertigen Standard (C-0004). v0.2 löst v0.1 ab und ist nach der Regel major.minor ein Minor-Sprung (C-0309). Von einer Version 1.0, einem Fahrplan oder einem Termin ist in keinem Claim die Rede.\n\nBelege:\n- C-0004 (S-0001, Einleitung und Abschluss, Wortlaut) — Stand 2026-07-28\n- C-0309 (S-0004, §12, §13 und §13.1, Wortlaut) — Stand 2026-07-28\n\nStand: 2026-07-28; Konfidenz: hoch\nHinweise: C-0004 steht auf der Seite okf.md, die OKF v0.1 beschreibt und den Status „veraltet“ trägt; maßgeblich ist die Nachfolgeseite okf-v02.md (OKF v0.2), die sie ersetzt und von der C-0309 stammt. Beide Seiten tragen Konfidenz „hoch“, sind aber von niemandem gegengeprüft (Trust-Tier unverified). Den optionalen Live-Abgleich mit den aufgeführten externen Bezugsquellen habe ich nicht ausgeführt (kein Netzzugang); er würde „Nicht im Bestand“ ohnehin nicht ersetzen.\nNicht im Bestand: der Erscheinungstermin von OKF v1.0 und ob eine solche Version überhaupt geplant ist.\nSichtung: 28 von 28 Claims, Quittung 78e731d5cda3\n\nSoll ich eine Quelle dazu aufnehmen?"
+  },
+  {
+   "id": "B2F3",
+   "art": "positiv",
+   "frage": "Muss jedes Paket eine Übersichtsseite und ein Verlaufsprotokoll mitbringen, oder kann man beides weglassen?",
+   "erwartet": [
+    "C-0003"
+   ],
+   "sweep_args": [],
+   "quittung": [
+    "1:c53b3c78bd9df645=C-0003,C-0301"
+   ],
+   "antwort": "Nein, beides darf fehlen. Ich lese „Paket“ als Bundle, „Übersichtsseite“ als index.md und „Verlaufsprotokoll“ als log.md: Beide Dateien sind als optionale Bestandteile eines Bundles vorgesehen, index.md für die progressive Offenlegung beim Navigieren, log.md für die chronologische Änderungshistorie (C-0003, beschrieben für OKF v0.1). Nach der maßgeblichen Fassung v0.2 ist ein Bundle konform, wenn jede nicht reservierte .md-Datei einen parsebaren Frontmatter-Block mit nicht leerem `type` enthält (C-0301); eine Übersichts- oder Protokolldatei nennt diese Bedingung nicht.\n\nBelege:\n- C-0003 (S-0001, Abschnitt „How it works“, Wortlaut) — Stand 2026-07-28\n- C-0301 (S-0004, §3, §4, §4.1 und §11, Wortlaut) — Stand 2026-07-28\n\nStand: 2026-07-28; Konfidenz: hoch\nHinweise: C-0003 steht auf der Seite okf.md, die OKF v0.1 beschreibt und den Status „veraltet“ trägt; maßgeblich ist die Nachfolgeseite okf-v02.md (OKF v0.2), die sie ersetzt. Die v0.2-Seite wiederholt die Aussage zu index.md und log.md nicht eigens; laut Kontextabschnitt von okf.md bleiben C-0001 bis C-0005 gültig und werden von v0.2 inhaltlich bestätigt. Beide Seiten tragen Konfidenz „hoch“, sind aber von niemandem gegengeprüft (Trust-Tier unverified).\nSichtung: 28 von 28 Claims, Quittung 750b28b1b564"
+  },
+  {
+   "id": "B3F1",
+   "art": "negativ",
+   "frage": "Welches Zeitformat ist für generated.at vorgeschrieben?",
+   "erwartet": [],
+   "sweep_args": [
+    "--size",
+    "10"
+   ],
+   "quittung": [
+    "1:792a4a3e2e74b45b=-",
+    "2:c6732af8ee31210a=C-0304,C-0306,C-0309",
+    "3:46765590a429d400=-"
+   ],
+   "antwort": "Der Bestand kennt das Feld `generated.at`, legt aber kein Zeitformat dafür fest. Belegt ist nur das Feld selbst: In OKF v0.2 hält `generated` mit `by` und `at` fest, wer den aktuellen Inhalt erzeugt hat (C-0304), und `generated.at` tritt an die Stelle des v0.1-Feldes `timestamp`; das ist eine der beiden ausdrücklich benannten Bruchstellen von v0.2 (C-0309).\n\nBelege:\n- C-0304 (S-0004, §5.2 und §7, Wortlaut) — Stand 2026-07-28\n- C-0309 (S-0004, §12, §13 und §13.1, Wortlaut) — Stand 2026-07-28\n- C-0306 (S-0004, §5.4 und §5.5, Wortlaut) — Stand 2026-07-28\n\nStand: 2026-07-28; Konfidenz: hoch\nHinweise: Das einzige Datumsformat, das der Bestand nennt, ist JJJJ-MM-TT, und es gilt für `stale_after` (C-0306), nicht für `generated.at`; eine Übertragung auf `generated.at` deckt kein Claim. Die genutzte Seite ist von niemandem gegengeprüft (Signal `trust_tier:unverified`); die Konfidenz „hoch“ ist deshalb eine Kuratierungsentscheidung ohne Gegenprüfung. Maßgeblich ist die Seite zu OKF v0.2 (okf-v02.md); die Vorgängerfassung zu v0.1 (okf.md) bleibt mit Status „veraltet“ im Bestand.\nNicht im Bestand: das für `generated.at` vorgeschriebene Zeitformat. Die Claims zu `generated` stammen aus S-0004 (§5.2 und §7); falls die Spezifikation dort ein Format festlegt, müsste es über den Befüllen-Workflow als Claim nachgetragen werden. Soll ich das anstoßen?\nSichtung: 28 von 28 Claims, Quittung 71a40d343587"
+  },
+  {
+   "id": "B3F2",
+   "art": "positiv",
+   "frage": "Welche Hilfsseiten erlauben es, sich schrittweise vom Groben ins Feine vorzuarbeiten und nachzuvollziehen, was sich im Lauf der Zeit getan hat?",
+   "erwartet": [
+    "C-0003"
+   ],
+   "sweep_args": [
+    "--size",
+    "10"
+   ],
+   "quittung": [
+    "1:c79553067a8d284e=C-0102,C-0104",
+    "2:72d9fba7f75114c3=C-0309",
+    "3:ca67517e502a106c=C-0003,C-0004"
+   ],
+   "antwort": "Der Bestand nennt dafür zwei Arten von Hilfsseiten eines OKF-Bundles: `index.md`-Dateien für die progressive Offenlegung beim Navigieren, also das schrittweise Vorarbeiten vom Groben ins Feine, und `log.md`-Dateien für die chronologische Änderungshistorie. Beide sind als optionale Bestandteile eines Bundles vorgesehen (C-0003). Die Aussage steht auf der Seite zu OKF v0.1, die im Bestand als überholt geführt wird (siehe Hinweise).\n\nErgänzend aus dem LLM-Wiki-Muster, das OKF v0.1 formalisiert (C-0004): Laut S-0002, einer unbestätigten Webquelle, erhält das Log dort chronologische, mit Datums-Präfix grep-bare Einträge (C-0102). Für diesen Tresor nennt der Bestand außerdem als eigene Einordnung die Map-first-Regel, nach der Relevanz über die Map entschieden wird und nie durch Lesen von Seitenkörpern (C-0104); welche Datei mit „Map“ gemeint ist, sagt die Seite nicht.\n\nBelege:\n- C-0003 (S-0001, Abschnitt \"How it works\", Wortlaut) — Stand 2026-07-28\n- C-0004 (S-0001, Einleitung und Abschluss, Wortlaut) — Stand 2026-07-28\n- C-0102 (S-0002, Gist-Text, Wortlaut) — Stand 2026-07-04\n- C-0104 (S-0002, Kommentarbereich, Auslegung) — Stand 2026-07-04, eigene Einordnung\n- C-0309 (S-0004, §12, §13 und §13.1, Wortlaut) — Stand 2026-07-28\n\nStand: 2026-07-04; Konfidenz: mittel\nHinweise: C-0003 und C-0004 stehen auf der Seite okf.md, die OKF v0.1 beschreibt und den Status „veraltet“ trägt. Maßgeblich ist die neuere Fassung okf-v02.md, denn OKF v0.2 löst v0.1 ab (C-0309). Laut „Kontext und Grenzen“ der v0.1-Seite bleiben ihre Claims gültig und werden von v0.2 inhaltlich bestätigt; die v0.2-Seite selbst nennt `index.md` und `log.md` nicht ausdrücklich. Der ältere Stand und die Konfidenz „mittel“ stammen von der Seite zum LLM-Wiki-Muster (Quelle S-0002, Trust T3) und betreffen nur die Ergänzung; die Kernaussage C-0003 steht auf einer Seite mit Konfidenz „hoch“. Keine der drei genutzten Seiten ist gegengeprüft (Signal `trust_tier:unverified`); die Konfidenz „hoch“ der beiden OKF-Seiten ist deshalb eine Kuratierungsentscheidung ohne Gegenprüfung. Pflegehinweis: Gefunden hat C-0003 die Vollsichtung, nicht das Ranking; für diese Wortwahl fehlt dem Bestand ein Alias oder Tag.\nSichtung: 28 von 28 Claims, Quittung a49d9f7f1cb2"
+  },
+  {
+   "id": "B3F3",
+   "art": "positiv",
+   "frage": "Schreibweise für Urheber: Mensch, Sprachmodell oder Skript unterscheiden?",
+   "erwartet": [
+    "C-0304"
+   ],
+   "sweep_args": [
+    "--size",
+    "10"
+   ],
+   "quittung": [
+    "1:22b785e7f7d3e503=-",
+    "2:5922fd7fa27c892a=C-0304,C-0305",
+    "3:fbc5a7074f979f95=-"
+   ],
+   "antwort": "Ja. OKF v0.2 unterscheidet die drei Fälle über eine gemeinsame Aktorkonvention (C-0304):\n- Agenten, hier gelesen als der Fall „Sprachmodell“: `<producer>/<version>`\n- Personen, also der Fall „Mensch“: `human:<id>`\n- automatisierte Prozesse, hier gelesen als der Fall „Skript“: `process:<id>`\n\nWer den aktuellen Inhalt erzeugt hat (der Urheber im Sinn der Frage), hält `generated` mit `by` und `at` fest; dieselbe Schreibweise gilt für `verified`, eine Liste von `by`- und `at`-Einträgen für unabhängige Bestätigungen (C-0304). Bei den Bestätigungen wirkt die Unterscheidung weiter: Fehlt `verified`, gilt das Trust-Tier unverified; bestätigen nur Akteure ohne `human:`-Präfix, gilt machine-confirmed; bestätigt mindestens ein `human:`-Akteur, gilt human-reviewed. Die Tiers sind beratende Signale und keine Zugriffskontrolle (C-0305).\n\nBelege:\n- C-0304 (S-0004, §5.2 und §7, Wortlaut) — Stand 2026-07-28\n- C-0305 (S-0004, §5.3, Wortlaut) — Stand 2026-07-28\n\nStand: 2026-07-28; Konfidenz: hoch\nHinweise: Der Bestand spricht von „Agenten“, „Personen“ und „automatisierten Prozessen“; die Zuordnung von „Sprachmodell“ zu Agenten und von „Skript“ zu automatisierten Prozessen ist eine Lesart der Frage, kein Wortlaut des Bestands. Die genutzte Tresorseite ist von niemandem gegengeprüft (Signal `trust_tier:unverified`); die Konfidenz „hoch“ ist deshalb eine Kuratierungsentscheidung ohne Gegenprüfung. Maßgeblich ist die Seite zu OKF v0.2 (okf-v02.md); die Vorgängerfassung zu v0.1 (okf.md) bleibt mit Status „veraltet“ im Bestand. Pflegehinweis: Gefunden hat C-0304 die Vollsichtung, nicht das Ranking; für diese Wortwahl fehlt dem Bestand ein Alias oder Tag.\nSichtung: 28 von 28 Claims, Quittung bfa0a5659a98"
+  },
+  {
+   "id": "B4F1",
+   "art": "positiv",
+   "frage": "Genügt das schlanke Grundformat allein, wenn jede Behauptung durch Belege abgesichert sein muss?",
+   "erwartet": [
+    "C-0005"
+   ],
+   "sweep_args": [
+    "--size",
+    "10"
+   ],
+   "quittung": [
+    "1:ba78649391d9ffe9=-",
+    "2:e8b0d1a064983e33=C-0301,C-0302,C-0309,C-0310",
+    "3:10016fea2f4dbf9b=C-0004,C-0005"
+   ],
+   "antwort": "Nein. Nach dem Bestand genügt das schlanke Grundformat – gemeint ist das Open Knowledge Format (OKF) – dafür allein nicht: Weil die Spezifikation bewusst minimal ist, benötigt ein evidenzgebundener Wissenstresor ein strengeres Profil oberhalb von OKF; dieses Bundle definiert dafür das Profil oksv-lite, siehe schema/profil.md (C-0005 – eigene Einordnung des Bestands, kein Quellenwortlaut). Google selbst bezeichnet OKF v0.1 als Ausgangspunkt und nicht als fertigen Standard (C-0004).\n\nMaßgeblich ist die aktuelle Fassung v0.2, die v0.1 ablöst (C-0309). Sie behält die schlanke Grundform: `type` bleibt das einzige stets erforderliche Feld (C-0301). Belege sieht v0.2 als Provenienz im Frontmatter-Feld `sources` vor, einer Liste von Einträgen mit dem Pflichtfeld `resource` (C-0302); das Feld ersetzt die frühere Rumpfliste `# Citations` (C-0309), gehört aber nicht zu den stets erforderlichen Feldern (C-0301). OKF v0.2 regelt Provenienz, Vertrauen und Lebenszyklus damit jetzt selbst, jedoch in anderer Gestalt als das hiesige Profil (C-0310 – eigene Einordnung).\n\nBelege:\n- C-0005 (S-0001, Gesamtdokument, Auslegung) — eigene Einordnung, Stand 2026-07-28, Seite überholt (v0.1)\n- C-0004 (S-0001, Einleitung und Abschluss, Wortlaut) — Stand 2026-07-28, Seite überholt (v0.1)\n- C-0301 (S-0004, §3, §4, §4.1 und §11, Wortlaut) — Stand 2026-07-28\n- C-0302 (S-0004, §5.1, Wortlaut) — Stand 2026-07-28\n- C-0309 (S-0004, §12, §13 und §13.1, Wortlaut) — Stand 2026-07-28\n- C-0310 (S-0004, §5 und §13.2, Auslegung) — eigene Einordnung, Stand 2026-07-28\n\nStand: 2026-07-28; Konfidenz: hoch\nHinweise: Veraltete Fassung existiert: C-0004 und C-0005 stehen auf der Seite „Open Knowledge Format (OKF)\" (v0.1, Status veraltet); maßgeblich ist die Nachfolgeseite „Open Knowledge Format v0.2\", die sie ersetzt. Laut der überholten Seite bleiben ihre Claims gültig und werden von v0.2 inhaltlich bestätigt. Die Aussage zum strengeren Profil trägt allein C-0005; sie ist eine Einordnung des Bestands, kein Wortlaut der Spezifikation. Beide Seiten sind trotz Konfidenz „hoch\" von niemandem gegengeprüft (Trust-Tier unverified). Pflegehinweis: Das Ranking hat die Wortwahl der Frage nicht erkannt (Trefferstärke weak); gefunden hat C-0005 die Vollsichtung, dem Bestand fehlt dafür ein Alias oder Tag.\nSichtung: 28 von 28 Claims, Quittung a070adb5e266"
+  },
+  {
+   "id": "B4F2",
+   "art": "positiv",
+   "frage": "Können Programme ältere Schriftstücke mit der früheren Zeitmarke und dem Belegverzeichnis im Fließtext noch verarbeiten?",
+   "erwartet": [
+    "C-0309"
+   ],
+   "sweep_args": [
+    "--size",
+    "10"
+   ],
+   "quittung": [
+    "1:8352a25e2ca35109=-",
+    "2:a652c2344b971456=C-0302,C-0304,C-0309",
+    "3:a50e6220d71dc08d=-"
+   ],
+   "antwort": "Ja, nach dem Bestand ist das zulässig: Konsumenten – das sind die „Programme\" der Frage – dürfen beide Altformen für v0.1-Dokumente weiterhin als Rückfall lesen (C-0309). Gemeint sind die zwei ausdrücklich benannten Bruchstellen beim Wechsel von OKF v0.1 auf v0.2: Die frühere Zeitmarke `timestamp` wird durch `generated.at` ersetzt, das Belegverzeichnis im Fließtext – die Rumpfliste `# Citations` – durch das Frontmatter-Feld `sources` (C-0309).\n\nZur Einordnung der neuen Formen: `generated` mit `by` und `at` hält fest, wer den aktuellen Inhalt erzeugt hat (C-0304); die Provenienz liegt im Frontmatter-Feld `sources`, einer Liste von Einträgen mit dem Pflichtfeld `resource` (C-0302). Der Bestand formuliert den Rückfall als Erlaubnis für Konsumenten („dürfen\") und bezieht ihn auf v0.1-Dokumente.\n\nBelege:\n- C-0309 (S-0004, §12, §13 und §13.1, Wortlaut) — Stand 2026-07-28\n- C-0304 (S-0004, §5.2 und §7, Wortlaut) — Stand 2026-07-28\n- C-0302 (S-0004, §5.1, Wortlaut) — Stand 2026-07-28\n\nStand: 2026-07-28; Konfidenz: hoch\nHinweise: Genutzt ist die aktuelle Seite „Open Knowledge Format v0.2\"; die von ihr ersetzte Vorgängerseite zu v0.1 bleibt mit Status „veraltet\" im Bestand. Die Seite ist trotz Konfidenz „hoch\" von niemandem gegengeprüft (Trust-Tier unverified). Pflegehinweis: Das Ranking hat die Wortwahl der Frage nicht erkannt (Trefferstärke weak); gefunden hat C-0309 die Vollsichtung, dem Bestand fehlt dafür ein Alias oder Tag.\nSichtung: 28 von 28 Claims, Quittung 4c84142d5bc4"
+  },
+  {
+   "id": "B4F3",
+   "art": "negativ",
+   "frage": "Wer haftet, wenn eine freigegebene Rechenvorschrift ein falsches Ergebnis liefert?",
+   "erwartet": [],
+   "sweep_args": [
+    "--size",
+    "10"
+   ],
+   "quittung": [
+    "1:f9c6beef8879de86=-",
+    "2:09c3974e7e72ab3a=C-0307,C-0308",
+    "3:012d52354778653f=-"
+   ],
+   "antwort": "Nicht im Bestand. Der Tresor enthält keine Aussage dazu, wer haftet, wenn eine freigegebene Rechenvorschrift ein falsches Ergebnis liefert.\n\nIm Bestand steht nur der Gegenstand selbst, ohne Haftungsregel: Der „freigegebenen Rechenvorschrift\" entspricht dort die sanktionierte Berechnung des OKF-v0.2-Typs Attested Computation. Der Typ macht sie zu einem eigenen Konzept, unter anderem mit `executor` samt Laufanweisung und deklarierten `receipt`-Feldern sowie `attester` als deterministischem Prüfcode ohne LLM; OKF legt die Schnittstelle fest und führt selbst nichts aus (C-0307). Ein Agent darf ausschließlich Werte für die deklarierten `parameters` liefern und die Berechnung weder verfassen noch ändern; `verified` bestätigt dokumentweise, dass die Definition weiterhin zur Richtlinie passt, während die Attestierung einen einzelnen Lauf zur Laufzeit prüft und nicht im Bundle gespeichert wird (C-0308). Wer für ein falsches Ergebnis haftet, sagt keiner dieser Claims.\n\nBelege:\n- C-0307 (S-0004, §10.1 und §10.2, Wortlaut) — Stand 2026-07-28\n- C-0308 (S-0004, §10.3 und §10.6, Wortlaut) — Stand 2026-07-28\n\nStand: 2026-07-28; Konfidenz: hoch\nHinweise: Die Belege beschreiben nur den Gegenstand, nicht die Haftung. Die genutzte Seite „Open Knowledge Format v0.2\" ist trotz Konfidenz „hoch\" von niemandem gegengeprüft (Trust-Tier unverified); die von ihr ersetzte Vorgängerseite zu v0.1 bleibt mit Status „veraltet\" im Bestand. Pflegehinweis: Für die Wortwahl „freigegebene Rechenvorschrift\" fehlt dem Bestand ein Alias oder Tag; das Ranking lieferte keinen Kandidaten, gefunden hat die Claims die Vollsichtung.\nNicht im Bestand: Wer haftet, wenn eine freigegebene Rechenvorschrift (sanktionierte Berechnung) ein falsches Ergebnis liefert.\nSichtung: 28 von 28 Claims, Quittung a93ca74bb9ae\n\nAus Modellwissen ergänze ich das nicht (geschlossene Welt). Soll ich eine Quelle dazu aufnehmen? Die im Tresor aufgeführten externen Bezugsquellen habe ich nicht nachgeschlagen."
+  }
+ ]
+}

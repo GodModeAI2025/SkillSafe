@@ -190,6 +190,60 @@ class WortformTests(VaultCase):
             with self.subTest(links=links, rechts=rechts):
                 self.assertNotEqual(self.stamm(links), self.stamm(rechts))
 
+    def test_indexed_variants_equal_the_full_scan(self):
+        """Die Verzeichnisse für Stamm, Kopf und Schwanz sind nur schneller.
+
+        Bis v0.13.0 prüfte jede Abfrage je Fragebegriff das ganze Vokabular;
+        200 Begriffe gegen 70.000 Tokens brauchten rund zehn Sekunden. Die
+        Verzeichnis-Fassung muss dieselben Mengen liefern wie der Vollscan,
+        der hier als Referenz noch einmal ausgeschrieben steht.
+        """
+        engine = self.engine
+
+        def vollscan(begriffe, vokabular):
+            staemme = {token: engine._wortstamm(token) for token in vokabular}
+            ergebnis = {}
+            for begriff in begriffe:
+                stamm = engine._wortstamm(begriff)
+                formen = {begriff, stamm}
+                gleiche, teile = set(), set()
+                for token, token_stamm in staemme.items():
+                    if token == begriff:
+                        continue
+                    if token_stamm == stamm:
+                        gleiche.add(token)
+                        continue
+                    token_formen = {token, token_stamm}
+                    if (engine._kompositum_teil(formen, token_formen)
+                            or engine._kompositum_teil(token_formen, formen)):
+                        teile.add(token)
+                ergebnis[begriff] = (gleiche, teile)
+            return ergebnis
+
+        snapshot, fehler = engine._load_released_query_snapshot("x")
+        self.assertIsNone(fehler)
+        vokabular = set()
+        for page in snapshot["pages"].values():
+            vokabular |= set(engine._inhaltstokens(page["fm"].get("title", "")))
+            for claim in page["claims"]:
+                vokabular |= set(engine._inhaltstokens(
+                    f"{claim['text']} {claim['fundstelle']}"))
+        silben = ["miet", "minder", "ung", "schimmel", "befall", "nach",
+                  "weis", "wissen", "tresor", "stufe", "en", "er", "e", "s",
+                  "ae", "ue", "neu", "foerd", "ford", "seite", "sicher"]
+        kunst = {a + b + c for a in silben for b in silben
+                 for c in ("", "en", "ung")}
+        begriffe = sorted(vokabular)[::3] + sorted(kunst)[::7] + [
+            "miete", "waende", "wand", "it", "ab", "himmel", "nachweis"]
+        for menge in (vokabular, kunst, vokabular | kunst):
+            erwartet = vollscan(begriffe, menge)
+            self.assertEqual(
+                engine._wortform_varianten(begriffe, [menge]), erwartet)
+        mit_teil = sum(1 for _, teile in erwartet.values() if teile)
+        mit_stamm = sum(1 for gleiche, _ in erwartet.values() if gleiche)
+        self.assertGreater(mit_teil, 50)
+        self.assertGreater(mit_stamm, 50)
+
     def test_compound_parts_match_only_at_word_boundaries(self):
         kompositum = self.engine._kompositum
         self.assertTrue(kompositum("miete", "mietminderung"))
@@ -470,6 +524,206 @@ class QuerySignalTests(VaultCase):
         self.assertEqual(payload["coverage"]["match_strength"], "strong")
         self.assertEqual(payload["evidence"][0]["claim_id"], "C-0001")
 
+    def test_an_unknown_id_stays_an_unmatched_word(self):
+        """Eine vertippte ID verschwand bis v2 spurlos aus der Frage.
+
+        Übrig blieb ein Allerweltswort, das irgendwo traf, und das Ergebnis
+        hieß 'strong': jedes Wort wiedererkannt.
+        """
+        faelle = [("Was steht in C-9999?", "9999"),
+                  ("Was steht laut S-9999?", "9999"),
+                  ("Was steht zu B-9999?", "9999")]
+        for frage, rest in faelle:
+            with self.subTest(frage=frage):
+                _, payload = self.query(frage)
+                begriffe = payload["coverage"]["query_terms"]
+                self.assertIn(rest, begriffe["content"])
+                self.assertIn(rest, begriffe["unmatched"])
+                self.assertNotEqual(
+                    payload["coverage"]["match_strength"], "strong")
+                self.assertTrue(
+                    payload["fallback"]["exhaustive_review_required"])
+        # Eine vorhandene ID bleibt, was sie war: ein Anker, kein Wort.
+        _, bekannt = self.query("Was steht in C-0001?")
+        self.assertEqual(
+            bekannt["coverage"]["query_terms"]["content"], ["steht"])
+        self.assertEqual(bekannt["evidence"][0]["claim_id"], "C-0001")
+        # Eine B-ID der gewählten Welt bleibt ebenfalls ein Anker.
+        _, welt = self.query("B-0001", "--world", "BW-0001")
+        self.assertEqual(welt["coverage"]["query_terms"]["content"], [])
+
+    def test_second_concept_is_never_dropped_behind_a_strong_label(self):
+        """Zwei kuratierte Begriffe in einer Frage.
+
+        Bis v2 füllte die Seite des einen das Limit mit Kontext-Claims, die
+        Seite des anderen fehlte samt Definitions-Claim, und weil eine
+        getroffene Benennung pauschal als verstanden galt, hieß das Ergebnis
+        'strong' mit 100 Prozent. Gefunden hat das der Review, nicht das Gold:
+        Dort erreichen nur zwei von 84 Fragen überhaupt 'strong'.
+        """
+        _, payload = self.query("Ontologie und Provenienz")
+        belege = [item["claim_id"] for item in payload["evidence"]]
+        seiten = [page["path"] for page in payload["pages"]]
+        self.assertIn("C-0201", belege)   # Definition von B-0004
+        self.assertIn("C-0302", belege)   # Definition von B-0007
+        self.assertIn("knowledge/demo-okf/ontologie-strategie.md", seiten)
+        self.assertIn("knowledge/demo-okf/okf-v02.md", seiten)
+        self.assertEqual(payload["coverage"]["match_strength"], "strong")
+
+        # Als Reihe über alle Paare von Vorzugsbenennungen: 'strong' gibt es
+        # nur, wenn jeder getroffene Begriff in der Ausgabe vertreten ist.
+        engine = load_engine(self.root)
+        snapshot, fehler = engine._load_released_query_snapshot("x")
+        self.assertIsNone(fehler)
+        begriffe = snapshot["concepts"]
+        geprueft = 0
+        for eins in sorted(begriffe):
+            for zwei in sorted(begriffe):
+                if eins == zwei:
+                    continue
+                frage = (f"{begriffe[eins]['preferred']} und "
+                         f"{begriffe[zwei]['preferred']}")
+                paar, _ = engine._load_released_query_snapshot(frage)
+                ergebnis = engine.build_query_result(paar)
+                if ergebnis["coverage"]["match_strength"] != "strong":
+                    continue
+                geprueft += 1
+                gezeigt = {item["claim_id"] for item in ergebnis["evidence"]}
+                seiten = {page["path"] for page in ergebnis["pages"]}
+                for treffer in ergebnis["concepts"]["matched"]:
+                    cid = treffer["id"]
+                    vertreten = (
+                        begriffe[cid].get("definition_claim") in gezeigt
+                        or any(cid in snapshot["pages"][pfad]["fm"].get(
+                            "concepts", []) for pfad in seiten))
+                    self.assertTrue(vertreten, (frage, cid))
+        self.assertGreater(geprueft, 20)
+
+    def test_a_function_word_never_names_a_concept(self):
+        """'sich' ist nicht 'Sicherung', 'seit' nicht 'Seite'.
+
+        Über die Wortform traf bis v2 jedes Füllwort eine Benennung mit
+        gleichem Stamm. Das gab einen Anker, hob die Stärke auf 'partial'
+        oder 'strong' und schaltete die Pflicht-Vollsichtung ab: derselbe
+        Fehler wie beim Hilfsverb 'darf', nur über die Begriffswelt.
+        """
+        engine = load_engine(self.root)
+
+        def treffer(benennung, frage):
+            begriffe = {"B-0001": {
+                "id": "B-0001", "world": "BW-0001", "preferred": benennung,
+                "aliases": [], "broader": [], "related": []}}
+            _, _, _, arten = engine._match_concepts(
+                engine._retrieval_norm(frage), begriffe,
+                inhalt=set(engine._inhaltstokens(frage)))
+            return arten
+
+        fehltreffer = [
+            ("Sicherung", "Wie wirkt sich Schimmel auf die Miete aus?"),
+            ("Seite", "Was gilt seit v0.2?"),
+            ("Änderung", "Was machen die anderen?"),
+            ("Fall", "Was tun, falls es regnet?"),
+            ("Weg", "Wegen Regen geschlossen?"),
+            ("Wille", "Was will er?"),
+            ("Stand der Technik", "Stand und Technik"),
+        ]
+        for benennung, frage in fehltreffer:
+            with self.subTest(benennung=benennung, frage=frage):
+                self.assertEqual(treffer(benennung, frage), {})
+        # Was ein Inhaltswort trägt, trifft weiterhin: exakt und als Wortform.
+        self.assertEqual(
+            treffer("Sicherung", "Wie mache ich eine Sicherung?"),
+            {"B-0001": "exact"})
+        self.assertEqual(
+            treffer("Sicherung", "Welche Sicherungen gibt es?"),
+            {"B-0001": "wortform"})
+        self.assertEqual(
+            treffer("Stand der Technik", "Was sind die Stände der Technik?"),
+            {"B-0001": "wortform"})
+        # Ein Homograph bleibt als Benennung exakt auffindbar, mehr nicht.
+        self.assertEqual(
+            treffer("Macht", "Was macht er?"), {"B-0001": "exact"})
+
+        # Dasselbe durch die ganze Abfrage: ein Begriff 'Sicherung' im
+        # Bestand darf eine Frage mit 'sich' nicht an sich ziehen.
+        self.use_private_vault()
+        pfad = self.root / "schema/begriffswelten.json"
+        daten = json.loads(pfad.read_text(encoding="utf-8"))
+        daten["concepts"].append({
+            "id": "B-0901", "world": "BW-0001", "preferred": "Sicherung",
+            "aliases": [], "broader": [], "related": [],
+            "definition_claim": "C-0101",
+        })
+        pfad.write_text(
+            json.dumps(daten, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8")
+        seite = self.root / "knowledge/demo-okf/llm-wiki-muster.md"
+        seite.write_text(
+            seite.read_text(encoding="utf-8").replace(
+                "concepts: [B-0002]", "concepts: [B-0002, B-0901]"),
+            encoding="utf-8")
+        self.release()
+        _, payload = self.query("Wie wirkt sich Schimmel auf die Miete aus?")
+        self.assertEqual(payload["concepts"]["matched"], [])
+        self.assertTrue(payload["fallback"]["exhaustive_review_required"])
+        _, direkt = self.query("Wie funktioniert die Sicherung?")
+        self.assertEqual(
+            [item["id"] for item in direkt["concepts"]["matched"]], ["B-0901"])
+
+    def test_own_hit_outranks_a_grazed_label(self):
+        """Ein Claim mit dem Fragewort steht vor der Seite, deren Benennung
+        das Wort nur als Wortteil streift. Bis v2 war es umgekehrt (30 gegen
+        20 Punkte), und der Claim mit dem Wort fiel aus dem Limit."""
+        _, payload = self.query("Wissen verdichten")
+        belege = {item["claim_id"]: item for item in payload["evidence"]}
+        self.assertIn("C-0301", belege)
+        self.assertIn("token:wissen", belege["C-0301"]["reasons"])
+        eigene = [item["score"] for item in payload["evidence"]
+                  if item["reasons"] != ["concept-page:partial"]]
+        gestreift = [item["score"] for item in payload["evidence"]
+                     if item["reasons"] == ["concept-page:partial"]]
+        self.assertTrue(gestreift)
+        self.assertGreater(min(eigene), max(gestreift))
+        self.assertEqual(payload["coverage"]["omitted_pages"], [])
+
+    def test_a_question_without_content_words_is_never_strong(self):
+        """'nicht' und 'und' stehen wörtlich in vielen Claims.
+
+        Als ganze Frage ist das kein Anker: Verstanden wurde nichts.
+        """
+        for frage in ("nicht", "und", "Was ist das?"):
+            with self.subTest(frage=frage):
+                _, payload = self.query(frage)
+                self.assertEqual(
+                    payload["coverage"]["query_terms"]["content"], [])
+                self.assertIn(
+                    payload["coverage"]["match_strength"], {"weak", "none"})
+                self.assertTrue(
+                    payload["fallback"]["exhaustive_review_required"])
+
+    def test_an_acronym_is_never_a_function_word(self):
+        """'die IT' ist nicht das englische 'it'."""
+        engine = load_engine(self.root)
+        tokens = engine._inhaltstokens
+        self.assertEqual(
+            tokens("Welche Aufgaben hat die IT?"), ("aufgaben", "it"))
+        self.assertEqual(tokens("IT"), ("it",))
+        self.assertEqual(
+            tokens("Die IT übernimmt den Betrieb."),
+            ("it", "uebernimmt", "betrieb"))
+        # Wer alles groß schreibt, meint keine Abkürzungen.
+        self.assertEqual(tokens("WAS IST DIE IT"), ())
+        # Das englische Pronomen bleibt ein Funktionswort.
+        self.assertEqual(tokens("Is it valid?"), ("valid",))
+        # Englische Einträge, die ein deutsches Hauptwort verschluckten.
+        self.assertEqual(
+            tokens("Not, All, Most und Same"),
+            ("not", "all", "most", "same"))
+        _, payload = self.query("Welche Aufgaben hat die IT?")
+        self.assertEqual(
+            payload["coverage"]["query_terms"]["content"], ["aufgaben", "it"])
+        self.assertNotEqual(payload["coverage"]["match_strength"], "strong")
+
     def test_nothing_found_stays_nothing_found(self):
         _, payload = self.query("Urlaubsanspruch")
         self.assertEqual(payload["state"], "no_candidates")
@@ -483,6 +737,30 @@ class QuerySignalTests(VaultCase):
         _, payload = self.query("himmel")
         self.assertEqual(payload["state"], "no_candidates")
 
+    def test_legacy_page_list_is_capped_and_says_so(self):
+        """fallback.page_paths war die Arbeitsliste des alten Rückfalls.
+
+        Die Vollsichtung hat ihn ersetzt; die Liste bleibt als Feld, wächst
+        aber nicht mehr mit dem Bestand in jede Ausgabe hinein.
+        """
+        _, payload = self.query("Was ist OKF?")
+        rueckfall = payload["fallback"]
+        self.assertEqual(rueckfall["page_paths_total"], 6)
+        self.assertEqual(len(rueckfall["page_paths"]), 6)
+        engine = load_engine(self.root)
+        self.assertEqual(engine.MAX_FALLBACK_SEITEN, 50)
+        snapshot, _ = engine._load_released_query_snapshot("Was ist OKF?")
+        vorlage = snapshot["pages"]["knowledge/demo-okf/fakten.md"]
+        for nummer in range(80):
+            snapshot["pages"][f"knowledge/gross/seite-{nummer:03}.md"] = {
+                "fm": dict(vorlage["fm"], concepts=[], tags=[]),
+                "claims": [], "relationen": [],
+            }
+        gross = engine.build_query_result(snapshot)["fallback"]
+        self.assertEqual(gross["page_paths_total"], 86)
+        self.assertEqual(len(gross["page_paths"]), 50)
+        self.assertEqual(gross["page_paths"], sorted(gross["page_paths"]))
+
     def test_signal_fields_exist_in_every_state(self):
         self.use_private_vault()
         erwartet = {"match_strength", "term_coverage_percent", "query_terms",
@@ -490,7 +768,10 @@ class QuerySignalTests(VaultCase):
         _, leer = self.query("   ")
         self.assertEqual(leer["state"], "invalid_query")
         self.assertTrue(erwartet <= set(leer["coverage"]))
-        self.assertEqual(leer["coverage"]["match_strength"], "none")
+        # Ein Fehlerzustand ist kein "kein Kandidat": Die Stärke ist nicht
+        # bewertet, und die Pflicht-Vollsichtung ist kein Thema.
+        self.assertIsNone(leer["coverage"]["match_strength"])
+        self.assertFalse(leer["fallback"]["exhaustive_review_required"])
         self.assertEqual(leer["concepts"]["partial"], [])
 
         page = self.root / "knowledge/demo-okf/okf.md"
@@ -499,6 +780,7 @@ class QuerySignalTests(VaultCase):
         _, kaputt = self.query("OKF")
         self.assertEqual(kaputt["state"], "invalid_vault")
         self.assertTrue(erwartet <= set(kaputt["coverage"]))
+        self.assertIsNone(kaputt["coverage"]["match_strength"])
         self.assertIsNone(kaputt["fallback"]["sweep"])
 
     def test_word_form_ranking_is_deterministic(self):
@@ -506,7 +788,7 @@ class QuerySignalTests(VaultCase):
             "query", "Wie werden Bestätigungen und Vertrauensstufen geprüft?")
         self.assertEqual(erster.returncode, 0, erster.stdout + erster.stderr)
         self.assertEqual(
-            json.loads(erster.stdout)["retrieval"], "hybrid-local/v2")
+            json.loads(erster.stdout)["retrieval"], "hybrid-local/v3")
         for _ in range(5):
             wieder = self.run_cli(
                 "query", "Wie werden Bestätigungen und Vertrauensstufen geprüft?")
@@ -657,6 +939,130 @@ class SweepTests(VaultCase):
         _, neuer_stand = self.sweep(self.FRAGE, "--receipt", quittung)
         self.assertEqual(neuer_stand["state"], "invalid_receipt")
 
+    def test_seal_tells_apart_what_the_ranking_may_blur(self):
+        """Das Ranking darf 'Maßen' und 'Massen' gleich lesen, das Siegel nicht.
+
+        Sonst gälte die Quittung einer Frage für eine andere, die sich nur in
+        einem Operator, einem Vorzeichen oder in ß gegen ss unterscheidet, und
+        die Engine bescheinigte eine Sichtung, die es zu dieser Frage nie gab.
+        """
+        paare = [
+            ("Gilt ein Konzept mit stale_after < heute als veraltet?",
+             "Gilt ein Konzept mit stale_after >= heute als veraltet?"),
+            ("Darf ein Agent Parameter in Maßen ändern?",
+             "Darf ein Agent Parameter in Massen ändern?"),
+            ("Was sagt der Bestand zu C++?", "Was sagt der Bestand zu C#?"),
+            ("Gilt das bei -5 Grad?", "Gilt das bei 5 Grad?"),
+            ("Was kostet das: 5 €?", "Was kostet das: 5 %?"),
+            ("?", "!"),
+        ]
+        for eine, andere in paare:
+            with self.subTest(frage=eine):
+                _, erste = self.sweep(eine, "--batch", "1")
+                _, zweite = self.sweep(andere, "--batch", "1")
+                self.assertEqual(erste["state"], "batch", erste)
+                self.assertNotEqual(erste["seal"], zweite["seal"])
+                _, erschlichen = self.sweep(
+                    andere, "--receipt", f"1:{erste['seal']}=-")
+                self.assertEqual(erschlichen["state"], "invalid_receipt")
+                self.assertFalse(erschlichen["abstention"]["allowed"])
+        # Was zwischen zwei Aufrufen derselben Frage wirklich schwankt, bleibt
+        # gleich: Groß-/Kleinschreibung, Leerraum, Anführungs- und Satzzeichen
+        # am Wortrand.
+        gleich = ['Was ist "OKF"?', "was ist okf", "  Was   ist OKF ?  ",
+                  "Was ist »OKF«!", "Was ist ‚OKF‘ …"]
+        siegel = {
+            self.sweep(frage, "--batch", "1")[1]["seal"] for frage in gleich}
+        self.assertEqual(len(siegel), 1, siegel)
+
+    def test_repeated_receipt_switches_are_collected(self):
+        """Je Stapel ein eigenes --receipt, wie beim Einsammeln von Subagenten."""
+        _, gelesen = self.stapel(self.FRAGE, "--size", "10")
+        einzeln = []
+        for nummer, (siegel, _) in sorted(gelesen.items()):
+            einzeln += ["--receipt", f"{nummer}:{siegel}=-"]
+        result, fertig = self.sweep(self.FRAGE, "--size", "10", *einzeln)
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertEqual(fertig["state"], "sweep_complete")
+        self.assertEqual(fertig["coverage"]["batches_confirmed"], 3)
+        self.assertTrue(fertig["abstention"]["allowed"])
+
+        # Bis v0.13.0 zählte nur der letzte Schalter. War er allein
+        # vollständig, verschwand ein früheres Urteil spurlos: hier ein
+        # positives zu C-0002, und die Engine erlaubte die Abstention.
+        mit_c2 = [nummer for nummer, (_, ids) in gelesen.items()
+                  if "C-0002" in ids][0]
+        widerspruch = ["--receipt", f"{mit_c2}:{gelesen[mit_c2][0]}=C-0002"]
+        widerspruch += ["--receipt"] + [
+            f"{nummer}:{siegel}=-"
+            for nummer, (siegel, _) in sorted(gelesen.items())]
+        result, doppelt = self.sweep(self.FRAGE, "--size", "10", *widerspruch)
+        self.assertEqual(result.returncode, 2, result.stdout)
+        self.assertEqual(doppelt["state"], "invalid_receipt")
+        self.assertIn("doppelt quittiert", " ".join(doppelt["errors"]))
+        self.assertFalse(doppelt["abstention"]["allowed"])
+        self.assertEqual(doppelt["selected"], [])
+
+        # Die Frage hinter --receipt würde als Quittungseintrag verschluckt.
+        # Das endet als JSON-Zustand mit Hinweis, nicht als Usage-Text.
+        result, payload = self.sweep("--size", "10", *einzeln, self.FRAGE)
+        self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+        self.assertEqual(payload["state"], "invalid_query")
+        self.assertIn("Die Frage fehlt", payload["errors"][0])
+        self.assertFalse(payload["abstention"]["allowed"])
+        result, payload = self.sweep()
+        self.assertEqual(result.returncode, 2)
+        self.assertEqual(payload["state"], "invalid_query")
+
+    def test_every_state_carries_the_fail_closed_fields(self):
+        """Niemand soll auf einen fehlenden Schlüssel prüfen müssen."""
+        faelle = [
+            ((), "plan"),
+            (("--batch", "1"), "batch"),
+            (("--receipt",), "sweep_incomplete"),
+            (("--receipt", "1:0000000000000000=-"), "invalid_receipt"),
+            (("--domain", "gibt-es-nicht"), "invalid_query"),
+            (("--size", "4", "--receipt", "1:0000000000000000=-"),
+             "invalid_query"),
+        ]
+        for argumente, zustand in faelle:
+            with self.subTest(zustand=zustand, argumente=argumente):
+                _, payload = self.sweep(self.FRAGE, *argumente)
+                self.assertEqual(payload["state"], zustand, payload)
+                self.assertEqual(payload["evidence"], [])
+                self.assertEqual(payload["selected"], [])
+                self.assertIs(payload["abstention"]["allowed"], False)
+                self.assertTrue(payload["abstention"]["reason"])
+        self.use_private_vault()
+        page = self.root / "knowledge/demo-okf/fakten.md"
+        page.write_text(
+            page.read_text(encoding="utf-8") + "\nNachtrag ohne Release.\n",
+            encoding="utf-8")
+        for argumente in ((), ("--batch", "1"), ("--receipt",)):
+            with self.subTest(zustand="invalid_vault", argumente=argumente):
+                result, payload = self.sweep(self.FRAGE, *argumente)
+                self.assertEqual(result.returncode, 1)
+                self.assertEqual(payload["state"], "invalid_vault")
+                self.assertEqual(payload["evidence"], [])
+                self.assertEqual(payload["selected"], [])
+                self.assertIs(payload["abstention"]["allowed"], False)
+
+    def test_no_page_lives_outside_the_manifest(self):
+        """knowledge/__pycache__/ nähme das Manifest aus: Wissen ohne Schutz."""
+        self.use_private_vault()
+        schatten = self.root / "knowledge/__pycache__"
+        schatten.mkdir()
+        quelle = self.root / "knowledge/demo-okf/fakten.md"
+        (schatten / "schatten.md").write_text(
+            quelle.read_text(encoding="utf-8")
+            .replace("domain: demo-okf", "domain: __pycache__")
+            .replace("C-0290", "C-8001").replace("C-0291", "C-8002"),
+            encoding="utf-8")
+        result = self.run_cli("validate")
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertIn("den das Manifest ausnimmt", result.stdout)
+        self.assertNotEqual(self.run_cli("release", "patch").returncode, 0)
+
     def test_partial_scope_never_licenses_not_in_vault(self):
         plan, gelesen = self.stapel(self.FRAGE, "--domain", "demo-extern")
         self.assertFalse(plan["scope"]["complete"])
@@ -712,7 +1118,7 @@ class SweepTests(VaultCase):
                 self.assertEqual(result.returncode, 2, result.stdout)
                 self.assertEqual(payload["state"], "invalid_query")
                 self.assertTrue(payload["errors"])
-                self.assertNotIn("evidence", payload)
+                self.assertEqual(payload["evidence"], [])
         result, payload = self.sweep(
             self.FRAGE, "--batch", "1", "--receipt", "1:0000000000000000=-")
         self.assertEqual(payload["state"], "invalid_query")
@@ -866,6 +1272,62 @@ class RecallGateTests(unittest.TestCase):
             kaputt = lauf()
             self.assertEqual(kaputt.returncode, 1, kaputt.stdout + kaputt.stderr)
             self.assertIn("C-9999", kaputt.stdout)
+
+    def test_tool_takes_a_relative_vault_path(self):
+        """So steht der Aufruf in README und BETRIEB: --vault <tresor>.
+
+        Ein relativer Pfad wurde doppelt aufgelöst, einmal als
+        Arbeitsverzeichnis und einmal als Scriptpfad darunter; die Meldung
+        lautete dann "lieferte kein JSON", als wäre der Tresor defekt.
+        """
+        with tempfile.TemporaryDirectory(prefix="skillsafe-gold-") as temp:
+            gold = Path(temp) / "gold.json"
+            gold.write_text(json.dumps({
+                "schema": "skillsafe.recall-gold/v1",
+                "fragen": [{"frage": "Welche Vertrauensstufen gibt es?",
+                            "erwartet": ["C-0305"]}],
+            }, ensure_ascii=False), encoding="utf-8")
+            for pfad in (SOURCE_SKILL.name, "./" + SOURCE_SKILL.name):
+                with self.subTest(pfad=pfad):
+                    result = subprocess.run(
+                        [sys.executable, "-B", str(RECALL_TOOL), "--kurz",
+                         "--vault", pfad, "--gold", str(gold)],
+                        cwd=REPOSITORY, text=True, stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE, check=False, timeout=120,
+                    )
+                    self.assertEqual(
+                        result.returncode, 0, result.stdout + result.stderr)
+                    self.assertIn("0 stille Verfehlungen", result.stdout)
+
+    def test_a_locked_vault_is_a_failed_measurement_not_an_aborted_run(self):
+        """Zwischen Änderung und Release ist der Tresor gesperrt.
+
+        Die Messfunktionen melden das als gewöhnlichen Fehler. Bis v0.13.0
+        warfen sie SystemExit: Aus setUpClass gerufen, beendete das den
+        ganzen Testlauf ohne Bericht, und rund hundert Tests liefen nicht.
+        """
+        with tempfile.TemporaryDirectory(prefix="skillsafe-gold-") as temp:
+            vault = Path(temp) / "wissenstresor"
+            shutil.copytree(SOURCE_SKILL, vault)
+            seite = vault / "knowledge/demo-okf/fakten.md"
+            seite.write_text(
+                seite.read_text(encoding="utf-8") + "\nOhne Release.\n",
+                encoding="utf-8")
+            with self.assertRaises(self.tool.MessFehler) as gesperrt:
+                self.tool.messe(vault, self.fragen[:1], [])
+            self.assertIn("doctor", str(gesperrt.exception))
+            self.assertNotIsInstance(gesperrt.exception, SystemExit)
+            with self.assertRaises(self.tool.MessFehler):
+                self.tool.sichtung_pruefen(vault, "Was ist OKF?")
+            result = subprocess.run(
+                [sys.executable, "-B", str(RECALL_TOOL), "--kurz",
+                 "--vault", str(vault)],
+                cwd=REPOSITORY, text=True, stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE, check=False, timeout=120,
+            )
+            self.assertEqual(result.returncode, 1, result.stdout)
+            self.assertIn("recall-check:", result.stdout)
+            self.assertNotIn("Traceback", result.stdout + result.stderr)
 
 
 if __name__ == "__main__":

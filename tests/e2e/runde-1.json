@@ -1,0 +1,427 @@
+{
+ "schema": "skillsafe.antwort-protokoll/v1",
+ "hinweis": "Ende-zu-Ende-Messung vom 2026-11-12, Runde 1. Acht frische Agenten, je vier Fragen, Standardgröße (ein Stapel). Jeder Agent bekam nur den entpackten Skill-Ordner und die Fragen im Wortlaut. Die Siegel gelten ausschließlich für den Stand unter 'stand': nachprüfen lässt sich das Protokoll mit tools/antwort_check.py gegen den Tresor dieses Commits (siehe tests/e2e/LIESMICH.md). 'ergebnis' ist die Ausgabe des Werkzeugs zum Messzeitpunkt.",
+ "runde": 1,
+ "agenten": 8,
+ "stand": {
+  "version": "0.12.1",
+  "manifest_sha256": "2677eba026c22a6f1a024b30f5d582005577f2b080c64ea9cfb76e54ca6b1bb8",
+  "commit": "0d9f5dd"
+ },
+ "ergebnis": {
+  "antworten": 32,
+  "davon_gefunden": 19,
+  "negativ": 8,
+  "negativ_korrekt": 8,
+  "ohne_verstoss": 32,
+  "pflicht_vollsichtung": 28,
+  "positiv": 24,
+  "positiv_gefunden": 24,
+  "quittungen": 32,
+  "quittungen_gueltig": 32,
+  "verstoesse": 0,
+  "vom_ranking_verfehlt": 19
+ },
+ "antworten": [
+  {
+   "id": "A1F1",
+   "art": "negativ",
+   "frage": "Wie hoch ist der Urlaubsanspruch in Teilzeit?",
+   "erwartet": [],
+   "sweep_args": [],
+   "quittung": [
+    "1:02a0dfc4d1870821=-"
+   ],
+   "antwort": "Nicht im Bestand. Der Tresor enthält keine Aussage zum Urlaubsanspruch, weder allgemein noch für Teilzeit.\n\nHinweise: Das externe Nachschlagen (Fallback nach der Vollsichtung) ergab keinen Zeiger, ist hier aber kein Negativbefund: Keine der beiden aufgeführten Bezugsquellen war lesbar – X-0001 ist auf diesem Host nicht gebunden, X-0002 wurde wegen der Offline-Schaltung nicht abgerufen. Es wurde also kein externes Dokument gelesen.\nSichtung: 28 von 28 Claims, Quittung b4c178ae2511\n\nSoll ich eine Quelle dazu aufnehmen?"
+  },
+  {
+   "id": "A1F2",
+   "art": "positiv",
+   "frage": "Darf ich dem Hauseigentümer weniger überweisen, wenn sich an den Zimmerwänden großflächig schwarze Pilzflecken ausbreiten?",
+   "erwartet": [
+    "C-0401"
+   ],
+   "sweep_args": [],
+   "quittung": [
+    "1:933aea83ebaf0146=C-0401,C-0402"
+   ],
+   "antwort": "Laut Bestand ja – allerdings nur als Aussage eines Beispielhandbuchs, nicht als Rechtsauskunft. Laut X-0001 (Beispielhandbuch, Trust T3) ist erheblicher Schimmelbefall in Wohnräumen ein Mangel, der zur Mietminderung berechtigt (C-0401). Nach demselben Handbuch ist der Mangel dem Vermieter unverzüglich anzuzeigen (C-0402).\n\nBelege:\n- C-0401 (X-0001, A-0004 in handbuch/mietminderung.md, Wortlaut) — Stand 2026-08-06\n- C-0402 (X-0001, A-0007 in handbuch/mietminderung.md, Wortlaut) — Stand 2026-08-06\n\nStand: 2026-08-06; Konfidenz: mittel\nHinweise: Lesart der Frage: „großflächig sich ausbreitende schwarze Pilzflecken an den Zimmerwänden“ = erheblicher Schimmelbefall in Wohnräumen; „dem Hauseigentümer weniger überweisen“ = Mietminderung gegenüber dem Vermieter. Diese Wortwahl steht in keinem Claim; gefunden hat die beiden Claims die Vollsichtung, nicht das Ranking. Die Seite bezeichnet X-0001 als erfundenes Beispielhandbuch und sich selbst als Bauteil-Beispiel, keine Rechtsauskunft. Beide Claims sind extern belegt (Signal external_source): Ihr Wortlaut steht im Beispielhandbuch, nicht im Tresor; ein doctor-Hinweis auf Anker-Drift liegt mir nicht vor, doctor habe ich für diese Antwort nicht ausgeführt.\nSichtung: 28 von 28 Claims, Quittung 6afdbe0e867f"
+  },
+  {
+   "id": "A1F3",
+   "art": "positiv",
+   "frage": "Darf ein Sprachassistent die Formel einer freigegebenen Rechenvorschrift selbst umschreiben, oder nur die Eingabegrößen einsetzen?",
+   "erwartet": [
+    "C-0308"
+   ],
+   "sweep_args": [],
+   "quittung": [
+    "1:d4298dc251f4f478=C-0307,C-0308"
+   ],
+   "antwort": "Nur die Eingabegrößen einsetzen; die Formel selbst umschreiben darf er nicht. Nach OKF v0.2 darf ein Agent ausschließlich Werte für die deklarierten `parameters` liefern und die Berechnung weder verfassen noch ändern (C-0308). Die freigegebene Rechenvorschrift ist dort eine sanktionierte Berechnung vom Typ Attested Computation: ein eigenes Konzept mit `parameters` als typisierter Liste, einem `executor` mit Laufanweisung und einem `attester` als deterministischem Prüfcode ohne LLM; OKF legt die Schnittstelle fest und führt selbst nichts aus (C-0307). Dass die Definition weiterhin zur Richtlinie passt, bestätigt `verified` dokumentweise im Bundle; die Attestierung prüft dagegen einen einzelnen Lauf zur Laufzeit und wird nicht im Bundle gespeichert (C-0308).\n\nBelege:\n- C-0308 (S-0004, §10.3 und §10.6, Wortlaut) — Stand 2026-07-28\n- C-0307 (S-0004, §10.1 und §10.2, Wortlaut) — Stand 2026-07-28\n\nStand: 2026-07-28; Konfidenz: hoch\nHinweise: Lesart der Frage: „Sprachassistent“ = Agent im Sinne von OKF v0.2; „freigegebene Rechenvorschrift“ = sanktionierte Berechnung (Attested Computation); „Eingabegrößen“ = deklarierte `parameters`; „Formel umschreiben“ = Berechnung ändern. Diese Wortwahl steht in keinem Claim; gefunden hat die Claims die Vollsichtung, nicht das Ranking. Die Seite trägt das Signal trust_tier:unverified: Die Aussage ist belegt, aber von niemandem gegengeprüft – die hohe Konfidenz ist eine Kuratierungsentscheidung ohne Gegenprüfung.\nSichtung: 28 von 28 Claims, Quittung 121d2de53ae9"
+  },
+  {
+   "id": "A1F4",
+   "art": "positiv",
+   "frage": "Ab wann zahlt sich eine vorab aufbereitete Notizebene für einen Sprachassistenten überhaupt aus?",
+   "erwartet": [
+    "C-0103"
+   ],
+   "sweep_args": [],
+   "quittung": [
+    "1:1ed063dba9efc7cf=C-0101,C-0103,C-0104"
+   ],
+   "antwort": "Erst dann, wenn zwei Dinge zusammenkommen: Eine Seite verdichtet Fakten aus vielen Quellen, und ihr wird zur Abfragezeit vertraut. Seiten, die einzelne kleine Quellen nur spiegeln, sparen dagegen nichts und erzeugen doppelte Kosten, wenn das Modell Wiki und Quelle liest. Das zeigt laut S-0002 – einer Quelle mit Trust T3 (Karpathy-Gist samt Kommentarbereich, ein lebendes Dokument) – ein kontrolliertes Experiment im Kommentarbereich (C-0103). Gemeint ist die persistente, kuratierte Wiki-Schicht des LLM-Wiki-Musters, die das Modell statt der Rohdokumente liest (C-0101). Als eigene Einordnung des Bestands, nicht als Wortlaut der Quelle: Für den Wissenstresor folgt daraus die Kompressionsregel – verdichten statt spiegeln; der Locator dient der menschlichen Nachprüfung, nicht der Re-Verifikation pro Anfrage (C-0104).\n\nBelege:\n- C-0103 (S-0002, Kommentarbereich, Wortlaut) — Stand 2026-07-04\n- C-0101 (S-0002, Gist-Text, Wortlaut) — Stand 2026-07-04\n- C-0104 (S-0002, Kommentarbereich, Auslegung) — eigene Einordnung\n\nStand: 2026-07-04; Konfidenz: mittel\nHinweise: Lesart der Frage: „vorab aufbereitete Notizebene“ = persistente, kuratierte Wiki-Schicht; „Sprachassistent“ = das Modell, das sie liest; „zahlt sich aus“ = Nutzen statt doppelter Kosten. Diese Wortwahl steht in keinem Claim; das Ranking erkannte von der Frage nur das Wort „vorab“, getragen wird die Antwort von der Vollsichtung. Der Kommentarbereich der Quelle wächst laufend; ausgewertet ist er mit Stand 2026-07-04.\nSichtung: 28 von 28 Claims, Quittung 18615e11ef20"
+  },
+  {
+   "id": "A2F1",
+   "art": "positiv",
+   "frage": "Wie schnell muss der Hausbesitzer davon erfahren, wenn in meiner Bleibe ein Schaden auftritt?",
+   "erwartet": [
+    "C-0402"
+   ],
+   "sweep_args": [],
+   "quittung": [
+    "1:404ff7d4805d6ac6=C-0401,C-0402"
+   ],
+   "antwort": "Laut Bestand: unverzüglich. Nach dem Beispielhandbuch X-0001 – einer erfundenen Beispielquelle mit Trust T3 – ist ein Mangel dem Vermieter (in der Frage: dem Hausbesitzer) unverzüglich anzuzeigen (C-0402). Der Bestand spricht dabei von einem „Mangel“; als solchen nennt er erheblichen Schimmelbefall in Wohnräumen (C-0401).\n\nBelege:\n- C-0402 (X-0001, Anker A-0007 in handbuch/mietminderung.md, Wortlaut) — Stand 2026-08-06\n- C-0401 (X-0001, Anker A-0004 in handbuch/mietminderung.md, Wortlaut) — Stand 2026-08-06\n\nStand: 2026-08-06; Konfidenz: mittel\nHinweise: Keine Rechtsauskunft – die Seite versteht sich als Bauteil-Beispiel und führt die Aussagen des Handbuchs nur als Beleg-Mechanik. Beide Claims sind über Satzanker aus der externen Bezugsquelle X-0001 belegt; ihr Wortlaut liegt außerhalb des Tresors, und ob er dort unverändert steht, prüft nicht die Abfrage, sondern `doctor` (für diese Antwort nicht ausgeführt). Die Seite ist von niemandem gegengeprüft (Trust-Tier unverified).\nSichtung: 28 von 28 Claims, Quittung c349367dab97"
+  },
+  {
+   "id": "A2F2",
+   "art": "negativ",
+   "frage": "Wer hat den Wissenstresor programmiert?",
+   "erwartet": [],
+   "sweep_args": [],
+   "quittung": [
+    "1:5a90587f32b321cf=-"
+   ],
+   "antwort": "Nicht im Bestand. Der Tresor enthält keine Aussage dazu, wer den Wissenstresor programmiert hat: Er erwähnt den Wissenstresor zwar an mehreren Stellen, nennt aber weder eine Person noch ein Team noch eine Organisation als Urheber.\n\nHinweise: Angaben aus dem Quellenregister (Titel, Ziel, Rechte einer Quelle) sind keine Evidenz; einen Urheber leite ich daraus nicht ab, und aus Modellwissen ergänze ich nichts.\nSichtung: 28 von 28 Claims, Quittung c982fe1b8344\nExtern (nicht im Bestand): kein Zeiger. Das Nachschlagen in den aufgeführten externen Quellen kam hier nicht zustande – X-0001 ist auf diesem Host nicht gebunden, X-0002 wurde wegen der Offline-Schaltung (SKILLSAFE_OFFLINE) nicht abgerufen. Es wurde also kein externes Dokument gelesen; das ist kein Negativbefund über diese Quellen.\n\nSoll ich eine Quelle dazu aufnehmen?"
+  },
+  {
+   "id": "A2F3",
+   "art": "positiv",
+   "frage": "Was ist beim Umstieg auf die neuere Formatausgabe nicht mehr abwärtskompatibel?",
+   "erwartet": [
+    "C-0309"
+   ],
+   "sweep_args": [],
+   "quittung": [
+    "1:88951f9e1e9cc6ca=C-0309,C-0310"
+   ],
+   "antwort": "Verstanden als: der Wechsel von OKF v0.1 auf OKF v0.2. Dafür nennt der Bestand zwei ausdrücklich benannte Bruchstellen (C-0309):\n1. `timestamp` wird durch `generated.at` ersetzt.\n2. Die Rumpfliste `# Citations` wird durch das Frontmatter-Feld `sources` ersetzt.\n\nDazu hält der Bestand fest: v0.2 gilt nach der Regel major.minor als Minor-Sprung, und Konsumenten dürfen beide Altformen für v0.1-Dokumente weiterhin als Rückfall lesen (C-0309).\n\nEigene Einordnung des Bestands, kein Wortlaut der Spezifikation (C-0310): Für dieses Bundle kommt hinzu, dass `sources` und `status` in v0.2 und im hiesigen Profil namensgleich, aber unterschiedlich belegt sind. v0.2-`sources` ist eine Liste von Einträgen mit Pflichtangabe `resource`, das Profilfeld eine flache Liste registrierter S-IDs; v0.2-`status` nutzt draft, stable und deprecated, das Profil aktiv, veraltet und in-pruefung. Deshalb muss jede Aussage über OKF-Kompatibilität die Zielversion nennen. Das betrifft das Verhältnis des Profils zu v0.2, nicht den Sprung von v0.1 auf v0.2 selbst.\n\nBelege:\n- C-0309 (S-0004, §12, §13 und §13.1, Wortlaut) — Stand 2026-07-28\n- C-0310 (S-0004, §5 und §13.2, Auslegung) — eigene Einordnung, Stand 2026-07-28\n\nStand: 2026-07-28; Konfidenz: hoch\nHinweise: Die Seite okf-v02.md trägt Konfidenz hoch, ist aber von niemandem gegengeprüft (Trust-Tier unverified); die hohe Konfidenz ist damit eine Kuratierungsentscheidung ohne Gegenprüfung. Maßgeblich ist die Fassung v0.2 (okf-v02.md); die Vorgängerfassung v0.1 bleibt als okf.md mit Status veraltet im Bestand.\nSichtung: 28 von 28 Claims, Quittung f6d0734bfac6"
+  },
+  {
+   "id": "A2F4",
+   "art": "positiv",
+   "frage": "Wie stufe ich einen Text ein, den bislang nur Software, aber noch kein Mensch abgesegnet hat?",
+   "erwartet": [
+    "C-0305"
+   ],
+   "sweep_args": [],
+   "quittung": [
+    "1:618744afa3a7a908=C-0304,C-0305"
+   ],
+   "antwort": "Als „machine-confirmed“ – verstanden für ein Dokument, das bislang nur von Software bestätigt wurde. Nach OKF v0.2 leiten Konsumenten die Einstufung (Trust-Tier) aus dem Feld `verified` ab: Bestätigen dort nur Akteure ohne `human:`-Präfix, gilt machine-confirmed. Fehlt das Feld, gilt unverified; bestätigt mindestens ein `human:`-Akteur, gilt human-reviewed (C-0305).\n\nWoran sich „nur Software“ ablesen lässt: `verified` hält als Liste von `by`- und `at`-Einträgen unabhängige Bestätigungen fest. Agenten stehen dort als `<producer>/<version>`, automatisierte Prozesse als `process:<id>`, Personen als `human:<id>` (C-0304).\n\nDie Tiers sind beratende Signale und keine Zugriffskontrolle (C-0305).\n\nBelege:\n- C-0305 (S-0004, §5.3, Wortlaut) — Stand 2026-07-28\n- C-0304 (S-0004, §5.2 und §7, Wortlaut) — Stand 2026-07-28\n\nStand: 2026-07-28; Konfidenz: hoch\nHinweise: Die Seite okf-v02.md trägt Konfidenz hoch, ist aber von niemandem gegengeprüft (Trust-Tier unverified); die hohe Konfidenz ist damit eine Kuratierungsentscheidung ohne Gegenprüfung.\nSichtung: 28 von 28 Claims, Quittung 07974fbf8304"
+  },
+  {
+   "id": "A3F1",
+   "art": "positiv",
+   "frage": "Welche typischen Pannen beim Zerstückeln langer Texte in Abschnitte umgeht man, wenn man stattdessen jede Kernaussage für sich ablegt?",
+   "erwartet": [
+    "C-0291"
+   ],
+   "sweep_args": [],
+   "quittung": [
+    "1:c09f7108aa785312=C-0291"
+   ],
+   "antwort": "Laut Bestand umgeht man damit die klassischen Chunking-Fehler, also die Pannen beim Zerlegen langer Texte in Abschnitte. Genannt werden drei: Trennungen mitten im Gedanken, vermischte Konzepte und willkürliche Grenzen. Atomare Fact-Einheiten, bei denen jede Aussage für sich abgelegt wird, vermeiden sie (C-0291). Der Bestand führt die drei mit „wie“ als Beispiele an, nicht als abschließende Liste. Die Aussage stammt aus S-0003, einer unbestätigten Webquelle (Trust T3), und ist entsprechend vorsichtig zu lesen.\n\nBelege:\n- C-0291 (S-0003, „Facts: The Trick You Haven't Thought Of“, Wortlaut) — Stand 2026-07-04\n\nStand: 2026-07-04; Konfidenz: mittel\nHinweise: Das Ranking hat C-0291 unter dieser Wortwahl nicht geliefert (Trefferstärke weak), gefunden hat ihn die Vollsichtung. Für die Pflege heißt das: Dem Bestand fehlt für diese Wortwahl ein Alias oder Tag.\nSichtung: 28 von 28 Claims, Quittung d24ec09214ec"
+  },
+  {
+   "id": "A3F2",
+   "art": "positiv",
+   "frage": "Wie stelle ich Verbindungen zwischen zwei Einträgen her, sodass aus der Ordnerstruktur ein Netz wird?",
+   "erwartet": [
+    "C-0002"
+   ],
+   "sweep_args": [],
+   "quittung": [
+    "1:7fa09a43f6362839=C-0002"
+   ],
+   "antwort": "Über gewöhnliche Markdown-Links. Laut Bestand ist der Dateipfad die Identität eines Konzepts (so heißen dort die Einträge), und Konzepte verlinken sich über gewöhnliche Markdown-Links; dadurch wird das Verzeichnis zu einem Beziehungsgraphen (C-0002). Belegt ist das für OKF v0.1; diese Fassung führt der Bestand als veraltet, maßgeblich ist OKF v0.2 (siehe Hinweise).\n\nBelege:\n- C-0002 (S-0001, Abschnitt „How it works“, Wortlaut) — Stand 2026-07-28\n\nStand: 2026-07-28; Konfidenz: hoch\nHinweise: C-0002 steht auf der Seite zu OKF v0.1 (knowledge/demo-okf/okf.md), die im Bestand als veraltet geführt wird. Maßgeblich ist die Nachfolgeseite zu OKF v0.2 (knowledge/demo-okf/okf-v02.md), die v0.1 ablöst (ersetzt-Relation im Graph; dort C-0309) und laut ihrer Kurzfassung dessen Grundform beibehält; einen eigenen Claim zur Verlinkung enthält sie nicht. Nach dem Vermerk auf der v0.1-Seite bleiben C-0001 bis C-0005 gültig und werden von v0.2 inhaltlich bestätigt. Die Aussagen beider Seiten sind belegt, aber von niemandem gegengeprüft (Trust-Tier unverified); die Konfidenz „hoch“ ist deshalb eine Kuratierungsentscheidung ohne Gegenprüfung. Das Ranking hat C-0002 unter dieser Wortwahl nicht geliefert (Trefferstärke weak), gefunden hat ihn die Vollsichtung; für die Pflege heißt das, dass dem Bestand dafür ein Alias oder Tag fehlt.\nSichtung: 28 von 28 Claims, Quittung a215c99a7f32"
+  },
+  {
+   "id": "A3F3",
+   "art": "negativ",
+   "frage": "Wie viele Nutzer hat OKF weltweit?",
+   "erwartet": [],
+   "sweep_args": [],
+   "quittung": [
+    "1:1bf3b109b4335ee0=-"
+   ],
+   "antwort": "Nicht im Bestand: Der Bestand beschreibt OKF als Format (Fassungen v0.1 und v0.2), enthält aber keine Angabe dazu, wie viele Nutzer OKF hat, weder weltweit noch sonst.\n\nHinweise: Der externe Fallback (query --extern) brachte keinen Hinweis, weil keine der beiden aufgeführten Bezugsquellen gelesen werden konnte: X-0001 ist auf diesem Host nicht gebunden, X-0002 wurde wegen der Offline-Schaltung nicht abgerufen. Das ist kein Negativbefund über diese Quellen.\nSichtung: 28 von 28 Claims, Quittung 16a9e2fca391\n\nSoll ich eine Quelle zu OKF-Nutzerzahlen aufnehmen?"
+  },
+  {
+   "id": "A3F4",
+   "art": "positiv",
+   "frage": "Kann ich eine Kennzahl, eine Betriebsanleitung und eine Programmierschnittstelle gemeinsam in einem einzigen Textdokument abhandeln, oder braucht jedes Thema sein eigenes?",
+   "erwartet": [
+    "C-0001"
+   ],
+   "sweep_args": [],
+   "quittung": [
+    "1:075b5d45d31c89b1=C-0001"
+   ],
+   "antwort": "Der Bestand beantwortet das für das Open Knowledge Format (OKF): Dort braucht jedes Thema seine eigene Datei. OKF v0.1 stellt Wissen als Verzeichnis von Markdown-Dateien dar, und jede Datei beschreibt genau ein Konzept; als Beispiele für Konzepte nennt der Bestand Tabelle, Metrik, Runbook und API (C-0001). Kennzahl (Metrik), Betriebsanleitung (Runbook) und Programmierschnittstelle (API) sind danach drei Konzepte und gehören in drei Dateien, nicht gemeinsam in eine. Belegt ist das für OKF v0.1; diese Fassung führt der Bestand als veraltet, maßgeblich ist OKF v0.2 (siehe Hinweise).\n\nBelege:\n- C-0001 (S-0001, Abschnitt „How it works“, Wortlaut) — Stand 2026-07-28\n\nStand: 2026-07-28; Konfidenz: hoch\nHinweise: C-0001 beschreibt OKF v0.1 und steht auf der im Bestand als veraltet geführten Seite knowledge/demo-okf/okf.md. Maßgeblich ist die Nachfolgeseite zu OKF v0.2 (knowledge/demo-okf/okf-v02.md), die v0.1 ablöst (ersetzt-Relation im Graph; dort C-0309) und laut ihrer Kurzfassung dessen Grundform beibehält; die Regel „genau ein Konzept je Datei“ wiederholt sie nicht als eigenen Claim. Nach dem Vermerk auf der v0.1-Seite bleiben C-0001 bis C-0005 gültig und werden von v0.2 inhaltlich bestätigt. Die Aussagen beider Seiten sind belegt, aber von niemandem gegengeprüft (Trust-Tier unverified); die Konfidenz „hoch“ ist deshalb eine Kuratierungsentscheidung ohne Gegenprüfung. Das Ranking hat die Frage nur schwach erfasst (Trefferstärke weak, C-0001 nur über das Wort „jedes“), belastbar wurde der Treffer erst durch die Vollsichtung; für die Pflege heißt das, dass dem Bestand für Kennzahl, Betriebsanleitung und Programmierschnittstelle Aliase oder Tags fehlen.\nSichtung: 28 von 28 Claims, Quittung 15f4ced3194d"
+  },
+  {
+   "id": "A4F1",
+   "art": "positiv",
+   "frage": "Welche drei grundlegenden Arbeitsgänge kennt eine maschinell gepflegte Wissenssammlung?",
+   "erwartet": [
+    "C-0102"
+   ],
+   "sweep_args": [],
+   "quittung": [
+    "1:3ba4874f81ba1fc6=C-0101,C-0102"
+   ],
+   "antwort": "Drei Kernoperationen: Ingest, Query und Lint (C-0102). Der Bestand nennt sie für das LLM-Wiki-Muster, also für eine persistente, kuratierte Wiki-Schicht, die das Modell statt der unveränderlichen Rohquellen liest (C-0101). Beide Aussagen gelten laut S-0002, einer unbestätigten Webquelle (Trust T3, lebendes Dokument), und sind entsprechend vorsichtig zu lesen.\n\nBelege:\n- C-0102 (S-0002, Gist-Text, Wortlaut) — Stand 2026-07-04\n- C-0101 (S-0002, Gist-Text, Wortlaut) — Stand 2026-07-04\n\nStand: 2026-07-04; Konfidenz: mittel\nHinweise: Die Seite ist von niemandem gegengeprüft (Trust-Tier unverified). Der Bestand spricht von »Kernoperationen« und »LLM-Wiki-Muster«, nicht von »Arbeitsgängen« oder einer »maschinell gepflegten Wissenssammlung«; das Ranking erkannte die Frage deshalb nur schwach, gefunden hat die Belege erst die Vollsichtung. Für diese Wortwahl fehlt dem Bestand ein Alias.\nSichtung: 28 von 28 Claims, Quittung 88fa2cc1e6e3"
+  },
+  {
+   "id": "A4F2",
+   "art": "positiv",
+   "frage": "Welches Vorgehen stand Pate für das offene Regelwerk für Wissenssammlungen, und was soll es zwischen verschiedenen Werkzeugen leisten?",
+   "erwartet": [
+    "C-0004"
+   ],
+   "sweep_args": [],
+   "quittung": [
+    "1:3c3e3d6e6759ad40=C-0004,C-0101,C-0309"
+   ],
+   "antwort": "Pate stand das LLM-Wiki-Muster: Die Spezifikation des Open Knowledge Format (OKF, hier in der Fassung v0.1) formalisiert dieses Muster in ein portables, interoperables Format (C-0004). Genau das soll sie zwischen verschiedenen Werkzeugen leisten: Portabilität und Interoperabilität (C-0004). Das Muster selbst trennt laut S-0002, einer unbestätigten Webquelle (Trust T3), unveränderliche Rohquellen von einer persistenten, kuratierten Wiki-Schicht, die das Modell statt der Rohdokumente liest (C-0101).\n\nBelege:\n- C-0004 (S-0001, Einleitung und Abschluss, Wortlaut) — Stand 2026-07-28\n- C-0101 (S-0002, Gist-Text, Wortlaut) — Stand 2026-07-04\n- C-0309 (S-0004, §12, §13 und §13.1, Wortlaut) — Stand 2026-07-28\n\nStand: 2026-07-04; Konfidenz: mittel\nHinweise: C-0004 steht auf der Seite zu OKF v0.1 (okf.md), die den Status »veraltet« trägt. Maßgeblich ist die Nachfolgeseite zu OKF v0.2 (okf-v02.md), denn v0.2 löst v0.1 ab (C-0309). Die v0.2-Seite enthält keinen eigenen Claim zu Herkunft und Zweck des Formats; laut Vermerk auf der v0.1-Seite bleiben deren Claims C-0001 bis C-0005 aber gültig und werden von v0.2 inhaltlich bestätigt. Beide OKF-Seiten haben Konfidenz »hoch«, sind aber von niemandem gegengeprüft (Trust-Tier unverified). Die Kurzfassung der v0.1-Seite nennt OKF außerdem eine offene, anbieterneutrale Spezifikation; einen eigenen Claim gibt es dafür nicht. Das Ranking erkannte die Frage nur schwach, weil der Bestand von »OKF«, »LLM-Wiki-Muster« und »interoperabel« spricht statt von »Regelwerk«, »Vorgehen« und »Werkzeugen«; gefunden hat die Belege erst die Vollsichtung.\nSichtung: 28 von 28 Claims, Quittung bad693bfd351"
+  },
+  {
+   "id": "A4F3",
+   "art": "positiv",
+   "frage": "Was droht einem Vorhaben, wenn man das Begriffs- und Beziehungsmodell gleich zu Beginn lückenlos festlegen will?",
+   "erwartet": [
+    "C-0201"
+   ],
+   "sweep_args": [],
+   "quittung": [
+    "1:053ce5105e99431b=C-0201,C-0202,C-0203"
+   ],
+   "antwort": "Dem Vorhaben droht der Stillstand. Laut S-0003, einer Einzelquelle der Trust-Stufe T3, friert der Versuch, die Ontologie — welche Knoten, welche Kanten — vorab perfekt zu entwerfen, Projekte ein; die Ontologie gilt dort als härtester Teil einer Graph-/Memory-Schicht (C-0201). Empfohlen wird der umgekehrte Weg: eine kleine, fixe, generische Basis (POLE+O), die per Subtypen additiv erweitert wird (C-0202). Subtypen werden dabei nicht theoretisiert, sondern an echten Daten entdeckt; eine Fehlklassifikation (Clash) ist ein Signal für eine gezielte Ergänzung, nicht für ein Schema-Redesign (C-0203).\n\nBelege:\n- C-0201 (S-0003, Einleitung und »The Overkill Trap«, Wortlaut) — Stand 2026-07-04\n- C-0202 (S-0003, »The POLE+O Data Model«, Wortlaut) — Stand 2026-07-04\n- C-0203 (S-0003, Explorations-Loop und Beispiele, Wortlaut) — Stand 2026-07-04\n\nStand: 2026-07-04; Konfidenz: mittel\nHinweise: Die Seite stützt sich auf eine Einzelquelle der Trust-Stufe T3 und ist von niemandem gegengeprüft (Trust-Tier unverified). Der Bestand spricht von »Ontologie«, nicht von einem »Begriffs- und Beziehungsmodell«; das Ranking erkannte die Frage deshalb nur schwach, gefunden hat die Belege erst die Vollsichtung.\nSichtung: 28 von 28 Claims, Quittung 9376d66dd6fe"
+  },
+  {
+   "id": "A4F4",
+   "art": "negativ",
+   "frage": "Was sagt der Bestand zum Datenschutz?",
+   "erwartet": [],
+   "sweep_args": [],
+   "quittung": [
+    "1:72555fb65dc9635f=-"
+   ],
+   "antwort": "Nicht im Bestand. Der Tresor enthält keine Aussage zum Datenschutz.\n\nHinweise: Der anschließende externe Fallback brachte keinen Treffer, konnte aber auch kein Dokument lesen: X-0001 ist auf diesem Host nicht gebunden, X-0002 wurde wegen der gesetzten Offline-Schaltung (SKILLSAFE_OFFLINE) nicht abgerufen. Das ist deshalb kein Negativbefund über diese beiden Quellen.\nSichtung: 28 von 28 Claims, Quittung e9af01eaefca\n\nSoll ich eine Quelle zum Datenschutz aufnehmen?"
+  },
+  {
+   "id": "A5F1",
+   "art": "negativ",
+   "frage": "Welche Frist hat der Vermieter, um einen angezeigten Mangel zu beseitigen?",
+   "erwartet": [],
+   "sweep_args": [],
+   "quittung": [
+    "1:69764e4c75860129=-"
+   ],
+   "antwort": "Nicht im Bestand. Der Tresor enthält keine Aussage dazu, welche Frist der Vermieter hat, um einen angezeigten Mangel zu beseitigen.\n\nHinweise: Am nächsten liegt C-0402 (X-0001, A-0007, Wortlaut; Seite „Mietminderung bei Schimmelbefall“, Stand 2026-08-06; Quelle der Trust-Stufe T3, Seite nicht gegengeprüft): Danach ist der Mangel dem Vermieter nach dem Beispielhandbuch unverzüglich anzuzeigen. Das regelt die Anzeige an den Vermieter, nicht eine Frist des Vermieters für die Beseitigung, und beantwortet die Frage deshalb nicht.\nNicht im Bestand: Frist des Vermieters für die Beseitigung eines angezeigten Mangels.\nSichtung: 28 von 28 Claims, Quittung ffb02f014750\nExtern (nicht im Bestand): kein Treffer. Der externe Fallback konnte keine der beiden aufgeführten Bezugsquellen lesen: X-0001 (Beispielhandbuch) ist auf diesem Rechner nicht gebunden, X-0002 (SkillSafe-Repositorium) wurde wegen der Offline-Schaltung nicht abgerufen. Das ist kein Negativbefund über diese Quellen.\n\nSoll ich eine Quelle dazu aufnehmen? Sobald X-0001 hier gebunden ist, kann ich auch den externen Fallback wiederholen."
+  },
+  {
+   "id": "A5F2",
+   "art": "positiv",
+   "frage": "Wie verhindere ich, dass die Verknüpfungen zwischen den Seiten meiner Wissenssammlung mit der Zeit unbemerkt auseinanderlaufen?",
+   "erwartet": [
+    "C-0104"
+   ],
+   "sweep_args": [],
+   "quittung": [
+    "1:98f668edb221a98a=C-0102,C-0104"
+   ],
+   "antwort": "Der Bestand nennt dafür ein Mittel: Lint auf festem Rhythmus. Regelmäßiges Lint ist dort als Pflicht festgehalten, weil die Drift der Querverweise der am häufigsten gemeldete Fehlermodus ist (C-0104; eigene Einordnung des Tresors, formuliert als Vorgabe für den Wissenstresor selbst). Lint ist zugleich neben Ingest und Query eine der drei Kernoperationen des LLM-Wiki-Musters (C-0102; laut S-0002, einer unbestätigten Webquelle).\n\nBelege:\n- C-0104 (S-0002, Kommentarbereich, Auslegung) — eigene Einordnung\n- C-0102 (S-0002, Gist-Text, Wortlaut) — Stand 2026-07-04\n\nStand: 2026-07-04; Konfidenz: mittel\nHinweise: Die tragende Aussage C-0104 ist eine Auslegung, kein Wortlaut der Quelle. S-0002 hat die Trust-Stufe T3, die Seite ist nicht gegengeprüft. Pflegehinweis: Das Ranking erkannte die Frage nur schwach (weak), gefunden hat die Claims erst die Vollsichtung; für „Verknüpfungen“ und „auseinanderlaufen“ fehlt dem Bestand ein Alias oder Tag zu „Querverweise“ und „Drift“.\nNicht im Bestand: was ein Lint-Lauf konkret prüft und welcher Rhythmus gemeint ist. Der Bestand nennt nur die Regel.\nSichtung: 28 von 28 Claims, Quittung 6cbca1548179\n\nSoll ich dazu eine Quelle aufnehmen?"
+  },
+  {
+   "id": "A5F3",
+   "art": "positiv",
+   "frage": "Größte Hürde beim Aufbau eines vernetzten Langzeitgedächtnisses für Sprachassistenten?",
+   "erwartet": [
+    "C-0201"
+   ],
+   "sweep_args": [],
+   "quittung": [
+    "1:d60b6f2a47642558=C-0201"
+   ],
+   "antwort": "Laut Bestand ist das die Ontologie, also die Festlegung, was Knoten und was Kante wird: Sie ist der härteste Teil jeder Graph- oder Memory-Schicht. Der Versuch, sie vorab perfekt zu entwerfen, friert Projekte ein; auch dateibasierte „virtuelle Wissensgraphen“ stehen vor derselben Frage, welche Primitive und Entitäten überhaupt extrahiert werden (C-0201; laut S-0003, einer Einzelquelle der Trust-Stufe T3, unbestätigt).\n\nBelege:\n- C-0201 (S-0003, Einleitung und \"The Overkill Trap\", Wortlaut) — Stand 2026-07-04\n\nStand: 2026-07-04; Konfidenz: mittel\nHinweise: Der Bestand trifft die Aussage allgemein für Graph- und Memory-Schichten; ich habe „vernetztes Langzeitgedächtnis“ als eine solche Schicht gelesen (Oberbegriff). Sprachassistenten nennt der Bestand an keiner Stelle; die Quelle argumentiert laut Seite im Kontext von Neo4j/GraphRAG. Die Seite ist nicht gegengeprüft. Pflegehinweis: Das Ranking fand nichts (none), den Claim hat erst die Vollsichtung gefunden; für diese Wortwahl fehlt dem Bestand ein Alias oder Tag.\nNicht im Bestand: eine Aussage, die sich eigens auf Sprachassistenten bezieht.\nSichtung: 28 von 28 Claims, Quittung 69416dd816e5"
+  },
+  {
+   "id": "A5F4",
+   "art": "positiv",
+   "frage": "Welche Arbeitsschritte gibt es und wie wird protokolliert?",
+   "erwartet": [
+    "C-0102"
+   ],
+   "sweep_args": [],
+   "quittung": [
+    "1:e39352bc9cf92b62=C-0102,C-0003,C-0203"
+   ],
+   "antwort": "Die Frage nennt keinen Gegenstand. Der Bestand beschreibt Arbeitsschritte und Protokollierung gemeinsam nur für das LLM-Wiki-Muster, darauf bezieht sich diese Antwort:\n\nArbeitsschritte: Die Kernoperationen sind Ingest, Query und Lint (C-0102).\nProtokollierung: Das Log erhält chronologische Einträge, die über ein Datums-Präfix per grep auffindbar sind (C-0102). Im Open Knowledge Format sind dafür log.md-Dateien für die chronologische Änderungshistorie als optionaler Bestandteil eines Bundles vorgesehen (C-0003, überholte Fassung v0.1, siehe Hinweise).\n\nBelege:\n- C-0102 (S-0002, Gist-Text, Wortlaut) — Stand 2026-07-04\n- C-0003 (S-0001, Abschnitt \"How it works\", Wortlaut) — Stand 2026-07-28, Seite veraltet\n- C-0203 (S-0003, Explorations-Loop und Beispiele, Wortlaut) — Stand 2026-07-04\n\nStand: 2026-07-04; Konfidenz: mittel\nHinweise:\n- Andere Lesart: Falls andere Arbeitsschritte gemeint waren, enthält der Bestand noch die Schrittfolge zum Entdecken von Ontologie-Subtypen: generisch starten, Extraktion über echte Daten laufen lassen, Fehlklassifikationen (Clashes) inspizieren, pro Clash genau einen Subtyp ergänzen oder umbenennen, wiederholen (C-0203).\n- Veraltete Fassung: C-0003 steht auf der Seite „Open Knowledge Format (OKF)“ zu v0.1 mit Status veraltet. Maßgeblich ist die Nachfolgeseite „Open Knowledge Format v0.2“, die sie über die ersetzt-Relation ablöst. Sie enthält keinen eigenen Claim zu Log-Dateien; laut der überholten Seite bleiben deren Claims gültig.\n- Vertrauen: C-0102 und C-0203 stammen aus unbestätigten Quellen der Trust-Stufe T3 (S-0002, S-0003). Die v0.1-Seite trägt Konfidenz hoch, ist aber von niemandem gegengeprüft.\n- Pflege: Das Ranking fand nichts (none), alle drei Claims hat erst die Vollsichtung gefunden; für „Arbeitsschritte“ und „protokolliert“ fehlt dem Bestand ein Alias oder Tag.\nNicht im Bestand: eine Aussage der maßgeblichen Fassung OKF v0.2 zu Log-Dateien; ebenso, wie die Ontologie-Schrittfolge aus C-0203 protokolliert wird.\nSichtung: 28 von 28 Claims, Quittung cfd54e0e6ce8\n\nWenn du einen anderen Ablauf meinst, sag mir bitte welchen."
+  },
+  {
+   "id": "A6F1",
+   "art": "positiv",
+   "frage": "Wie halte ich im Kopf eines Schriftstücks fest, woher sein Inhalt kommt, und welche Einzelheiten je Beleg sind freiwillig?",
+   "erwartet": [
+    "C-0302"
+   ],
+   "sweep_args": [],
+   "quittung": [
+    "1:fa9c041547607125=C-0302,C-0304,C-0309,C-0310"
+   ],
+   "antwort": "Die Herkunft des Inhalts steht im Frontmatter, also im Kopf der Datei, im Feld `sources`. Nach OKF v0.2 ist das eine Liste von Einträgen. Pflicht ist je Eintrag das Feld `resource`. Freiwillig sind `id`, `title`, `author`, `usage_count` und `last_modified`. Gesondert nennt der Bestand `usage_window`: ein Geschwisterfeld, das jeden `usage_count` mit einem Zeitraum aus `from` und `to` rahmt (C-0302).\n\nWer den aktuellen Inhalt erzeugt hat, steht getrennt davon im Feld `generated` mit `by` und `at` (C-0304).\n\nBelege:\n- C-0302 (S-0004, §5.1, Wortlaut) — Stand 2026-07-28\n- C-0304 (S-0004, §5.2 und §7, Wortlaut) — Stand 2026-07-28\n- C-0309 (S-0004, §12, §13 und §13.1, Wortlaut) — Stand 2026-07-28\n- C-0310 (S-0004, §5 und §13.2, Auslegung) — eigene Einordnung\n\nStand: 2026-07-28; Konfidenz: hoch\nHinweise: Die Angaben gelten für OKF v0.2. In v0.1 stand die Herkunft als Rumpfliste `# Citations` im Text; v0.2 ersetzt sie durch `sources`, und Konsumenten dürfen die Altform bei v0.1-Dokumenten weiter als Rückfall lesen (C-0309). Die v0.1-Fassung liegt als überholt im Bestand (okf.md), maßgeblich ist okf-v02.md. Eigene Einordnung des Tresors (C-0310): Das gleichnamige Feld `sources` im Profil dieses Tresors ist anders belegt, nämlich als flache Liste registrierter S-IDs. Die Seite trägt Konfidenz „hoch“, ist aber von niemandem gegengeprüft (trust_tier: unverified); die hohe Konfidenz ist damit eine Kuratierungsentscheidung ohne Gegenprüfung. Pflegehinweis: Das Ranking fand C-0302 unter dieser Wortwahl nicht, dem Bestand fehlt dafür ein Alias oder Tag.\nSichtung: 28 von 28 Claims, Quittung 384c6c24a06b"
+  },
+  {
+   "id": "A6F2",
+   "art": "negativ",
+   "frage": "Wie heißen die 22 Ontologien im Neo4j-Domänenkatalog im Einzelnen?",
+   "erwartet": [],
+   "sweep_args": [],
+   "quittung": [
+    "1:39e114407b0b3ab1=C-0202"
+   ],
+   "antwort": "Nicht im Bestand: Der Bestand erwähnt den Neo4j-Domänenkatalog mit seinen 22 Ontologien, nennt aber keine von ihnen beim Namen.\n\nWas er dazu enthält, gilt laut S-0003, einer unbestätigten Einzelquelle der Trust-Stufe T3: Der dort zitierte Katalog mit 22 fertigen Ontologien landet durchgängig bei 10–12 Entitätstypen, nämlich 5 gemeinsamen Basis- plus 5–7 Domänen-Nomen (C-0202).\n\nBelege:\n- C-0202 (S-0003, \"The POLE+O Data Model\", Wortlaut) — Stand 2026-07-04\n\nStand: 2026-07-04; Konfidenz: mittel\nHinweise: Das Nachschlagen in den aufgeführten externen Quellen war hier nicht möglich: X-0001 ist auf diesem Host nicht gebunden, X-0002 wurde nicht abgerufen, weil die Umgebung offline geschaltet ist (SKILLSAFE_OFFLINE). Das ist kein Negativbefund über diese Quellen.\nSichtung: 28 von 28 Claims, Quittung 355327f7704a\n\nSoll ich eine Quelle dazu aufnehmen, etwa den zitierten Katalog selbst?"
+  },
+  {
+   "id": "A6F3",
+   "art": "positiv",
+   "frage": "Muss ich das ganze Kategoriensystem umbauen, wenn die automatische Erkennung etwas in die falsche Schublade steckt?",
+   "erwartet": [
+    "C-0203"
+   ],
+   "sweep_args": [],
+   "quittung": [
+    "1:9235c7367613d6a0=C-0202,C-0203,C-0205"
+   ],
+   "antwort": "Nein. Laut S-0003, einer unbestätigten Einzelquelle der Trust-Stufe T3, ist eine Fehlklassifikation, dort „Clash“ genannt, ein Signal für eine gezielte Ergänzung und nicht für ein Schema-Redesign. Das Vorgehen: generisch starten, die Extraktion über echte Daten laufen lassen, die Fehlklassifikationen inspizieren, pro Clash genau einen Subtyp ergänzen oder umbenennen, wiederholen (C-0203). Die kleine, fixe, generische Basis bleibt dabei bestehen und wird per Subtypen additiv erweitert (C-0202).\n\nEigene Einordnung des Tresors (C-0205): Für den Tresor selbst sieht der Bestand darin sein Type-Onboarding bestätigt, also kleine Registry als fixe Basis, fail-closed, Erweiterung nur bei nachgewiesenem Clash.\n\nBelege:\n- C-0203 (S-0003, Explorations-Loop und Beispiele, Wortlaut) — Stand 2026-07-04\n- C-0202 (S-0003, \"The POLE+O Data Model\", Wortlaut) — Stand 2026-07-04\n- C-0205 (S-0003, Gesamtdokument, Auslegung) — eigene Einordnung\n\nStand: 2026-07-04; Konfidenz: mittel\nHinweise: Ich lese „Kategoriensystem“ als Typschema (Ontologie) und „in die falsche Schublade stecken“ als Fehlklassifikation bei der Extraktion; der Bestand benutzt diese Wörter nicht. Pflegehinweis: Das Ranking fand unter dieser Wortwahl keinen Kandidaten, dem Bestand fehlt dafür ein Alias oder Tag.\nSichtung: 28 von 28 Claims, Quittung 6d972c10b25a"
+  },
+  {
+   "id": "A6F4",
+   "art": "positiv",
+   "frage": "Was mache ich, wenn etwas falsch zugeordnet wurde?",
+   "erwartet": [
+    "C-0203"
+   ],
+   "sweep_args": [],
+   "quittung": [
+    "1:dfd7f6a800839a59=C-0203,C-0204,C-0205"
+   ],
+   "antwort": "Im Bestand ist das für die Extraktion in ein Typschema (Ontologie) beschrieben; eine falsche Zuordnung heißt dort Fehlklassifikation oder „Clash“. Das Vorgehen laut S-0003, einer unbestätigten Einzelquelle der Trust-Stufe T3:\n\n- Den Clash inspizieren und pro Clash genau einen Subtyp ergänzen oder umbenennen, dann den Durchlauf über echte Daten wiederholen (C-0203).\n- Das Schema dabei nicht neu entwerfen: Ein Clash ist ein Signal für eine gezielte Ergänzung, nicht für ein Schema-Redesign (C-0203).\n- Passt etwas in gar keinen Typ, ist „Facts“ das generische Fallback: atomare, einzeln gespeicherte Aussagen ohne Kanten, nur über Suche auffindbar. Mit reifendem Graph wandern sie zu typisierten Entitäten und Kanten (C-0204).\n\nEigene Einordnung des Tresors (C-0205): Für den Tresor selbst sieht der Bestand darin sein Type-Onboarding bestätigt, also kleine Registry als fixe Basis, fail-closed, Erweiterung nur bei nachgewiesenem Clash; atomare Claims ohne eigene Seite landen in fakten.md der Domäne.\n\nBelege:\n- C-0203 (S-0003, Explorations-Loop und Beispiele, Wortlaut) — Stand 2026-07-04\n- C-0204 (S-0003, \"Facts: The Trick You Haven't Thought Of\", Wortlaut) — Stand 2026-07-04\n- C-0205 (S-0003, Gesamtdokument, Auslegung) — eigene Einordnung\n\nStand: 2026-07-04; Konfidenz: mittel\nHinweise: Die Frage nennt nicht, was zugeordnet wurde. Ich habe sie als Frage nach Fehlklassifikationen bei der Extraktion gelesen, weil der Bestand falsche Zuordnung in diesem Zusammenhang behandelt. Ist etwas anderes gemeint, sichte ich den Bestand gezielt dafür; dazu brauche ich die Angabe, was zugeordnet wurde. Pflegehinweis: Das Ranking fand unter dieser Wortwahl keinen Kandidaten, dem Bestand fehlt dafür ein Alias oder Tag.\nSichtung: 28 von 28 Claims, Quittung 8a8f71583270"
+  },
+  {
+   "id": "A7F1",
+   "art": "positiv",
+   "frage": "Wo steht, von wem und zu welchem Zeitpunkt die gegenwärtige Fassung eines Textes geschrieben wurde, und wo, wer sie danach gegengeprüft hat?",
+   "erwartet": [
+    "C-0304"
+   ],
+   "sweep_args": [],
+   "quittung": [
+    "1:3c6caffc96f0ff94=C-0304,C-0305,C-0308,C-0309"
+   ],
+   "antwort": "Der Bestand beantwortet das für Dokumente im Open Knowledge Format (OKF) v0.2:\n\n- Wer die aktuelle Fassung erzeugt hat und wann: Das Feld `generated` mit den Angaben `by` und `at` hält fest, wer den aktuellen Inhalt erzeugt hat (C-0304). Der Zeitpunkt ist die Angabe `at`: `generated.at` ersetzt das frühere `timestamp` aus v0.1, das Konsumenten für v0.1-Dokumente weiterhin als Rückfall lesen dürfen (C-0309).\n- Wer gegengeprüft hat: Das Feld `verified`, eine Liste von `by`- und `at`-Einträgen, hält unabhängige Bestätigungen fest (C-0304). Konsumenten leiten daraus drei Trust-Tiers ab: Fehlt das Feld, gilt unverified; bestätigen nur Akteure ohne `human:`-Präfix, gilt machine-confirmed; bestätigt mindestens ein `human:`-Akteur, gilt human-reviewed. Die Tiers sind beratende Signale, keine Zugriffskontrolle (C-0305).\n- Wie die Beteiligten benannt sind: Beide Felder nutzen dieselbe Aktorkonvention – `<producer>/<version>` für Agenten, `human:<id>` für Personen, `process:<id>` für automatisierte Prozesse (C-0304).\n- Wo `verified` liegt: Für den Typ Attested Computation hält der Bestand fest, dass `verified` dokumentweise bestätigt, dass die Definition weiterhin zur Richtlinie passt, und im Bundle steht; die Attestierung eines einzelnen Laufs wird dagegen zur Laufzeit geprüft und nicht im Bundle gespeichert (C-0308).\n\nBelege:\n- C-0304 (S-0004, §5.2 und §7, Wortlaut) — Stand 2026-07-28\n- C-0305 (S-0004, §5.3, Wortlaut) — Stand 2026-07-28\n- C-0308 (S-0004, §10.3 und §10.6, Wortlaut) — Stand 2026-07-28\n- C-0309 (S-0004, §12, §13 und §13.1, Wortlaut) — Stand 2026-07-28\n\nStand: 2026-07-28; Konfidenz: hoch\nHinweise: Die genutzte Seite „Open Knowledge Format v0.2“ (knowledge/demo-okf/okf-v02.md) trägt das Trust-Tier unverified – die Aussagen sind belegt, aber von niemandem gegengeprüft; die hohe Konfidenz ist damit eine Kuratierungsentscheidung ohne Gegenprüfung. Maßgeblich ist die Fassung v0.2; die Vorgängerseite zu OKF v0.1 (knowledge/demo-okf/okf.md) bleibt mit Status veraltet im Bestand und wird durch die v0.2-Seite ersetzt. Der Kernbeleg C-0304 wurde erst durch die Vollsichtung gefunden, nicht durch das Ranking (Trefferstärke weak); für diese Wortwahl fehlt dem Bestand ein Alias oder Tag.\nSichtung: 28 von 28 Claims, Quittung 0920d2498107"
+  },
+  {
+   "id": "A7F2",
+   "art": "positiv",
+   "frage": "Warum genügt es nicht zu sagen, die eigene Sammlung vertrage sich mit dem offenen Wissensformat, ohne dazuzuschreiben, welche Ausgabe gemeint ist?",
+   "erwartet": [
+    "C-0310"
+   ],
+   "sweep_args": [],
+   "quittung": [
+    "1:798ad40b21a843a9=C-0309,C-0310"
+   ],
+   "antwort": "Kurz: weil OKF v0.2 und das Profil dieses Tresors gleich benannte Felder unterschiedlich belegen; deshalb muss nach dem Bestand jede Aussage über OKF-Kompatibilität die Zielversion nennen (C-0310). Im Einzelnen:\n\n- Eigene Einordnung des Bestands (Auslegung, kein Wortlaut der Spezifikation), bezogen auf dieses Bundle: OKF v0.2 regelt Provenienz, Vertrauen und Lebenszyklus inzwischen selbst, aber in anderer Gestalt als das hiesige Profil. Das v0.2-Feld `sources` ist eine Liste von Einträgen mit Pflichtangabe `resource`, das gleichnamige Profilfeld eine flache Liste registrierter S-IDs; `status` kennt in v0.2 die Werte draft, stable und deprecated, im Profil aktiv, veraltet und in-pruefung. Beide Felder sind namensgleich und unterschiedlich belegt (C-0310).\n- Wortlaut der Spezifikation: v0.2 löst v0.1 ab und ist nach der Regel major.minor ein Minor-Sprung mit zwei ausdrücklich benannten Bruchstellen – `timestamp` wird durch `generated.at` ersetzt, die Rumpfliste `# Citations` durch das Frontmatter-Feld `sources`; beide Altformen dürfen Konsumenten für v0.1-Dokumente weiterhin als Rückfall lesen (C-0309). Auch zwischen den beiden Ausgaben gibt es also benannte Unterschiede.\n\nBelege:\n- C-0310 (S-0004, §5 und §13.2, Auslegung) — eigene Einordnung\n- C-0309 (S-0004, §12, §13 und §13.1, Wortlaut) — Stand 2026-07-28\n\nStand: 2026-07-28; Konfidenz: hoch\nHinweise: Veraltete Fassung existiert – die Seite „Open Knowledge Format (OKF)“ (knowledge/demo-okf/okf.md, C-0001 bis C-0005) beschreibt v0.1, hat Status veraltet und wird durch „Open Knowledge Format v0.2“ (knowledge/demo-okf/okf-v02.md) ersetzt; maßgeblich ist die v0.2-Seite, auch wenn das Ranking die überholte Seite zuerst nannte. Die genutzte v0.2-Seite trägt das Trust-Tier unverified: belegt, aber von niemandem gegengeprüft; die hohe Konfidenz ist eine Kuratierungsentscheidung ohne Gegenprüfung. Der Kernbeleg C-0310 stand nicht unter den gelieferten Treffern des Rankings, sondern wurde beim Lesen der Kandidatenseite gefunden und durch die Vollsichtung bestätigt; für die Wortwahl der Frage („Ausgabe“, „vertrage sich“) fehlt dem Bestand ein Alias oder Tag.\nSichtung: 28 von 28 Claims, Quittung 889ced1c628a"
+  },
+  {
+   "id": "A7F3",
+   "art": "negativ",
+   "frage": "Kann ich vom Hauseigentümer Ersatz für Möbel verlangen, die durch die Feuchtigkeit ruiniert wurden?",
+   "erwartet": [],
+   "sweep_args": [],
+   "quittung": [
+    "1:2eef1840a46e5cc1=-"
+   ],
+   "antwort": "Nicht im Bestand. Der Tresor enthält keine Aussage dazu, ob sich vom Hauseigentümer Ersatz für Möbel verlangen lässt, die durch Feuchtigkeit ruiniert wurden. Aus Allgemeinwissen ergänze ich das bewusst nicht – der Tresor antwortet nur aus seinen kuratierten Claims.\n\nHinweise: Angrenzend, aber keine Antwort auf die Frage: Nach einem Beispielhandbuch (externe Quelle X-0001, Trust T3) ist erheblicher Schimmelbefall in Wohnräumen ein Mangel, der zur Mietminderung berechtigt (C-0401), und der Mangel ist dem Vermieter unverzüglich anzuzeigen (C-0402); beides steht auf der Seite „Mietminderung bei Schimmelbefall“, Stand 2026-08-06. Zu Ersatz- oder Schadensersatzansprüchen für beschädigte Sachen sagt keiner der 28 Claims etwas, und aus diesen beiden lässt sich dazu nichts ableiten.\nSichtung: 28 von 28 Claims, Quittung 20578496422e\nExtern (nicht im Bestand): kein Treffer – und kein Negativbefund: Der externe Fallback konnte keine der beiden aufgeführten Quellen lesen. X-0001 (Beispielhandbuch) ist auf diesem Host nicht gebunden, X-0002 (SkillSafe-Repositorium, Netzquelle) wurde wegen der Offline-Schaltung nicht abgerufen.\n\nSoll ich eine Quelle dazu aufnehmen? Alternativ lässt sich X-0001 lokal binden (`vault.py extern bind X-0001 <pfad>`); dann kann ich dort nachschlagen."
+  },
+  {
+   "id": "A7F4",
+   "art": "positiv",
+   "frage": "Welche Probleme entstehen beim Zerschneiden von Texten in Stücke?",
+   "erwartet": [
+    "C-0291"
+   ],
+   "sweep_args": [],
+   "quittung": [
+    "1:a21570a80d867616=C-0291"
+   ],
+   "antwort": "Laut S-0003 (Iusztin: „Stop Chasing the Perfect Ontology“, Trust T3 – also mit Vorsicht zu lesen) zählen zu den klassischen Chunking-Fehlern, also den Problemen beim Zerschneiden von Texten in Stücke (C-0291):\n\n- Trennungen mitten im Gedanken,\n- vermischte Konzepte,\n- willkürliche Grenzen.\n\nNach derselben Aussage vermeiden atomare Fact-Einheiten diese Fehler (C-0291).\n\nBelege:\n- C-0291 (S-0003, \"Facts: The Trick You Haven't Thought Of\", Wortlaut) — Stand 2026-07-04\n\nStand: 2026-07-04; Konfidenz: mittel\nHinweise: Die Quelle S-0003 hat Trust T3, und die genutzte Seite „Faktensammlung demo-okf“ trägt das Trust-Tier unverified (belegt, aber von niemandem gegengeprüft). Der Claim leitet die Aufzählung mit „wie“ ein; sie ist also beispielhaft, und mehr als diese drei Punkte nennt der Bestand nicht. Gefunden per Vollsichtung, nicht über das Ranking (Trefferstärke weak): Für diese Wortwahl fehlt dem Bestand ein Alias oder Tag zu „Chunking“.\nSichtung: 28 von 28 Claims, Quittung e5b2ea2be00c"
+  },
+  {
+   "id": "A8F1",
+   "art": "positiv",
+   "frage": "Was wird angenommen, wenn bei einem Eintrag nicht vermerkt ist, ob er ein Entwurf, eine gültige Fassung oder bereits abgekündigt ist?",
+   "erwartet": [
+    "C-0306"
+   ],
+   "sweep_args": [],
+   "quittung": [
+    "1:ab5b229e4ecece1f=C-0306"
+   ],
+   "antwort": "Dann wird `stable` angenommen, also die gültige Fassung. Nach OKF v0.2 läuft der Lebenszyklus über das Feld `status` mit den Werten draft, stable und deprecated (in der Wortwahl der Frage: Entwurf, gültige Fassung, abgekündigt); ein fehlendes Feld bedeutet stable (C-0306).\n\nBelege:\n- C-0306 (S-0004, §5.4 und §5.5, Wortlaut) — Stand 2026-07-28\n\nStand: 2026-07-28; Konfidenz: hoch\nHinweise: Geltungsbereich der Seite knowledge/demo-okf/okf-v02.md ist die Spezifikation OKF v0.2 selbst, nicht ihre Abbildung im Profil dieses Tresors. Die Seite trägt das Signal trust_tier:unverified: Die Aussage ist belegt, aber von niemandem gegengeprüft; die hohe Konfidenz ist eine Kuratierungsentscheidung ohne Gegenprüfung. Für die Pflege: Das Ranking hat C-0306 unter dieser Wortwahl nicht als Treffer geliefert, gefunden hat ihn erst die Vollsichtung; dem Bestand fehlt dafür ein Alias oder Tag.\nSichtung: 28 von 28 Claims, Quittung 64976c4d7fcd"
+  },
+  {
+   "id": "A8F2",
+   "art": "positiv",
+   "frage": "Woher kommt das POLE-Modell ursprünglich?",
+   "erwartet": [
+    "C-0290"
+   ],
+   "sweep_args": [],
+   "quittung": [
+    "1:af8da31b1038b1fc=C-0290"
+   ],
+   "antwort": "Laut S-0003 (Iusztin, „Stop Chasing the Perfect Ontology“; Quelle mit Trust T3, deshalb vorsichtig zu lesen) stammt POLE aus der Ermittlungs- und Nachrichtendienstanalyse. Das O für Organization wurde für die allgemeine Entitäten-Extraktion ergänzt (C-0290).\n\nBelege:\n- C-0290 (S-0003, \"The POLE+O Data Model\", Wortlaut) — Stand 2026-07-04\n\nStand: 2026-07-04; Konfidenz: mittel\nHinweise: Die vorsichtige Formulierung folgt aus dem Trust T3 der Quelle S-0003. Davon unabhängig ist die genutzte Seite knowledge/demo-okf/fakten.md von niemandem gegengeprüft (trust_tier:unverified).\nSichtung: 28 von 28 Claims, Quittung ecc7bdea1613"
+  },
+  {
+   "id": "A8F3",
+   "art": "positiv",
+   "frage": "Darf eine KI die Rechenlogik selbst umschreiben?",
+   "erwartet": [
+    "C-0308"
+   ],
+   "sweep_args": [],
+   "quittung": [
+    "1:f61d3fcaaee88f82=C-0307,C-0308"
+   ],
+   "antwort": "Nein. Nach OKF v0.2 darf ein Agent bei einer Attested Computation ausschließlich Werte für die deklarierten `parameters` liefern; die Berechnung selbst darf er weder verfassen noch ändern (C-0308). Dieser Konzepttyp legt eine sanktionierte Berechnung als eigenes Konzept fest, und zu ihm gehört ein `attester`, ein deterministischer Prüfcode ohne LLM (C-0307). Der Bestand spricht dabei von „Agent“ und „Berechnung“, nicht von „KI“ und „Rechenlogik“.\n\nBelege:\n- C-0308 (S-0004, §10.3 und §10.6, Wortlaut) — Stand 2026-07-28\n- C-0307 (S-0004, §10.1 und §10.2, Wortlaut) — Stand 2026-07-28\n\nStand: 2026-07-28; Konfidenz: hoch\nHinweise: Geltungsbereich der Seite knowledge/demo-okf/okf-v02.md ist die Spezifikation OKF v0.2 selbst, nicht ihre Abbildung im Profil dieses Tresors. Die Seite trägt das Signal trust_tier:unverified: Die Aussagen sind belegt, aber von niemandem gegengeprüft; die hohe Konfidenz ist eine Kuratierungsentscheidung ohne Gegenprüfung. Für die Pflege: Das Ranking fand zu dieser Wortwahl keinen einzigen Kandidaten, gefunden hat die Claims erst die Vollsichtung; dem Bestand fehlt dafür ein Alias oder Tag.\nSichtung: 28 von 28 Claims, Quittung 7ac8c1ab5f14"
+  },
+  {
+   "id": "A8F4",
+   "art": "negativ",
+   "frage": "Welche Vektordatenbank wird für die semantische Suche über die Wissensseiten empfohlen?",
+   "erwartet": [],
+   "sweep_args": [],
+   "quittung": [
+    "1:8a22741eaca11459=-"
+   ],
+   "antwort": "Nicht im Bestand. Keiner der 28 Claims des Tresors handelt von Vektordatenbanken oder empfiehlt eine für die semantische Suche über die Wissensseiten.\n\nSichtung: 28 von 28 Claims, Quittung d2ddc0c8f017\nExtern (nicht im Bestand): kein Treffer, weil keine der beiden aufgeführten Bezugsquellen gelesen werden konnte – X-0001 ist auf diesem Host nicht gebunden, X-0002 wurde wegen gesetztem SKILLSAFE_OFFLINE nicht abgerufen. Das ist kein Negativbefund über diese Quellen.\n\nSoll ich eine Quelle dazu aufnehmen?"
+  }
+ ]
+}

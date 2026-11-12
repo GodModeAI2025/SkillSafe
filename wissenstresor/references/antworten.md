@@ -39,7 +39,7 @@ Protokoll für den jeweils maßgeblichen Tresor durchlaufen — eine
    | Stärke | Heißt | Was zu tun ist |
    |---|---|---|
    | `strong` | Jeder Inhaltsbegriff ist exakt, als Wortform oder über einen kuratierten Begriff getroffen | Weiter mit Schritt 3 und 4: Kandidaten lesen und antworten. Decken sie die Frage nicht, Schritt 4b. |
-   | `partial` | Ein Anker trägt (ein kuratierter Begriff, eine genannte ID oder die ganze Frage als Wortfolge in einem Claim), oder mindestens zwei Begriffe sind getroffen und das sind mindestens 60 % — aber `unmatched` oder `partial` ist nicht leer | Weiter mit Schritt 3 und 4. Steht unter den ungetroffenen Begriffen das, wonach gefragt wird, danach Schritt 4b. |
+   | `partial` | Ein Anker trägt (ein kuratierter Begriff, eine genannte ID oder die ganze Frage als Wortfolge in einem Claim), oder mindestens zwei Begriffe sind getroffen und das sind mindestens 60 % — aber `unmatched` oder `partial` ist nicht leer | Tragen die getroffenen Begriffe die Frage: weiter mit Schritt 3 und 4. Steht unter den ungetroffenen das, wonach gefragt wird: direkt zu Schritt 4b, wie bei `weak`. |
    | `weak` | Weniger als das: ein einzelner getroffener Begriff ohne Anker, Wortteil- oder Zufallstreffer | Schritt 4 entfällt, direkt zu Schritt 4b. Die Kandidaten sind Fingerzeige, keine Antwort. |
    | `none` | Kein Kandidat | Schritt 4 entfällt, direkt zu Schritt 4b. |
 
@@ -58,6 +58,11 @@ Protokoll für den jeweils maßgeblichen Tresor durchlaufen — eine
    deshalb dort als Grund stehen und trotzdem `unmatched` sein: Der Claim,
    der ihn trägt, fiel dem Limit zum Opfer. Und ein Treffer kann in der
    Fundstelle eines Claims liegen (`source.locator`) statt in seinem Text.
+
+   Beantworten die in Schritt 4 gelesenen Seiten die Frage ganz, ist die
+   Vollsichtung bei `partial` und `strong` nicht nötig. Nötig wird sie,
+   sobald ein Teil der Frage offen bleibt und als „Nicht im Bestand"
+   ausgewiesen werden soll (Schritt 6).
 
    **Umformulieren ist erlaubt, nie verlangt.** Wer bei `partial` vermutet,
    dass der Bestand ein anderes Wort für dieselbe Sache benutzt, darf
@@ -82,6 +87,11 @@ Protokoll für den jeweils maßgeblichen Tresor durchlaufen — eine
    sind es die Seiten aus `pages` ihrer Quittung.
    Kurzfassung und Claims gelten als wahr (Regel 2); Fundstellen werden
    zitiert, nicht erneut gegen Rohquelle oder Medienrepräsentation geprüft.
+   Evidenz sind dabei allein die Claims: Die Kurzfassung verdichtet sie und
+   darf nichts behaupten, was kein Claim trägt. Sagt eine Kurzfassung doch
+   mehr als die Claims ihrer Seite, ist das ein Pflegefehler
+   (Kurzfassungs-Deckung, `references/lint.md`): in „Hinweise:" benennen,
+   nie als belegte Kernaussage ausgeben.
    `media` liefert nur die validierte Region/Position, niemals OCR-Text als
    eigene Evidenz. Der Abschnitt „Kontext und Grenzen" ordnet ein und nennt
    den Geltungsbereich; er darf in „Hinweise:" einfließen, trägt aber keine
@@ -92,9 +102,14 @@ Protokoll für den jeweils maßgeblichen Tresor durchlaufen — eine
    Seite unter `relations.incoming` eine Kante `ersetzt`, ist die dort
    genannte Seite die neuere Fassung: sie zusätzlich lesen, auch wenn sie
    nicht unter `pages` steht, und als maßgeblich benennen. Bei
-   `widerspricht` gilt dasselbe in beiden Richtungen. Die Claims einer so
-   gelesenen Seite sind zitierbar wie die jeder gelesenen Seite. Andere
-   Kantentypen sind Verweise und verpflichten zu nichts.
+   `widerspricht`, gleich in welcher Richtung, die andere Seite ebenfalls
+   lesen und beide Stände nennen, keinen stillschweigend wählen. Die Claims
+   einer so gelesenen Seite sind zitierbar wie die jeder gelesenen Seite.
+   Andere Kantentypen sind Verweise und verpflichten zu nichts, ebenso eine
+   ausgehende Kante `ersetzt`: Die Vorgängerin der genutzten Seite muss
+   niemand lesen. Eine Seite, die in derselben Sitzung schon ganz gelesen
+   wurde, muss nicht erneut gelesen werden, solange `vault.manifest_sha256`
+   derselbe ist.
 4b. **Vollsichtung — die Bedeutungssuche.** Pflicht bei `weak` und `none`
    (dort anstelle von Schritt 4), und immer, bevor irgendein Teil der Frage
    als „Nicht im Bestand" ausgewiesen wird. Hier liest das Modell jeden
@@ -122,10 +137,15 @@ Protokoll für den jeweils maßgeblichen Tresor durchlaufen — eine
    * **Im Zweifel aufnehmen.** Hinter das `=` gehört jeder Claim, auf den
      sich die Antwort stützen wird, auch einer, der nur einordnet oder
      einschränkt. Ein zu viel gewählter Claim kostet eine Seite Lesearbeit,
-     ein zu wenig gewählter fehlt in der Antwort.
+     ein zu wenig gewählter fehlt in der Antwort. Das gilt auch, wenn die
+     Antwort am Ende „Nicht im Bestand" lautet: Claims, die den Gegenstand
+     einordnen, dürfen gewählt und zitiert werden. `-` heißt nur, dass aus
+     diesem Stapel nichts in die Antwort eingeht.
    * **Die Frage nicht verändern.** Das Siegel bindet Stand, Frage,
-     Stapelgröße und Umfang. Groß-/Kleinschreibung und Satzzeichen sind
-     egal, ein anderes Wort ist eine andere Frage. Am sichersten steht sie
+     Stapelgröße und Zuschnitt. Groß-/Kleinschreibung, Leerraum sowie
+     Anführungs- und Satzzeichen am Wortrand sind egal. Alles andere ist
+     eine andere Frage: ein anderes Wort, aber auch ein Operator, ein
+     Vorzeichen oder „ß" statt „ss". Am sichersten steht sie
      einmal in einer Shell-Variablen (`F='…'`) und in jedem Aufruf als
      `"$F"`. Jede weitere Frage braucht ihre eigene Sichtung, auch wenn
      dieselben Stapel gerade erst gelesen wurden.
@@ -135,29 +155,40 @@ Protokoll für den jeweils maßgeblichen Tresor durchlaufen — eine
      Nachbarseiten aus `relations`. Eine Vollsichtung kennt keinen
      Graph-Hop: Liegt ein gewählter Claim auf einer überholten Seite
      (`page_status:veraltet`), nennt nur `relations.incoming` die
-     Nachfolgerin.
+     Nachfolgerin. Zitierbar sind danach alle Claims der gelesenen Seiten,
+     nicht nur die gewählten.
+   * **Die Vollsichtung sichtet Claims**, keine Kurzfassungen und keinen
+     Fließtext. Das genügt, weil eine Kurzfassung nichts behaupten darf, was
+     kein Claim trägt. Ein „Nicht im Bestand" heißt deshalb genau: Kein
+     Claim des Bestands trägt die Aussage.
      `sweep_incomplete` und `invalid_receipt` liefern nichts: fehlende
      Stapel nachholen, nie raten.
    * **Große Bestände.** `fallback.sweep.batches` nennt den Aufwand vorab.
      Stapel dürfen parallel von Subagenten gelesen werden; jeder gibt genau
-     `<stapel>:<siegel>=<IDs oder ->` zurück. `--domain` und `--page`
-     schränken den Umfang ein und sparen Lesearbeit, erlauben aber nie
-     „Nicht im Bestand", nur „in diesem Umfang nicht gefunden"
-     (`abstention.allowed: false`).
+     `<stapel>:<siegel>=<IDs oder ->` zurück. `--receipt` darf mehrfach
+     stehen, die Einträge werden gesammelt. `--domain` und `--page`
+     schränken den Umfang ein und sparen Lesearbeit, erlauben dann aber
+     kein „Nicht im Bestand", nur „in diesem Umfang nicht gefunden"
+     (`abstention.allowed: false`). Maßgeblich ist das Feld: Es ist nur
+     wahr, wenn der Umfang gezählt jeden Claim des Bestands enthält.
 
    `search` darf mit Synonymen helfen, ersetzt die Vollsichtung aber nicht:
    ein fehlender Lexiktreffer ist kein Negativbeweis.
-4c. **Externer Fallback.** Eine Option, keine Pflicht: Die Abstention aus
-   Schritt 6 braucht ihn nicht. Erst **danach**, und nur wenn
+4c. **Externer Fallback.** Eine Option, keine Pflicht, und nie von selbst:
+   Die Abstention aus Schritt 6 braucht ihn nicht. Er kommt nur in Frage,
+   wenn nach der Vollsichtung ein Teil der Frage ungedeckt bleibt **und**
+   der Mensch das Nachschlagen verlangt oder ihm zugestimmt hat. Anbieten
+   ist erlaubt. Erst **danach**, und nur wenn
    `fallback.external_lookup_available` wahr ist (das Feld steht auch ohne
    `--extern` im Envelope und sagt, ob überhaupt Quellen aufgeführt sind):
    `python3 scripts/vault.py query --extern "<frage>"`. Das liest aufgeführte
    externe Bezugsquellen live und ist eine bewusste Ausnahme von Regel 2 —
    nie der Default, nie eine Abkürzung um Schritt 4b. Ein externer Treffer
    **ersetzt „Nicht im Bestand" nicht**, er ergänzt es um einen benannten
-   Hinweis. Der Aufruf schreibt nie in den Skill-Ordner; nur der Abzug einer
-   Netzquelle landet im Cache-Verzeichnis des Nutzers. Details:
-   `references/externe-quellen.md`.
+   Hinweis. Am manifestierten Bestand ändert der Aufruf nichts. Ein
+   Netzabruf hinterlässt genau zwei Spuren: eine Zeile in `log.md`, das
+   außerhalb des Manifests liegt, und den Abzug im Cache-Verzeichnis des
+   Nutzers. Details: `references/externe-quellen.md`.
 
    Ein leerer `external`-Block ist nur dann ein Befund, wenn auch gelesen
    wurde. Nennt `external.notes` die Quellen als nicht gebunden oder nicht
@@ -178,7 +209,7 @@ Protokoll für den jeweils maßgeblichen Tresor durchlaufen — eine
 ## Answer Envelope (feste Form)
 
 ```
-[Antwortkern — knapp, aus Kurzfassungen und Claims]
+[Antwortkern — knapp, aus den Claims; Kurzfassungen helfen beim Formulieren]
 
 Belege:
 - C-0301 (S-0004, §3, §4, §4.1 und §11, Wortlaut) — Stand 2026-07-28
@@ -255,6 +286,25 @@ Regeln im Envelope:
   Graph auflösen, die aktuelle Fassung als maßgeblich benennen und die
   überholte ausdrücklich mitnennen. Nie die überholte Fassung
   kommentarlos ausgeben und nie die überholte kommentarlos weglassen.
+* Steht eine Aussage nur auf der überholten Seite und trägt die maßgebliche
+  Fassung dazu keinen eigenen Claim: den Claim mit seinem Stand zitieren und
+  in „Hinweise:" sagen, dass er aus der überholten Fassung stammt und die
+  aktuelle dazu nichts Eigenes sagt. Ob er fortgilt, entscheidet die Antwort
+  nicht; ein Satz unter „Kontext und Grenzen" macht daraus keine belegte
+  Aussage.
+* **Eine Bedeutungszuordnung wird offengelegt.** Trifft ein Claim die Frage
+  nur dem Sinn nach, weil sie andere Wörter benutzt, nennt die Antwort, was
+  der Claim wörtlich sagt, samt seiner Bedingung („erheblicher
+  Schimmelbefall"), und kennzeichnet die Zuordnung in „Hinweise:" als
+  Lesart der Frage („verstanden als …"). Was der Claim offenlässt, etwa ob
+  nasse Wände schon erheblicher Schimmelbefall sind, bleibt offen und steht
+  als solches da; es wird nicht aus Modellwissen entschieden. Dasselbe gilt
+  für einen Zusatz der Frage, den kein Claim kennt („für Sprachassistenten",
+  „in Teilzeit"): Die Antwort sagt, wofür der Claim gilt, und weist den
+  Zusatz als ungedeckt aus.
+* **Unbestimmte Fragen.** Lässt die Frage mehrere Lesarten zu und deckt der
+  Bestand mehr als eine, werden sie getrennt beantwortet; deckt er nur eine,
+  nennt die Antwort diese Lesart. Rückfragen ist erlaubt, raten nicht.
 
 ## Beispiele
 
@@ -273,7 +323,9 @@ als Teil von „Mietminderung". Also Vollsichtung: Der Stapel enthält C-0401
 Vermieter). Quittung `1:<siegel>=C-0401,C-0402` → `sweep_complete`.
 Antwort aus beiden Claims, mit der Zeile „Sichtung: 28 von 28 Claims".
 Die Wortwahl „nasse Wände" steht in keinem Claim; gefunden hat sie das
-Lesen, nicht das Ranking.
+Lesen, nicht das Ranking. Die Antwort sagt deshalb, worauf sich der Claim
+wörtlich bezieht: auf erheblichen Schimmelbefall. Ob nasse Wände das schon
+sind, sagt der Bestand nicht.
 
 **Nur das Subjekt gefunden** — „Wie groß ist OKF?" → `query` liefert
 OKF-Claims, womöglich sogar `strong`, aber keiner nennt eine Größe. Vor der

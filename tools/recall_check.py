@@ -50,6 +50,15 @@ class GoldFehler(ValueError):
     """Das Gold ist kaputt oder liegt am falschen Ort."""
 
 
+class MessFehler(RuntimeError):
+    """Der Tresor lässt sich gerade nicht messen.
+
+    Bewusst kein SystemExit: Wer die Funktionen hier aus einem Test ruft,
+    bekommt einen gewöhnlichen Fehlschlag statt eines abgebrochenen Laufs
+    ohne Bericht.
+    """
+
+
 def lade_gold(pfad, vault):
     pfad = Path(pfad).resolve()
     vault = Path(vault).resolve()
@@ -93,8 +102,11 @@ def lade_gold(pfad, vault):
 
 def lauf(vault, *argv):
     """Die Engine so aufrufen, wie ein Agent es täte: als Prozess, über JSON."""
+    # Einmal auflösen: mit einem relativen Pfad hieße das Script sonst
+    # relativ zu einem Arbeitsverzeichnis, das selbst schon der Tresor ist.
+    vault = Path(vault).resolve()
     ergebnis = subprocess.run(
-        [sys.executable, "-B", str(Path(vault) / "scripts" / "vault.py"), *argv],
+        [sys.executable, "-B", str(vault / "scripts" / "vault.py"), *argv],
         cwd=str(vault),
         text=True,
         stdout=subprocess.PIPE,
@@ -105,7 +117,7 @@ def lauf(vault, *argv):
     try:
         return json.loads(ergebnis.stdout)
     except json.JSONDecodeError as exc:
-        raise SystemExit(
+        raise MessFehler(
             f"vault.py {' '.join(argv[:2])} lieferte kein JSON "
             f"(Exit {ergebnis.returncode}): {exc}\n"
             f"{(ergebnis.stdout + ergebnis.stderr)[-800:]}"
@@ -138,8 +150,9 @@ def sichtung_pruefen(vault, frage):
     """Legt die Vollsichtung jeden Claim genau einmal vor?"""
     plan = lauf(vault, "sweep", frage)
     if plan.get("state") != "plan":
-        raise SystemExit(
-            f"sweep ist nicht bereit ({plan.get('state')}): {plan.get('errors')}"
+        raise MessFehler(
+            f"sweep ist nicht bereit ({plan.get('state')}): "
+            f"{plan.get('errors')}\nErst 'vault.py doctor' grün bekommen."
         )
     geliefert, seite_von = [], {}
     for eintrag in plan["batches"]:
@@ -183,7 +196,7 @@ def messe(vault, fragen, negativ, limit=8, seite_von=None):
     def eine_frage(eintrag):
         antwort = lauf(vault, "query", eintrag["frage"], "--limit", str(limit))
         if antwort["state"] not in {"candidates_found", "no_candidates"}:
-            raise SystemExit(
+            raise MessFehler(
                 f"query ist nicht bereit ({antwort['state']}): "
                 f"{antwort.get('errors')}\nErst 'vault.py doctor' grün bekommen."
             )
@@ -274,8 +287,12 @@ def bericht(zeilen, negativ_zeilen, sichtung, lecks, limit, ausfuehrlich):
         pflicht = sum(1 for zeile in negativ_zeilen if zeile["pflicht"])
         print(f"Negativfragen: {len(negativ_zeilen)}, davon Vollsichtung "
               f"Pflicht {pflicht}, als 'strong' eingestuft {stark}")
-        print("  Eine Negativfrage endet immer in der Vollsichtung: ohne "
-              "Quittung gibt es kein 'Nicht im Bestand'.")
+        # Gemessen ist hier nur das Signal. Dass auch die übrigen in der
+        # Vollsichtung enden, ist eine Regel des Antworten-Vertrags und
+        # lässt sich nur am Agenten messen (tools/antwort_check.py).
+        print(f"  Bei {len(negativ_zeilen) - pflicht} verlangt kein Signal "
+              f"die Vollsichtung; dort trägt allein die Vertragsregel: ohne "
+              f"Quittung kein 'Nicht im Bestand'.")
     fehlend = sichtung["claims_total"] - len(set(sichtung["geliefert"]))
     doppelt = len(sichtung["geliefert"]) - len(set(sichtung["geliefert"]))
     print(f"Vollsichtung: {len(set(sichtung['geliefert']))} von "
@@ -332,15 +349,16 @@ def main(argv=None):
     parser.add_argument("--kurz", action="store_true",
                         help="nur die Zusammenfassung ausgeben")
     args = parser.parse_args(argv)
+    vault = Path(args.vault).resolve()
     try:
-        fragen, negativ = lade_gold(args.gold, args.vault)
-    except GoldFehler as exc:
+        fragen, negativ = lade_gold(args.gold, vault)
+        sichtung = sichtung_pruefen(vault, fragen[0]["frage"])
+        zeilen, negativ_zeilen = messe(
+            vault, fragen, negativ, args.limit, sichtung["seite_von"])
+    except (GoldFehler, MessFehler) as exc:
         print(f"🔴 recall-check: {exc}")
         return 1
-    sichtung = sichtung_pruefen(args.vault, fragen[0]["frage"])
-    zeilen, negativ_zeilen = messe(
-        args.vault, fragen, negativ, args.limit, sichtung["seite_von"])
-    lecks = leck_suche(args.vault, [e["frage"] for e in fragen] + list(negativ))
+    lecks = leck_suche(vault, [e["frage"] for e in fragen] + list(negativ))
     bericht(zeilen, negativ_zeilen, sichtung, lecks, args.limit, not args.kurz)
     verletzt = gates(zeilen, sichtung, lecks, args.min_recall, args.max_hinweis)
     if verletzt:

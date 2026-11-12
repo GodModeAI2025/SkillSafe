@@ -33,7 +33,10 @@ Ampel und Befundliste sind die Arbeitsgrundlage. Rote Befunde zuerst.
 * **Kurzfassungs-Deckung:** Ist jede Kernaussage der Kurzfassung durch
   einen Claim der Seite gedeckt? Ungedeckte Sätze markieren — der
   Kurzfassung wird zur Abfragezeit vertraut, sie darf nichts behaupten,
-  was kein Claim trägt.
+  was kein Claim trägt. An dieser Regel hängt auch die Vollsichtung: Sie
+  legt Claims vor, keine Kurzfassungen. Was nur in einer Kurzfassung steht,
+  findet sie nicht, und die Antwort lautet dann zu Recht „Nicht im
+  Bestand".
 * **Widerspruchssuche:** Sagen zwei Claims (auch domänenübergreifend)
   Unvereinbares, ohne dass eine `widerspricht`-Relation existiert?
   Relation setzen, beide Stände stehen lassen, melden.

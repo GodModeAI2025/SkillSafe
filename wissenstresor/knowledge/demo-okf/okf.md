@@ -4,7 +4,7 @@ title: Open Knowledge Format (OKF)
 domain: demo-okf
 status: veraltet
 confidence: hoch
-version: 1.2.0
+version: 1.2.1
 stand: 2026-07-28
 sources: [S-0001]
 tags: [okf, format, google, markdown, frontmatter]
@@ -16,14 +16,15 @@ relations:
 # Open Knowledge Format (OKF)
 
 ## Kurzfassung
-OKF ist eine offene, anbieterneutrale Spezifikation von Google Cloud
-(v0.1, Juni 2026), die Wissen als Verzeichnis von Markdown-Dateien mit
-YAML-Frontmatter darstellt: eine Datei pro Konzept, der Dateipfad ist die
-Identität, normale Markdown-Links bilden den Beziehungsgraphen. index.md
-(progressive Offenlegung) und log.md (Historie) sind als optionale Dateien
-vorgesehen. Google bezeichnet v0.1 ausdrücklich als Ausgangspunkt, nicht als
-fertigen Standard; für einen evidenzgebundenen Tresor braucht es darum ein
-strengeres Profil oberhalb von OKF (hier: oksv-lite).
+OKF v0.1 ist eine Spezifikation von Google, die das LLM-Wiki-Muster in ein
+portables, interoperables Format bringt. Sie stellt Wissen als Verzeichnis
+von Markdown-Dateien mit YAML-Frontmatter dar: eine Datei pro Konzept, der
+Dateipfad ist die Identität, normale Markdown-Links bilden den
+Beziehungsgraphen. index.md (progressive Offenlegung) und log.md (Historie)
+sind als optionale Dateien vorgesehen. Google bezeichnet v0.1 ausdrücklich
+als Ausgangspunkt, nicht als fertigen Standard; für einen evidenzgebundenen
+Tresor braucht es darum ein strengeres Profil oberhalb von OKF (hier:
+oksv-lite).
 
 ## Claims
 - **C-0001** [S-0001 | Abschnitt "How it works" | Wortlaut] OKF v0.1 repräsentiert Wissen als Verzeichnis von Markdown-Dateien mit YAML-Frontmatter; jede Datei beschreibt genau ein Konzept (Tabelle, Metrik, Runbook, API usw.).

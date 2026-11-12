@@ -15,7 +15,7 @@ Kommandos:
   validate           Schema-, Referenz- und Integritätsprüfung (fail-closed)
   index              INDEX.md aus den Frontmatter-Daten neu erzeugen
   graph              graph/graph.json (Wissensgraph) ableiten
-  search <begriff>   Deterministische Volltextsuche (Plan B des Routers)
+  search <begriff>   Deterministische Volltextsuche (Hilfe bei Synonymen)
   query <frage>      Lokales Hybrid-Retrieval als stabiler JSON-Vertrag
                      (--extern: zusätzlich aufgeführte externe Quellen lesen)
   sweep <frage>      Vollsichtung: jeden Claim in Stapeln vorlegen und die
@@ -166,7 +166,7 @@ QUERY_SCHEMA = "skillsafe.query/v1"
 ANCHORS_SCHEMA = "skillsafe.anchors/v1"
 ORCHESTRATOR_SCHEMA = "skillsafe.orchestrator/v1"
 BINDING_SCHEMA = "skillsafe.bindung/v1"
-RETRIEVAL_PROFILE = "hybrid-local/v2"
+RETRIEVAL_PROFILE = "hybrid-local/v3"
 EXTERN_RETRIEVAL_PROFILE = "extern-zweistufig/v1"
 SEGMENTATION_PROFILE = "satzsegmentierung/v1"
 # Wortform ist kein Bedeutungsmodell: nur Flexion, Umlaut-Plural, -ung und
@@ -179,11 +179,19 @@ SWEEP_STANDARD_GROESSE = 40
 SWEEP_MIN_GROESSE = 5
 SWEEP_MAX_GROESSE = 200
 SWEEP_SIEGEL_LAENGE = 16
+# Zeichen, die am Rand eines Frageworts nichts bedeuten: Anführungszeichen
+# und Satzzeichen. Bewusst nicht dabei: + - # < > = % und Währungszeichen.
+SWEEP_FRAGE_RAND = "\"'`´„“”‚‘’«»‹›.,;:!?…()[]{}"
 SWEEP_QUITTUNG_RE = re.compile(
     r"^(\d{1,6}):([0-9a-f]{16})=(-|C-\d{4}(?:,C-\d{4})*)$"
 )
 KOMPOSITUM_MIN_TEIL = 4
 MAX_OMITTED_PAGES = 20
+# fallback.page_paths nannte bis v2 jede Seite des Bestands, als Arbeitsliste
+# des alten Rückfalls ("alle Seiten lesen"). Den Rückfall trägt seither die
+# Vollsichtung; die Liste blähte bei 1.500 Seiten jede Abfrage um rund 65 kB
+# auf. Sie bleibt als Feld bestehen, ist aber gedeckelt.
+MAX_FALLBACK_SEITEN = 50
 MAX_JSON_BYTES = 2 * 1024 * 1024
 MAX_QUERY_LENGTH = 1000
 MAX_QUERY_LIMIT = 20
@@ -297,7 +305,7 @@ RETRIEVAL_STOPWORDS = {
     "or", "the", "to", "what", "which", "with",
 }
 
-# Funktionswörter des lokalen Rankings hybrid-local/v2, in der normalisierten
+# Funktionswörter des lokalen Rankings (seit hybrid-local/v2), in der normalisierten
 # Schreibung von _retrieval_norm (ae/oe/ue/ss). Bewusst eine ZWEITE Liste und
 # keine Erweiterung von RETRIEVAL_STOPWORDS: die alte Liste formt auch
 # 'extern-zweistufig/v1' und die nachrechenbaren Katalogzahlen (token_count,
@@ -318,6 +326,12 @@ RETRIEVAL_STOPWORDS = {
 # der Pflicht-Vollsichtung, nie in einem stillen Fehltreffer. Als kuratiertes
 # Label einer Begriffswelt bleibt jedes dieser Wörter exakt auffindbar, weil
 # Begriffe gegen die ungefilterte Frage abgeglichen werden.
+#
+# Zwei Grenzen der Liste seit hybrid-local/v3. Englische Einträge, die nach
+# casefold ein deutsches Hauptwort sind, stehen nicht mehr hier: 'not' (Not),
+# 'all' (All), 'most' (Most), 'same' (Same). Und eine Abkürzung in
+# Großbuchstaben ist nie ein Funktionswort (siehe _inhaltstokens): Sonst wäre
+# "die IT" das englische 'it' und fiele spurlos aus der Frage.
 FUNKTIONSWOERTER = frozenset("""
 der die das den dem des ein eine einen einem einer eines kein keine keinen
 keinem keiner keines
@@ -360,9 +374,9 @@ andere anderen anderer anderes anderem anders
 a an the and or but if then else of on in at by for from with without to
 into onto over under about as is are was were be been being am do does did
 done doing have has had having will would shall should can could may might
-must not no nor so than that this these those there here it its you he she
+must no nor so than that this these those there here it its you he she
 we they me him her them my your his our their what which whom whose when
-where why how all any both each few more most other some such only own same
+where why how any both each few more other some such only own
 too very just now after before between during through against while because
 until above below again further once also off out up down
 """.split())
@@ -1091,11 +1105,35 @@ def _phrase_present(haystack, needle):
 # 'compound' (Kopf oder Schwanz eines Kompositums). Keine der drei rät eine
 # Bedeutung. "feuchte Wände" findet auch danach keinen "Schimmelbefall" — das
 # leistet erst die Vollsichtung, in der das Modell jeden Claim liest.
+WORT_RE = re.compile(r"[^\W_]+")
+
+
+def _kuerzel_tokens(text):
+    """Normalisierte Tokens der Wörter, die in Großbuchstaben geschrieben sind.
+
+    "IT", "EU", "AG": nach casefold wären das 'it', 'eu', 'ag', und das erste
+    ist ein englisches Funktionswort. Erkannt wird eine Abkürzung nur dort, wo
+    die Schreibung etwas aussagt: in gemischt geschriebenem Text oder als
+    einzelnes Wort. Wer einen ganzen Satz groß schreibt, meint keine
+    Abkürzungen.
+    """
+    woerter = WORT_RE.findall(text)
+    if len(woerter) > 1 and text == text.upper():
+        return frozenset()
+    gefunden = set()
+    for wort in woerter:
+        if len(wort) >= 2 and wort.isupper():
+            gefunden.update(_retrieval_norm(wort).split())
+    return gefunden
+
+
 def _inhaltstokens(value):
     """Inhaltstragende Tokens des lokalen Rankings: ohne Funktionswörter."""
+    text = str(value)
+    kuerzel = _kuerzel_tokens(text)
     return tuple(
-        token for token in _retrieval_tokens(value)
-        if token not in FUNKTIONSWOERTER
+        token for token in _retrieval_tokens(text)
+        if token not in FUNKTIONSWOERTER or token in kuerzel
     )
 
 
@@ -2255,6 +2293,13 @@ def lade_seiten(register, typen, reltypen, concepts=None, media=None,
         for feld in (set(REQUIRED_FIELDS) - LIST_FIELDS) | OPTIONAL_SCALAR_FIELDS:
             if feld in fm and not isinstance(fm[feld], str):
                 fehler.append(f"{rp}: Frontmatter-Feld {feld!r} muss Text sein")
+        # Eine Seite, die das Manifest nicht erfasst, wäre Wissen ohne
+        # Integritätsschutz: ihr Wortlaut könnte sich nach dem Release ändern,
+        # ohne dass Sperre oder Siegel es bemerken.
+        if not _tracked_path(p):
+            fehler.append(
+                f"{rp}: liegt in einem Pfad, den das Manifest ausnimmt "
+                f"(__pycache__); dort darf keine Wissensseite stehen")
         typ = fm.get("type", "")
         if typ and typ not in typen:
             fehler.append(f"{rp}: Typ {typ!r} nicht in schema/types.yaml — "
@@ -2855,8 +2900,10 @@ def cmd_graph():
 
 
 def cmd_search(begriffe, mit_quellen=True):
-    """Plan B: erschöpfende, deterministische Volltextsuche.
-    Ein Nicht-Treffer beweist nur lexikalische, nie semantische Abwesenheit."""
+    """Erschöpfende, deterministische Volltextsuche.
+
+    Ein Nicht-Treffer beweist nur lexikalische, nie semantische Abwesenheit.
+    Einen Negativbefund trägt allein die Vollsichtung (sweep)."""
     try:
         unsichere = _skill_symlinks() + _skill_hardlinks()
     except OSError as exc:
@@ -2890,7 +2937,8 @@ def cmd_search(begriffe, mit_quellen=True):
           f"(erschöpfend über {len(dateien)} Dateien).")
     if treffer == 0:
         print("Kein Lexiktreffer: semantische Abwesenheit ist damit nicht "
-              "bewiesen — relevante Seiten/Claims vollständig prüfen.")
+              "bewiesen. Einen Negativbefund trägt nur die Vollsichtung mit "
+              "Quittung: vault.py sweep \"<frage>\".")
     return 0 if treffer else 1
 
 
@@ -2915,7 +2963,10 @@ def _query_base(query, state, *, manifest_digest=None, version=None,
             # hat. Die Felder stehen in jedem Zustand, auch im Fehlerfall,
             # damit ein Konsument nie auf einen fehlenden Schlüssel prüft.
             "wortform": WORTFORM_PROFILE,
-            "match_strength": "none",
+            # None heißt: nicht bewertet. Nur 'candidates_found' und
+            # 'no_candidates' tragen eine Trefferstärke; ein Fehlerzustand
+            # ist kein "kein Kandidat".
+            "match_strength": None,
             "term_coverage_percent": 0,
             "query_terms": {
                 "content": [], "matched": [], "partial": [], "unmatched": [],
@@ -2931,6 +2982,7 @@ def _query_base(query, state, *, manifest_digest=None, version=None,
             "exhaustive_review_required": False,
             "reason": None,
             "page_paths": [],
+            "page_paths_total": 0,
             "sweep": None,
             # Gegenstück zu page_paths: was ein Mensch AUSSERHALB des Bestands
             # nachlesen müsste. Nur Hinweis, nie Ersatz für "Nicht im Bestand".
@@ -3095,7 +3147,22 @@ def _load_released_query_snapshot(query):
     }, None
 
 
-def _match_concepts(query_norm, concepts, world=None):
+def _stamm_phrase(norm_text, inhalt):
+    """Wortstamm-Phrase, in der nur Inhaltswörter als Stamm stehen.
+
+    Ein Funktionswort bleibt wörtlich und markiert stehen. Ohne die Marke
+    träfe "sich" den Stamm von "Sicherung", "seit" den von "Seite" und
+    "wegen" den von "Weg": Ein Füllwort der Frage benennte dann einen
+    kuratierten Begriff, lieferte einen Anker und schaltete die
+    Pflicht-Vollsichtung ab.
+    """
+    return " ".join(
+        _wortstamm(wort) if wort in inhalt else "=" + wort
+        for wort in norm_text.split()
+    )
+
+
+def _match_concepts(query_norm, concepts, world=None, inhalt=None):
     """Begriffe über ihre kuratierten Benennungen finden: exakt, sonst Wortform.
 
     Die exakte Stufe ist unverändert die aus hybrid-local/v1. Die
@@ -3108,8 +3175,17 @@ def _match_concepts(query_norm, concepts, world=None):
     Mehrdeutig ist eine Wortform nur über Weltgrenzen hinweg. Innerhalb einer
     Welt wäre der Zustand unauflösbar, weil '--world' dort nichts trennt;
     zwei Begriffe derselben Welt gelten dann beide als getroffen.
+
+    ``inhalt`` sind die Inhaltstokens der Frage. Die Wortform-Stufe trifft
+    eine Benennung nur über sie: mindestens ein Inhaltswort muss die
+    Benennung tragen, und Funktionswörter zählen nur wörtlich. Die exakte
+    Stufe bleibt davon unberührt; als kuratierte Benennung ist auch ein
+    Homograph wie "Macht" weiterhin exakt auffindbar. Ohne ``inhalt`` gilt
+    jedes Wort als Inhaltswort.
     """
-    query_stamm = " ".join(_wortstamm(wort) for wort in query_norm.split())
+    if inhalt is None:
+        inhalt = set(query_norm.split())
+    query_stamm = _stamm_phrase(query_norm, inhalt)
     kandidaten = []
     for concept_id, concept in sorted(concepts.items()):
         if world is not None and concept.get("world") != world:
@@ -3118,14 +3194,18 @@ def _match_concepts(query_norm, concepts, world=None):
         for label in labels:
             normalized = _retrieval_norm(label)
             if normalized:
-                kandidaten.append((concept_id, label, normalized,
-                                   _stamm_norm(label)))
+                label_inhalt = set(_inhaltstokens(label))
+                kandidaten.append((
+                    concept_id, label, normalized,
+                    _stamm_phrase(normalized, label_inhalt),
+                    bool(label_inhalt),
+                ))
 
     phrase_matches = {}
     matched_labels = {}
     modes = {}
     exakt_gedeckt = set()
-    for concept_id, label, normalized, stamm in kandidaten:
+    for concept_id, label, normalized, stamm, _ in kandidaten:
         if _phrase_present(query_norm, normalized):
             phrase_matches.setdefault(normalized, []).append(concept_id)
             matched_labels.setdefault(concept_id, []).append(label)
@@ -3138,9 +3218,10 @@ def _match_concepts(query_norm, concepts, world=None):
     }
 
     wortform_matches = {}
-    for concept_id, label, normalized, stamm in kandidaten:
+    for concept_id, label, normalized, stamm, hat_inhalt in kandidaten:
         if (concept_id in modes and modes[concept_id] == "exact"
                 or stamm in exakt_gedeckt
+                or not hat_inhalt
                 or not _phrase_present(query_stamm, stamm)):
             continue
         eintrag = wortform_matches.setdefault(stamm, {"ids": [], "label": label})
@@ -3357,18 +3438,38 @@ def _wortform_varianten(terms, tokenmengen):
     for tokens in tokenmengen:
         vokabular |= tokens
     staemme = {token: _wortstamm(token) for token in sorted(vokabular)}
+    # Zwei Verzeichnisse statt eines Vollscans je Fragebegriff. Gleiche
+    # Wortform heißt gleicher Stamm. Und ein Kompositumteil ist Kopf oder
+    # Schwanz mit mindestens KOMPOSITUM_MIN_TEIL Zeichen auf beiden Seiten
+    # der Naht: Zwei Formen, von denen eine Kopf der anderen ist, teilen also
+    # ihre ersten Zeichen, und beim Schwanz ihre letzten. Die Verzeichnisse
+    # liefern nur Anwärter; entschieden wird weiterhin von _kompositum_teil.
+    # Ohne sie wuchs die Abfrage mit Fragebegriffe mal Vokabular: 200
+    # Begriffe gegen 70.000 Tokens brauchten rund zehn Sekunden.
+    je_stamm, je_kopf, je_schwanz = {}, {}, {}
+    for token, token_stamm in staemme.items():
+        je_stamm.setdefault(token_stamm, set()).add(token)
+        for form in {token, token_stamm}:
+            if len(form) >= KOMPOSITUM_MIN_TEIL:
+                je_kopf.setdefault(
+                    form[:KOMPOSITUM_MIN_TEIL], set()).add(token)
+                je_schwanz.setdefault(
+                    form[-KOMPOSITUM_MIN_TEIL:], set()).add(token)
     varianten = {}
     for term in terms:
         stamm = _wortstamm(term)
         term_formen = {term, stamm}
-        gleiche, teile = set(), set()
-        for token, token_stamm in staemme.items():
-            if token == term:
+        gleiche = set(je_stamm.get(stamm, ())) - {term}
+        anwaerter = set()
+        for form in term_formen:
+            if len(form) >= KOMPOSITUM_MIN_TEIL:
+                anwaerter |= je_kopf.get(form[:KOMPOSITUM_MIN_TEIL], set())
+                anwaerter |= je_schwanz.get(form[-KOMPOSITUM_MIN_TEIL:], set())
+        teile = set()
+        for token in anwaerter:
+            if token == term or token in gleiche:
                 continue
-            if token_stamm == stamm:
-                gleiche.add(token)
-                continue
-            token_formen = {token, token_stamm}
+            token_formen = {token, staemme[token]}
             if (_kompositum_teil(term_formen, token_formen)
                     or _kompositum_teil(token_formen, term_formen)):
                 teile.add(token)
@@ -3389,12 +3490,15 @@ def _term_treffer(term, tokens, varianten):
 
 
 TERM_RANG = {"token": 3, "stem": 2, "compound": 1}
-# Ganzzahlgewichte von hybrid-local/v2. Die Zeile 'token' ist unverändert die
+# Ganzzahlgewichte seit hybrid-local/v2. Die Zeile 'token' ist unverändert die
 # aus v1; 'stem' und 'compound' liegen je Feld darunter. Die Staffel hält
-# eine Ordnung fest, die sich in der Messung als tragend erwiesen hat: ein
-# Claim, der einen Fragebegriff selbst trägt (mindestens 12), steht immer vor
-# einem, der ihn nur über Titel oder Tags seiner Seite erbt (höchstens 10),
-# und beide vor dem reinen Graph-Nachbarn (5).
+# eine Ordnung fest, die sich in der Messung als tragend erwiesen hat, und
+# zwar je Fragebegriff: ein Claim, der den Begriff selbst trägt (mindestens
+# 12), steht vor einem, der denselben Begriff nur über Titel oder Tags
+# seiner Seite erbt (höchstens 10), und beide vor dem reinen Graph-Nachbarn
+# (5). Über mehrere Begriffe summiert sich Geerbtes, und die Seite eines
+# direkt getroffenen kuratierten Begriffs hebt alle ihre Claims um 100: Das
+# ist gewollt, steht aber über jedem einzelnen Worttreffer.
 SEITEN_GEWICHTE = {
     "token": {"title": 30, "tag": 24, "claim": 12},
     "stem": {"title": 24, "tag": 20, "claim": 10},
@@ -3402,6 +3506,14 @@ SEITEN_GEWICHTE = {
 }
 CLAIM_GEWICHTE = {"token": 20, "stem": 16, "compound": 12}
 KONTEXT_GEWICHTE = {"token": 10, "stem": 8, "compound": 6}
+# Fingerzeig einer nur als Wortteil gestreiften Benennung, je Claim ihrer
+# Seite. Bis v2 waren es 30 Punkte, also mehr als ein exakter eigener Treffer
+# (20): Die ganze Begriffsseite füllte dann das Limit und der Claim, der das
+# Fragewort selbst trug, fiel heraus. Seit v3 liegt der Fingerzeig wie jeder
+# geerbte Treffer unter dem kleinsten eigenen.
+FINGERZEIG_CLAIM = 10
+# Reiner Graph-Nachbar: der kleinste Wert, unter jedem geerbten Treffer.
+GRAPH_FUELLER = 5
 
 
 def _sweep_stapel(seiten, groesse):
@@ -3432,17 +3544,24 @@ def build_query_result(snapshot, world=None, limit=8):
     query_concept_ids = set(re.findall(r"(?i)(?<![A-Z0-9])B-\d{4}(?![A-Z0-9])",
                                        query))
     query_concept_ids = {value.upper() for value in query_concept_ids}
+    concepts = snapshot["concepts"]
+    worlds = snapshot["worlds"]
     # Die Ziffern einer genannten ID sind kein Inhaltswort. Blieben sie
-    # stehen, gälte "C-0001" als Frage mit einem unverstandenen Begriff.
-    id_ziffern = {
-        value.split("-")[1]
-        for value in query_claim_ids | query_source_ids | query_concept_ids
-    }
+    # stehen, gälte "C-0001" als Frage mit einem unverstandenen Begriff. Das
+    # gilt nur für IDs, die es im Bestand gibt: Eine vertippte oder fremde ID
+    # bleibt als unverstandenes Wort stehen, statt spurlos zu verschwinden.
+    bekannte_ids = (
+        {value for value in query_claim_ids if value in snapshot["claims"]}
+        | {value for value in query_source_ids
+           if value in snapshot["register"]}
+        | {value for value in query_concept_ids
+           if value in concepts
+           and (world is None or concepts[value]["world"] == world)}
+    )
+    id_ziffern = {value.split("-")[1] for value in bekannte_ids}
     terms = sorted({
         token for token in _inhaltstokens(query) if token not in id_ziffern
     })
-    concepts = snapshot["concepts"]
-    worlds = snapshot["worlds"]
     if world is not None and world not in worlds:
         return _query_base(
             query, "invalid_query",
@@ -3453,7 +3572,7 @@ def build_query_result(snapshot, world=None, limit=8):
         )
 
     direct, matched_labels, ambiguous, concept_modes = _match_concepts(
-        query_norm, concepts, world=world
+        query_norm, concepts, world=world, inhalt=set(_inhaltstokens(query))
     )
     for concept_id in sorted(query_concept_ids):
         if (concept_id in concepts
@@ -3481,14 +3600,23 @@ def build_query_result(snapshot, world=None, limit=8):
         concepts[cid]["definition_claim"]: cid
         for cid in direct if concepts[cid].get("definition_claim")
     }
-    # Fragebegriffe, die eine getroffene Benennung selbst trägt. Sie gelten
-    # als verstanden, auch wenn kein Claim sie wörtlich wiederholt.
-    begriff_staemme = set()
+    # Fragebegriffe, die eine getroffene Benennung selbst trägt, je Begriff.
+    # Sie gelten als verstanden, auch wenn kein Claim sie wörtlich
+    # wiederholt — aber nur, solange der Begriff in der Ausgabe vertreten
+    # ist (siehe 'vertreten' unten).
+    begriff_terme = {}
     for cid in direct:
+        staemme = set()
         for label in matched_labels.get(cid, []):
-            begriff_staemme.update(_stamm_norm(label).split())
+            staemme.update(_stamm_norm(label).split())
+        begriff_terme[cid] = {
+            term for term in terms if _wortstamm(term) in staemme}
 
     pages = snapshot["pages"]
+    seiten_konzepte = {
+        path: set(page["fm"].get("concepts", []))
+        for path, page in pages.items()
+    }
     seiten_tokens = {}
     for path, page in sorted(pages.items()):
         fm = page["fm"]
@@ -3624,7 +3752,7 @@ def build_query_result(snapshot, world=None, limit=8):
             if concept_base:
                 reasons.append("concept-page")
             elif page_concepts & set(teilweise):
-                score += 30
+                score += FINGERZEIG_CLAIM
                 reasons.append("concept-page:partial")
             if claim["id"] in definitionen:
                 score += 40
@@ -3661,7 +3789,7 @@ def build_query_result(snapshot, world=None, limit=8):
                 score += KONTEXT_GEWICHTE[stufe]
                 reasons.append(f"page-{stufe}:{term}")
             if not score and path in graph_boost:
-                score = 5
+                score = GRAPH_FUELLER
                 reasons.append("graph:one-hop")
             if score <= 0:
                 continue
@@ -3696,17 +3824,18 @@ def build_query_result(snapshot, world=None, limit=8):
         return {term for term, stufe in begriffe.items()
                 if TERM_RANG[stufe] >= TERM_RANG["stem"]}
 
-    for term in terms:
-        if (_wortstamm(term) in begriff_staemme
-                or any(term in getragen(k) for k in gezeigt)):
-            continue
-        nachruecker = next(
-            (k for k in gekuerzt
-             if TERM_RANG.get(k["eigene"].get(term), 0) >= TERM_RANG["stem"]),
-            None,
-        )
-        if nachruecker is None:
-            continue
+    def gehoert_zu(kandidat, cid):
+        """Liegt der Kandidat auf einer Seite des Begriffs, oder definiert
+        er ihn?"""
+        return (cid in seiten_konzepte[kandidat["path"]]
+                or definitionen.get(kandidat["claim"]["id"]) == cid)
+
+    def vertreten(cid):
+        return any(gehoert_zu(k, cid) for k in gezeigt)
+
+    def nachruecken(nachruecker):
+        """Der rangniedrigste reine Kontext-Kandidat weicht, wenn seine Seite
+        auch ohne ihn vertreten bleibt. Sonst bleibt die Rangfolge stehen."""
         je_seite = {}
         for kandidat in gezeigt:
             je_seite[kandidat["path"]] = je_seite.get(kandidat["path"], 0) + 1
@@ -3717,10 +3846,38 @@ def build_query_result(snapshot, world=None, limit=8):
             None,
         )
         if weichen is None:
-            continue
+            return False
         gekuerzt.remove(nachruecker)
         gekuerzt.append(gezeigt[weichen])
         gezeigt[weichen] = nachruecker
+        return True
+
+    # Zuerst die Begriffe. Nennt eine Frage zwei kuratierte Begriffe, füllte
+    # bis v2 die Seite des einen das Limit mit Kontext, die Seite des
+    # anderen fehlte samt Definitions-Claim — und das Ergebnis hieß trotzdem
+    # 'strong', weil eine getroffene Benennung pauschal als verstanden galt.
+    for cid in direct:
+        if vertreten(cid):
+            continue
+        nachruecker = next(
+            (k for k in gekuerzt if gehoert_zu(k, cid)), None)
+        if nachruecker is not None:
+            nachruecken(nachruecker)
+
+    def begriff_traegt(term):
+        return any(term in begriff_terme[cid] and vertreten(cid)
+                   for cid in direct)
+
+    for term in terms:
+        if begriff_traegt(term) or any(term in getragen(k) for k in gezeigt):
+            continue
+        nachruecker = next(
+            (k for k in gekuerzt
+             if TERM_RANG.get(k["eigene"].get(term), 0) >= TERM_RANG["stem"]),
+            None,
+        )
+        if nachruecker is not None:
+            nachruecken(nachruecker)
     gezeigt.sort(key=rangfolge)
     gekuerzt.sort(key=rangfolge)
     evidence = [
@@ -3748,10 +3905,13 @@ def build_query_result(snapshot, world=None, limit=8):
         for term, stufe in list(k["eigene"].items()) + list(
                 seiten_begriffe.get(k["path"], {}).items()):
             term_stand[term] = max(term_stand[term], TERM_RANG[stufe])
-    if evidence:
-        for term in terms:
-            if _wortstamm(term) in begriff_staemme:
-                term_stand[term] = TERM_RANG["token"]
+    # Eine getroffene Benennung trägt ihre Wörter nur, wenn der Begriff in
+    # der Ausgabe vertreten ist: durch einen Claim seiner Seite oder seinen
+    # Definitions-Claim. Sonst hat das Modell von ihm nichts gesehen.
+    vertretene = [cid for cid in direct if vertreten(cid)]
+    for cid in vertretene:
+        for term in begriff_terme[cid]:
+            term_stand[term] = TERM_RANG["token"]
     # Ein Fragebegriff, den eine Benennung nur als Kompositumteil trägt, steht
     # unter concepts.partial in der Ausgabe. Er ist damit ein Teiltreffer wie
     # jeder andere und kein unbekanntes Wort. An der Stärke ändert das nichts:
@@ -3762,10 +3922,12 @@ def build_query_result(snapshot, world=None, limit=8):
     getroffen = [term for term in terms if term_stand[term] >= 2]
     teilgetroffen = [term for term in terms if term_stand[term] == 1]
     ungetroffen = [term for term in terms if term_stand[term] == 0]
-    anker = bool(evidence) and (bool(direct) or any(
-        reason == "exact:claim" or reason.startswith("id:")
+    # Die ganze Frage als Wortfolge ist nur ein Anker, wenn sie ein
+    # Inhaltswort hat: "nicht" oder "und" stehen wörtlich in vielen Claims.
+    anker = bool(vertretene) or any(
+        (reason == "exact:claim" and bool(terms)) or reason.startswith("id:")
         for k in gezeigt for reason in k["reasons"]
-    ))
+    )
     if terms:
         abdeckung = 100 * len(getroffen) // len(terms)
     else:
@@ -3873,7 +4035,8 @@ def build_query_result(snapshot, world=None, limit=8):
                 "no_retrieval_candidates" if not evidence
                 else "weak_candidates_only" if schwach else None
             ),
-            "page_paths": sorted(snapshot["pages"]),
+            "page_paths": sorted(snapshot["pages"])[:MAX_FALLBACK_SEITEN],
+            "page_paths_total": len(snapshot["pages"]),
             # Der Aufwand der Vollsichtung steht hier, damit die Entscheidung
             # dafür keine Schätzung ist.
             "sweep": {
@@ -3978,6 +4141,25 @@ def _sweep_umfang(snapshot, domaenen, seiten):
     }, []
 
 
+def _sweep_frage_norm(frage):
+    """Die Frage, wie Siegel und Quittung sie binden.
+
+    Enger als die Normalisierung des Rankings. Dort dürfen "Maßen" und
+    "Massen", "<" und ">=", "C++" und "C#" zusammenfallen, weil ein Treffer
+    mehr nur ein Kandidat mehr ist. Ein Siegel dagegen sagt: Zu genau dieser
+    Frage wurde geurteilt. Gleich bleibt deshalb nur, was zwischen zwei
+    Aufrufen derselben Frage wirklich schwankt: Groß-/Kleinschreibung,
+    Leerraum, Anführungszeichen und Satzzeichen am Wortrand. Operatoren,
+    Vorzeichen, ß und Umlaute bleiben stehen.
+    """
+    text = unicodedata.normalize("NFC", str(frage)).lower()
+    woerter = [wort.strip(SWEEP_FRAGE_RAND) for wort in text.split()]
+    woerter = [wort for wort in woerter if wort]
+    # Eine Frage nur aus Satzzeichen bleibt, was sie ist: sonst teilten sich
+    # "?" und "!" ein Siegel.
+    return " ".join(woerter) if woerter else " ".join(text.split())
+
+
 def _sweep_siegel(snapshot, groesse, nummer, claim_ids):
     """Kurzer Digest über Stand, Frage, Stapelgröße, Nummer und Inhalt.
 
@@ -3986,7 +4168,7 @@ def _sweep_siegel(snapshot, groesse, nummer, claim_ids):
     Wortlaut jedes Claims, ohne dass er hier noch einmal gehasht wird.
     """
     daten = [SWEEP_SCHEMA, snapshot["manifest_digest"],
-             _retrieval_norm(snapshot["query"]), groesse, nummer,
+             _sweep_frage_norm(snapshot["query"]), groesse, nummer,
              list(claim_ids)]
     return _sha256_bytes(json.dumps(
         daten, ensure_ascii=False, separators=(",", ":"),
@@ -4006,6 +4188,19 @@ def _sweep_basis(query, state, snapshot=None, errors=None, warnings=None):
         },
         "warnings": sorted(set(warnings or [])),
         "errors": list(errors or []),
+        # In jedem Zustand vorhanden und fail-closed vorbelegt, wie bei
+        # 'query': Ein Konsument soll nie auf einen fehlenden Schlüssel
+        # prüfen müssen, um zu erfahren, dass nichts erlaubt ist.
+        "selected": [],
+        "evidence": [],
+        "abstention": {
+            "allowed": False,
+            "reason": {
+                "plan": "ein Plan ist keine Quittung",
+                "batch": "ein Stapel ist keine Quittung",
+            }.get(state, "ohne gültige, vollständige Quittung keine "
+                         "Abstention"),
+        },
     }
 
 
@@ -4182,7 +4377,7 @@ def build_sweep_result(snapshot, batch=None, receipt=None,
     fingerprint = _sha256_bytes(json.dumps({
         "schema": SWEEP_SCHEMA,
         "manifest": snapshot["manifest_digest"],
-        "query": _retrieval_norm(query),
+        "query": _sweep_frage_norm(query),
         "batch_size": groesse,
         "seals": siegel,
         "selected": ausgewaehlt,
@@ -4221,6 +4416,12 @@ def build_sweep_result(snapshot, batch=None, receipt=None,
 def cmd_sweep(question_words, batch=None, receipt=None,
               groesse=SWEEP_STANDARD_GROESSE, domaenen=None, seiten=None):
     query = " ".join(question_words)
+    if not query.strip():
+        _emit_query_json(_sweep_basis(query, "invalid_query", errors=[
+            "Die Frage fehlt. Sie steht vor --receipt: der Schalter nimmt "
+            "alle folgenden Wörter als Quittungseinträge."
+        ]))
+        return 2
     snapshot, error = _load_released_query_snapshot(query)
     if error is not None:
         # Dieselbe fail-closed-Sperre wie bei 'query': ohne grünen,
@@ -5679,8 +5880,11 @@ def cmd_route(frage_woerter):
             treffer[dom] = worte
     if not treffer:
         print("route: kein Schlagwort-Treffer.")
-        print("Plan B: python3 scripts/vault.py search <begriff> "
-              "(lexikalisch erschöpfend; kein semantischer Negativbeweis).")
+        print("Weiter mit: python3 scripts/vault.py query \"<frage>\" — "
+              "der Router ist nur ein Hinweis. Die Abfrage sagt, wie viel "
+              "der Frage sie erkannt hat, und ob die Vollsichtung (sweep) "
+              "Pflicht ist. 'search' hilft mit Synonymen, ist aber kein "
+              "Negativbeweis.")
         return 1
     if len(treffer) > 1:
         print(f"🟡 MISCHFRAGE — berührt {len(treffer)} Domänen "
@@ -6480,9 +6684,14 @@ def main():
     # Vollsichtung: ohne Schalter der Plan, mit --batch ein Stapel samt
     # Siegel, mit --receipt die Prüfung der Quittung.
     sweep_parser = sub.add_parser("sweep")
-    sweep_parser.add_argument("frage", nargs="+")
+    # Die Frage ist formal optional, damit ihr Fehlen als JSON-Zustand endet
+    # und nicht als Usage-Text: --receipt nimmt alle folgenden Wörter als
+    # Einträge, eine Frage dahinter wäre sonst still verschluckt.
+    sweep_parser.add_argument("frage", nargs="*")
     sweep_parser.add_argument("--batch", type=int)
-    sweep_parser.add_argument("--receipt", nargs="*")
+    # 'extend': Wer je Stapel ein eigenes --receipt setzt, etwa beim
+    # Einsammeln von Subagenten, bekommt alle Einträge gewertet.
+    sweep_parser.add_argument("--receipt", nargs="*", action="extend")
     sweep_parser.add_argument("--size", type=int,
                               default=SWEEP_STANDARD_GROESSE)
     sweep_parser.add_argument("--domain", dest="domaene", action="append")

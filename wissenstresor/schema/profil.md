@@ -276,14 +276,6 @@ Mögliche Zustände sind:
   ob tatsächlich live gelesen wurde. Zwei Felder, zwei Fragen: Angebot und
   Ergebnis;
 * `ambiguous` — Alias ist über Begriffswelten mehrdeutig;
-
-Der Block `external` führt eigene Zustände, damit der Top-Level-`state` für
-bestehende Konsumenten eingefroren bleibt: `not_requested`, `not_declared`,
-`not_bound`, `external_candidates_found`, `no_external_candidates`,
-`budget_exceeded`, `unreachable`, `invalid_external_source` und
-`invalid_query`. Der letzte greift, wenn `--source` eine nicht aufgeführte
-ID nennt: Dann wird **nichts** durchsucht, und das Ergebnis ist ausdrücklich
-kein Negativbefund.
 * `invalid_query`, `invalid_vault`, `vault_busy`, `snapshot_changed` —
   fail-closed, immer ohne Evidenz.
 
@@ -300,6 +292,65 @@ Bezugsquellen — dann live, gekennzeichnet und in einem eigenen Block. Im
 **manifestierten Bestand** gibt es weiterhin keinen Cache; der TTL-Abzug einer
 Netzquelle liegt außerhalb des Skill-Ordners im Nutzer-Cache-Verzeichnis und
 meldet sein Alter in jeder Ausgabe.
+
+### Der Block `external`
+
+Der Block `external` führt eigene Zustände, damit der Top-Level-`state` für
+bestehende Konsumenten eingefroren bleibt. Der Exit-Code folgt allein dem
+Top-Level-`state`; ein externer Zustand ändert ihn nie.
+
+**Nur zwei dieser Zustände sind Ergebnisse**, und beide setzen voraus, dass
+mindestens ein externes Dokument tatsächlich gelesen wurde. Jeder andere
+Zustand heißt: Es wurde nichts gelesen. Das ist ausdrücklich **kein
+Negativbefund**, und `reason` sagt es wörtlich. Ein Block, der nach
+„durchsucht und nichts gefunden" aussieht, obwohl kein Dokument geöffnet
+wurde, wäre ein Fehltreffer, der nicht als Fehler auffällt.
+
+| Zustand | Wann | Dokument gelesen |
+|---|---|---|
+| `not_requested` | Abfrage ohne `--extern` | nein |
+| `not_declared` | `sources/EXTERN.md` führt keine Quelle | nein |
+| `invalid_query` | `--source` nennt eine nicht aufgeführte ID | nein |
+| `not_bound` | Jede berücksichtigte Quelle ist eine lokale Quelle ohne brauchbare Bindung auf diesem Host | nein |
+| `unreachable` | Mindestens eine berücksichtigte Quelle hätte gelesen werden sollen, aber es kam kein Dokument an — etwa eine Netzquelle bei gesetztem `SKILLSAFE_OFFLINE` oder mit fehlgeschlagenem Abruf, eine gebundene Quelle ohne lesbares Dokument oder ohne Katalog | nein |
+| `budget_exceeded` | Ein fremder Tresor überschreitet ein gezähltes Budget (Verzeichnistiefe oder Zahl der Einträge) | verworfen |
+| `invalid_external_source` | Ein fremder Tresor besteht die Nachrechnung seines Manifests nicht | verworfen |
+| `no_external_candidates` | Gelesen, und kein gelesenes Dokument enthält einen Anfragebegriff | ja |
+| `external_candidates_found` | Gelesen, mindestens ein Treffer | ja |
+
+„Berücksichtigt" sind alle aufgeführten Quellen oder, mit `--source`, die
+genannten. Die Regel ohne gelesenes Dokument ist eine einzige: `not_bound`
+gilt genau dann, wenn **jede** berücksichtigte Quelle ungebunden ist; jede
+andere Ursache ergibt `unreachable`. Kommen mehrere Ursachen zusammen, gewinnt
+damit die schwerwiegendere. Ungebunden ist der Normalzustand eines frisch
+entpackten Pakets; bei `unreachable` hätte etwas lesbar sein sollen.
+`budget_exceeded` und `invalid_external_source` brechen die externe Suche
+fail-closed ab und verwerfen, was aus anderen Quellen schon gelesen war — ein
+Teilergebnis sähe aus wie ein vollständiges.
+
+Vier Angaben hängen an derselben Tatsache und widersprechen einander nie:
+
+* `external.live` und `fallback.external_live_lookup_used` sind genau dann
+  wahr, wenn mindestens ein externes Dokument gelesen wurde und in das
+  Ergebnis eingeht. Das Flag `--extern` allein macht keines von beiden wahr.
+* `fallback.external_document_paths` nennt genau diese Dokumente als
+  `X-nnnn:pfad` und ist sonst leer.
+* `external_fingerprint` bezeugt ein Ergebnis und ist in jedem anderen
+  Zustand `null`. Er entsteht aus Algorithmus, normalisierter Anfrage,
+  Treffern und den Ständen der Quellen, aus denen tatsächlich gelesen wurde;
+  eine Quelle ohne gelesenes Dokument bezeugt nichts.
+
+Ein Ergebnis reicht genau so weit wie das Gelesene. Stufe 1 öffnet je Quelle
+höchstens 24 Katalogeinträge, und `reason` nennt bei `no_external_candidates`
+die Zahl der gelesenen Dokumente. Blieb etwas ungelesen, das hätte gelesen
+werden sollen — eine ganze Quelle oder ein einzelnes Dokument —, steht das
+bei beiden Ergebniszuständen als Zusatz „Nicht gelesen" im `reason` und nicht
+nur in `notes`. Fehlt der Zusatz, wurde jedes geöffnete Dokument gelesen.
+
+Zustände, `live` und die Fingerprint-Regel gehören zu diesem Query-Vertrag,
+nicht zum Ranking. `extern-zweistufig/v1` benennt allein die Rechenvorschrift
+für Treffer: Solange dieselben gelesenen Dokumente und dieselbe Anfrage
+dieselben Treffer und Scores ergeben, bleibt die Nummer.
 
 ## Externe Bezugsquellen (`sources/EXTERN.md`)
 
@@ -451,7 +502,9 @@ Artefakt.
 
 Nur lokale Quellen stehen hier; eine Netzquelle ist durch ihre Registrierung
 gebunden. Eine fehlende Bindung ist **nie** ein Validierungsfehler —
-ungebunden ist der Normalzustand eines frisch entpackten Pakets.
+ungebunden ist der Normalzustand eines frisch entpackten Pakets. Fail-closed
+greift bei der Nutzung: `query --extern` liest aus einer ungebundenen Quelle
+nichts und meldet das als `not_bound`, nie als Negativbefund.
 
 Die Bindungswurzel ist die einzige Stelle im System, an der ein absoluter
 Pfad zulässig ist. Sie wird beim Binden **aufgelöst** und in aufgelöster Form

@@ -184,7 +184,15 @@ class PackagedVaultTests(unittest.TestCase):
             self.assertNotIn(".vault-extern.json", nachher)
 
     def test_unbound_external_source_answers_offline_with_exit_code_zero(self):
-        """Ein frisch entpacktes Paket ist ungebunden — und trotzdem gruen."""
+        """Ein frisch entpacktes Paket ist ungebunden — und trotzdem gruen.
+
+        Gruen heisst: der Tresor antwortet aus seinem eigenen Bestand, mit
+        Exit-Code 0. Es heisst NICHT, dass extern etwas durchsucht wurde.
+        Ungebunden und offline wird kein einziges Dokument gelesen, und genau
+        das muss als eigener Zustand dastehen — nie als Negativbefund. Eine
+        fruehere Fassung dieses Tests erlaubte hier no_external_candidates und
+        schrieb damit den Fehler fest, den er haette finden sollen.
+        """
         with tempfile.TemporaryDirectory(prefix="skillsafe-unbound-") as temp:
             ziel = Path(temp) / "projekt/.claude/skills"
             ziel.mkdir(parents=True)
@@ -214,14 +222,47 @@ class PackagedVaultTests(unittest.TestCase):
 
             extern = lauf("query", "--extern", "Was ist OKF?")
             self.assertEqual(extern.returncode, 0, extern.stdout + extern.stderr)
-            block = json.loads(extern.stdout)["external"]
-            self.assertIn(block["state"],
-                          {"no_external_candidates", "external_candidates_found"})
-            hinweise = " ".join(block["notes"])
-            self.assertTrue(
-                "nicht gebunden" in hinweise or "SKILLSAFE_OFFLINE" in hinweise,
-                hinweise,
-            )
+            payload = json.loads(extern.stdout)
+            # Der lokale Teil ist vom externen Zustand unberuehrt.
+            self.assertEqual(payload["state"], "candidates_found")
+            block = payload["external"]
+            modi = {quelle["id"]: quelle["mode"] for quelle in block["sources"]}
+            self.assertTrue(modi, "Der Demo-Bestand fuehrt externe Quellen auf")
+            self.assertNotIn("lokal", modi.values(), "Paket darf nicht gebunden sein")
+
+            def erwartet(betroffene):
+                # Ungebunden ist der Normalzustand eines frischen Pakets; eine
+                # Netzquelle, die nicht abgerufen wurde, wiegt schwerer.
+                nur_ungebunden = all(modi[xid] == "unbound" for xid in betroffene)
+                return "not_bound" if nur_ungebunden else "unreachable"
+
+            def pruefe_nicht_gelesen(daten, zustand):
+                aussen = daten["external"]
+                self.assertEqual(aussen["state"], zustand, aussen)
+                self.assertFalse(aussen["live"])
+                self.assertEqual(aussen["hits"], [])
+                self.assertIsNone(aussen["external_fingerprint"])
+                self.assertIn("kein Negativbefund", aussen["reason"])
+                rueckfall = daten["fallback"]
+                self.assertTrue(rueckfall["external_lookup_available"])
+                self.assertFalse(rueckfall["external_live_lookup_used"])
+                self.assertEqual(rueckfall["external_document_paths"], [])
+                self.assertEqual(rueckfall["external_reason"], aussen["reason"])
+
+            pruefe_nicht_gelesen(payload, erwartet(modi))
+            # Der Demo-Bestand mischt beide Ursachen: X-0001 ist lokal und
+            # ungebunden, X-0002 eine Netzquelle hinter dem Offline-Schalter.
+            self.assertEqual(block["state"], "unreachable")
+            self.assertIn("nicht gebunden", block["reason"])
+            self.assertIn("SKILLSAFE_OFFLINE", block["reason"])
+
+            # Jede Quelle fuer sich: die Ursache bestimmt den Zustand.
+            for xid in sorted(modi):
+                einzeln = lauf("query", "--extern", "--source", xid, "Was ist OKF?")
+                self.assertEqual(
+                    einzeln.returncode, 0, einzeln.stdout + einzeln.stderr)
+                with self.subTest(quelle=xid):
+                    pruefe_nicht_gelesen(json.loads(einzeln.stdout), erwartet([xid]))
 
 
 if __name__ == "__main__":

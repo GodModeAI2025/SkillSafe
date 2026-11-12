@@ -1294,6 +1294,169 @@ class VaultSecurityTests(unittest.TestCase):
         self.assertEqual(payload["external"]["state"], "invalid_external_source")
         self.assertIn("Prüfsumme", payload["external"]["reason"])
         self.assertEqual(payload["external"]["hits"], [])
+        # Ein Abbruch ist kein Ergebnis: nichts geht ein, nichts gilt als
+        # live gelesen, und der Grund sagt ausdruecklich, was das nicht ist.
+        self.assertIn("kein Negativbefund", payload["external"]["reason"])
+        self.assertFalse(payload["external"]["live"])
+        self.assertIsNone(payload["external"]["external_fingerprint"])
+        self.assertFalse(payload["fallback"]["external_live_lookup_used"])
+        self.assertEqual(payload["fallback"]["external_document_paths"], [])
+
+    def test_foreign_vault_over_budget_fails_closed_as_budget_exceeded(self):
+        """Ein gesprengtes Budget ist ein eigener Zustand — und kein Traceback.
+
+        Vorher lief der Fehler des Baumlaufs ungefangen durch: die Abfrage
+        endete mit einer Ausnahme statt mit genau einem JSON-Dokument, und der
+        dokumentierte Zustand budget_exceeded entstand im Query-Pfad nie.
+        """
+        self.install_extern_register()
+        fremd = self.new_vault()
+        vault = self.load_vault(self.root, "budget-abfrage")
+        tief = fremd / "knowledge"
+        for nummer in range(vault.MAX_EXTERN_TIEFE + 2):
+            tief = tief / f"t{nummer}"
+        tief.mkdir(parents=True)
+        (self.root / "sources/EXTERN.md").write_text(
+            self.EXTERN_REGISTER.format(ziel="-").replace(
+                "markdown-tree", "skillsafe-vault").replace(
+                "2026-08-06", "2026-08-06, Scope: projekt"),
+            encoding="utf-8",
+        )
+        self.run_cli("extern", "bind", "X-0001", str(fremd))
+        self.run_cli("release", "patch")
+        result = self.run_cli("query", "--extern", "OKF")
+        self.assertNotIn("Traceback", result.stderr)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        payload = json.loads(result.stdout)
+        block = payload["external"]
+        self.assertEqual(block["state"], "budget_exceeded")
+        self.assertIn("Verzeichnistiefe", block["reason"])
+        self.assertIn("kein Negativbefund", block["reason"])
+        # Fail closed ohne Teilergebnis, wie beim Katalog-Geruest.
+        self.assertEqual(block["hits"], [])
+        self.assertFalse(block["live"])
+        self.assertIsNone(block["external_fingerprint"])
+        self.assertFalse(payload["fallback"]["external_live_lookup_used"])
+        self.assertEqual(payload["fallback"]["external_document_paths"], [])
+
+    # Der Netzpfad wird im Prozess geprueft und der Abruf dabei ersetzt: kein
+    # Test geht ins Netz, auch dann nicht, wenn der Offline-Schalter fehlt.
+    NETZ_PRAEFIX = "https://example.invalid/pfad/"
+
+    def install_netzkatalog(self, dokumente, xid="X-0001"):
+        (self.root / f"sources/derived/{xid}__orchestrator.json").write_text(
+            json.dumps({
+                "schema": "skillsafe.orchestrator/v1", "source_id": xid,
+                "segmentation": "satzsegmentierung/v1",
+                "generated_from_sha256": None,
+                "document_count": len(dokumente),
+                "documents": [{
+                    "path": pfad, "sha256": None, "title": pfad, "summary": "",
+                    "tags": [], "sentence_count": 1, "token_count": 1,
+                    "top_tokens": [],
+                } for pfad in dokumente],
+            }, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+
+    def extern_im_prozess(self, suffix, antworten, frage):
+        """Engine laden, Abruf ersetzen, externen Block im Prozess bauen."""
+        vault = self.load_vault(self.root, suffix)
+        aufrufe = []
+
+        def abruf(url, praefix, *, opener=None):
+            self.assertTrue(url.startswith(self.NETZ_PRAEFIX), url)
+            aufrufe.append(url)
+            return antworten[url[len(self.NETZ_PRAEFIX):]]
+
+        vault._hole_https = abruf
+        vault._netz_erlaubt = lambda: True
+        # Der TTL-Abzug liegt sonst im Nutzer-Cache dieses Hosts.
+        vault._extern_cache_dir = lambda xid: self.work / "abzug" / xid
+        snapshot, fehler = vault._load_released_query_snapshot(frage)
+        self.assertIsNone(fehler, fehler)
+        return vault, vault.build_external_result(snapshot, frage), aufrufe
+
+    def test_failed_fetches_are_unreachable_and_never_a_negative_finding(self):
+        """Abruffehler: es kam kein Dokument an, also gibt es keinen Befund."""
+        self.install_extern_register(ziel=self.NETZ_PRAEFIX)
+        self.install_netzkatalog(["a.md", "b.md"])
+        release = self.run_cli("release", "patch")
+        self.assertEqual(release.returncode, 0, release.stdout + release.stderr)
+        _, block, aufrufe = self.extern_im_prozess(
+            "abruffehler",
+            {"a.md": (None, "HTTP 503"),
+             "b.md": (None, "nicht erreichbar — Zeitüberschreitung")},
+            "Schimmelbefall",
+        )
+        self.assertEqual(len(aufrufe), 2)
+        self.assertEqual(block["state"], "unreachable")
+        self.assertFalse(block["live"])
+        self.assertEqual(block["hits"], [])
+        self.assertIsNone(block["external_fingerprint"])
+        self.assertIsNone(block["fetched_at"])
+        self.assertIn("kein Negativbefund", block["reason"])
+        self.assertIn("kein Dokument lesbar", block["reason"])
+        self.assertTrue(any("HTTP 503" in notiz for notiz in block["notes"]))
+        self.assertEqual(block.get("documents_read", []), [])
+
+    def test_partly_failed_fetch_keeps_the_hit_and_names_the_gap(self):
+        """Ein Abruf gelingt, einer nicht: Treffer ja, aber die Luecke steht da."""
+        self.install_extern_register(ziel=self.NETZ_PRAEFIX)
+        self.install_netzkatalog(["a.md", "b.md"])
+        release = self.run_cli("release", "patch")
+        self.assertEqual(release.returncode, 0, release.stdout + release.stderr)
+        inhalt = "# Minderung\n\nErheblicher Schimmelbefall ist ein Mangel.\n"
+        vault, block, _ = self.extern_im_prozess(
+            "teilabruf",
+            {"a.md": (inhalt.encode("utf-8"), None), "b.md": (None, "HTTP 404")},
+            "Schimmelbefall",
+        )
+        self.assertEqual(block["state"], "external_candidates_found")
+        self.assertTrue(block["live"])
+        self.assertEqual(block["hits"][0]["document"], "a.md")
+        self.assertEqual(block["documents_read"], ["X-0001:a.md"])
+        self.assertIn("1 von 2", block["reason"])
+        self.assertRegex(block["external_fingerprint"], r"^[0-9a-f]{64}$")
+        # Der Abruf steht im Herkunftsprotokoll.
+        self.assertIsNotNone(block["fetched_at"])
+        self.assertIn(
+            f"extern | abruf {self.NETZ_PRAEFIX}a.md",
+            (self.root / "log.md").read_text(encoding="utf-8"),
+        )
+
+    def test_fetch_is_logged_even_when_the_search_aborts_afterwards(self):
+        """Das Herkunftsprotokoll haengt am Abruf, nicht am Ergebnis."""
+        fremd = self.new_vault()
+        (fremd / "knowledge/demo-okf/okf.md").write_text(
+            "manipuliert\n", encoding="utf-8")
+        self.install_extern_register(ziel=self.NETZ_PRAEFIX)
+        register = self.root / "sources/EXTERN.md"
+        register.write_text(
+            register.read_text(encoding="utf-8")
+            + "| X-0002 | Fremdtresor | skillsafe-vault | - "
+              "| 2026-08-06, Scope: projekt | fremdtresor | T3 | frei |\n",
+            encoding="utf-8",
+        )
+        self.install_netzkatalog(["a.md"])
+        self.run_cli("extern", "bind", "X-0002", str(fremd))
+        release = self.run_cli("release", "patch")
+        self.assertEqual(release.returncode, 0, release.stdout + release.stderr)
+        inhalt = "# Minderung\n\nErheblicher Schimmelbefall ist ein Mangel.\n"
+        _, block, aufrufe = self.extern_im_prozess(
+            "abbruch-protokoll", {"a.md": (inhalt.encode("utf-8"), None)},
+            "Schimmelbefall",
+        )
+        self.assertEqual(len(aufrufe), 1)
+        # Die Netzquelle wurde gelesen, der fremde Tresor ist manipuliert:
+        # das Teilergebnis wird verworfen, der Abruf bleibt nachlesbar.
+        self.assertEqual(block["state"], "invalid_external_source")
+        self.assertEqual(block["hits"], [])
+        self.assertFalse(block["live"])
+        self.assertIn(
+            f"extern | abruf {self.NETZ_PRAEFIX}a.md",
+            (self.root / "log.md").read_text(encoding="utf-8"),
+        )
 
 
     def test_okf_export_carries_external_provenance_but_never_a_binding_path(self):

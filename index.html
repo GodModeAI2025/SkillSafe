@@ -239,13 +239,13 @@
         <p class="sub">Belegtes Wissen aus Text, Bildern und PDFs — als Skill, nicht als Server.</p>
         <p class="tagline-en">Für Claude Code und Codex: kontrollierte Begriffswelten, reproduzierbares Hybrid-Retrieval, Wissensgraph-Kontext und geprüfte Bildfundstellen — lokal, nachvollziehbar und ohne Embedding-Pflicht.</p>
         <div class="cta-row">
-          <a class="btn btn-primary" href="#funktionen">Was v0.11.11 kann</a>
+          <a class="btn btn-primary" href="#funktionen">Was v0.11.12 kann</a>
           <a class="btn btn-ghost" href="#regeln">Die sechs Regeln</a>
           <a class="btn btn-ghost" href="wissenstresor/KONZEPT.md">Konzept lesen</a>
           <a class="btn btn-ghost" href="https://github.com/GodModeAI2025/SkillSafe">GitHub</a>
         </div>
       </div>
-      <div class="stamp"><span><b>VALIDATE</b>0 Fehler<br>6 Seiten · 28 Claims<br>v0.11.11</span></div>
+      <div class="stamp"><span><b>VALIDATE</b>0 Fehler<br>6 Seiten · 28 Claims<br>v0.11.12</span></div>
     </div>
   </section>
 
@@ -357,6 +357,7 @@
       </div>
       <p class="lede reveal" style="margin-top:20px;">Warum zwei Stufen nötig sind, zeigt der mitgelieferte Beispielbaum. Auf die Anfrage „Minderung Mangel Wohnung" liefert die erste Stufe das Seerecht mit 78 Punkten vor dem Mietrecht mit 60, weil beide Katalogtexte absichtlich fast gleich klingen. Die zweite Stufe liest den tatsächlichen Satzbestand und dreht das Verhältnis auf 460 zu 152. Der Katalogtext ist ein schwaches Signal, der Bestand dahinter das starke. Ein Dokument, in dem kein einziger Anfragebegriff als ganzes Wort vorkommt, fällt heraus, egal wie gut sein Katalogeintrag aussah.</p>
       <p class="lede reveal" style="margin-top:20px;">Findet die zweite Stufe nichts, kommt nichts zurück. Kein alphabetischer Notnagel, kein bester Fehltreffer, stattdessen eine Meldung, die sagt, was zu tun ist. Ein plausibel aussehender Fehltreffer ist teurer als gar kein Treffer, weil er nicht als Fehler auffällt. Abgeglichen wird ausschließlich an Wortgrenzen, deshalb findet „himmel" auch kein „schimmel".</p>
+      <p class="lede reveal" style="margin-top:20px;">Nicht gelesen ist dabei nicht dasselbe wie nichts gefunden. Ein Negativbefund setzt voraus, dass mindestens ein Dokument tatsächlich geöffnet wurde. Ist eine Quelle auf diesem Rechner nicht gebunden oder nicht erreichbar, liest der Tresor nichts und meldet genau das als eigenen Zustand, <code>not_bound</code> oder <code>unreachable</code>, ausdrücklich nicht als Negativbefund und ohne Fingerprint. Ein frisch entpacktes Paket ohne Netz ist der Normalfall und sieht deshalb nie so aus, als sei gesucht und nichts gefunden worden.</p>
       <p class="lede reveal" style="margin-top:20px;">Eine Zusage verschiebt sich damit, und das gehört deutlich gesagt: „Kein Netzwerk im Skill" gilt jetzt für den regulären Abfrageweg statt absolut. Ohne <code>--extern</code> verlässt kein Byte den Skill-Ordner, weder zur Festplatte noch ins Netz. Mit <code>--extern</code> liest der Tresor ausschließlich aufgeführte Ziele, unter festem Präfix, mit Zeit-, Größen- und Weiterleitungsgrenzen. <code>SKILLSAFE_OFFLINE=1</code> schaltet jeden Abruf hart ab, noch vor dem ersten Socket; die Prüfkette läuft damit netzfrei. Protokoll und Grenzen stehen in <a href="wissenstresor/references/externe-quellen.md">references/externe-quellen.md</a>.</p>
     </div>
   </section>
@@ -463,7 +464,7 @@
 
 <footer>
   <div class="wrap-wide">
-    <span>SkillSafe v0.11.11 · Apache License 2.0 · Motor bleibt stabil, Treibstoff ist flüchtig.</span>
+    <span>SkillSafe v0.11.12 · Apache License 2.0 · Motor bleibt stabil, Treibstoff ist flüchtig.</span>
     <span><a href="README.md">README</a> · <a href="BETRIEB.md">Betrieb</a> · <a href="wissenstresor/KONZEPT.md">Konzept</a> · <a href="wissenstresor/SKILL.md">Skill-Vertrag</a> · <a href="https://godmodeai2025.github.io/MarkZimmermann/" target="_blank" rel="noopener">Impressum</a></span>
   </div>
 </footer>

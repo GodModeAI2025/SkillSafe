@@ -203,6 +203,10 @@ EXTERN_NETZ_MAX_REDIRECTS = 3
 EXTERN_NETZ_MAX_ABRUFE = 20
 EXTERN_CACHE_TTL = 6 * 3600
 EXTERN_OFFLINE_ENV = "SKILLSAFE_OFFLINE"
+# Ein Satz, eine Schreibweise. Jeder externe Zustand, bei dem kein Dokument
+# gelesen wurde, trägt ihn im Grund: „nicht gelesen" darf nie wie „gelesen und
+# nichts gefunden" aussehen. Antwort-Workflow und Tests halten sich daran fest.
+EXTERN_KEIN_BEFUND = "dies ist kein Negativbefund"
 MEDIA_TYPES = {
     ".png": "image/png",
     ".jpg": "image/jpeg",
@@ -283,6 +287,16 @@ RETRIEVAL_STOPWORDS = {
 
 class RollbackIncompleteError(RuntimeError):
     """Mindestens ein Release-Ziel konnte nicht wiederhergestellt werden."""
+
+
+class BudgetUeberschritten(OSError):
+    """Ein gezähltes Budget eines Baumlaufs ist überschritten.
+
+    Unterklasse von OSError, damit jeder bestehende Aufrufer unverändert
+    fail-closed abbricht. Der eigene Typ trennt „zu groß" von „nicht lesbar":
+    nur so kann der externe Query-Pfad ``budget_exceeded`` melden, statt beide
+    Ursachen in einem Zustand zu vermengen.
+    """
 
 
 # ---------------------------------------------------------------- Hilfen
@@ -679,7 +693,7 @@ def _walk_tree_no_links_within(start: Path, basis: Path, *, max_tiefe=None,
     while stapel:
         ordner, tiefe = stapel.pop()
         if max_tiefe is not None and tiefe > max_tiefe:
-            raise OSError(
+            raise BudgetUeberschritten(
                 f"{_rel_zu(ordner, basis)}: Verzeichnistiefe über {max_tiefe}"
             )
         try:
@@ -694,7 +708,7 @@ def _walk_tree_no_links_within(start: Path, basis: Path, *, max_tiefe=None,
             p = Path(eintrag.path)
             besucht += 1
             if max_eintraege is not None and besucht > max_eintraege:
-                raise OSError(
+                raise BudgetUeberschritten(
                     f"{_rel_zu(basis, basis) or '.'}: mehr als {max_eintraege} "
                     f"Verzeichniseinträge"
                 )
@@ -3291,7 +3305,10 @@ def cmd_query(question_words, world=None, limit=8, extern=False,
                                       quellen_filter=quellen_filter)
         gelesen = block.pop("documents_read", [])
         result["external"] = block
-        result["fallback"]["external_live_lookup_used"] = True
+        # Das ERGEBNIS, nicht der Aufruf: wahr nur, wenn tatsächlich gelesen
+        # wurde. Das Flag --extern allein hat noch nichts nachgeschlagen —
+        # eine ungebundene oder nicht erreichbare Quelle liest kein Byte.
+        result["fallback"]["external_live_lookup_used"] = bool(block["live"])
         result["fallback"]["external_reason"] = block.get("reason")
         result["fallback"]["external_document_paths"] = gelesen
     _emit_query_json(result)
@@ -3948,6 +3965,11 @@ def _lese_fremden_tresor(wurzel, anker):
     bevor wir irgendetwas glauben. Sein ``scripts/vault.py`` ist an dieser
     Stelle eine Datei mit einer Prüfsumme — kein import, kein exec, kein
     subprocess (AD-09, eiserne Regel 5).
+
+    Rückgabe: ``(daten, None)`` oder ``(None, grund)``. Ein überschrittenes
+    gezähltes Budget ist kein Grund unter vielen, sondern eine eigene
+    Ausnahme (``BudgetUeberschritten``): der Aufrufer meldet es als
+    ``budget_exceeded`` statt als ungültige Quelle.
     """
     manifest, digest, grund = _lies_externes_dokument(
         wurzel, anker, "MANIFEST.sha256")
@@ -3977,10 +3999,19 @@ def _lese_fremden_tresor(wurzel, anker):
     if not geprueft:
         return None, "MANIFEST.sha256 ist leer"
 
-    dokumente = []
-    for p in _walk_tree_no_links_within(
+    # Der Baumlauf darf scheitern, die Abfrage nicht: früher lief sein Fehler
+    # ungefangen durch und beendete sie mit einem Traceback statt mit genau
+    # einem JSON-Dokument.
+    try:
+        baum = _walk_tree_no_links_within(
             wurzel / "knowledge", wurzel, max_tiefe=MAX_EXTERN_TIEFE,
-            max_eintraege=MAX_EXTERN_EINTRAEGE):
+            max_eintraege=MAX_EXTERN_EINTRAEGE)
+    except BudgetUeberschritten:
+        raise
+    except OSError as exc:
+        return None, f"knowledge/ ist nicht lesbar — {exc}"
+    dokumente = []
+    for p in baum:
         if p.suffix.lower() != ".md" or not _safe_regular_file_within(p, wurzel):
             continue
         relpfad = _rel_zu(p, wurzel)
@@ -3998,6 +4029,14 @@ def build_external_result(snapshot, query, quellen_filter=None):
     Ergebnisse landen NIE in ``evidence`` und nie im lokalen
     ``retrieval_fingerprint``: ein externer Satz ist ein Zeiger auf fremdes
     Material, kein kuratierter Claim dieses Bestands.
+
+    Nur zwei Zustände sind Ergebnisse: ``external_candidates_found`` und
+    ``no_external_candidates``. Beide setzen voraus, dass mindestens ein
+    Dokument tatsächlich gelesen wurde. Jeder andere Zustand heißt „es wurde
+    nichts gelesen" und ist ausdrücklich kein Negativbefund. Ein Block, der
+    nach „durchsucht und nichts gefunden" aussieht, obwohl kein Dokument
+    geöffnet wurde, ist derselbe Fehltreffer wie eine vertippte Quellen-ID —
+    und genauso teuer, weil er nicht als Fehler auffällt.
     """
     bindung, bindungsfehler = parse_bindung()
     register = snapshot["extern"]["register"]
@@ -4006,9 +4045,14 @@ def build_external_result(snapshot, query, quellen_filter=None):
     tokens = _retrieval_tokens(query)
 
     block = {
-        "state": "no_external_candidates",
+        # Die Vorbelegung ist bewusst KEIN Ergebniszustand: verlässt ein Pfad
+        # die Funktion, ohne den Zustand zu setzen, sieht das nie nach einem
+        # Negativbefund aus.
+        "state": "unreachable",
         "algorithm": EXTERN_RETRIEVAL_PROFILE,
-        "live": True,
+        # 'live' wird verdient, nicht vorbelegt: wahr erst, wenn tatsächlich
+        # ein Dokument gelesen wurde und in dieses Ergebnis eingeht.
+        "live": False,
         "fetched_at": None,
         "sources": [],
         "hits": [],
@@ -4018,7 +4062,6 @@ def build_external_result(snapshot, query, quellen_filter=None):
     }
     if not register:
         block["state"] = "not_declared"
-        block["live"] = False
         block["reason"] = (
             f"{rel(EXTERN_REGISTER)} führt keine externe Bezugsquelle. "
             f"Es wird ausschließlich aufgeführtes Material gelesen."
@@ -4032,15 +4075,33 @@ def build_external_result(snapshot, query, quellen_filter=None):
     unbekannt = sorted(set(quellen_filter or []) - set(register))
     if unbekannt:
         block["state"] = "invalid_query"
-        block["live"] = False
         block["reason"] = (
             f"Nicht aufgeführte Quelle(n) {unbekannt}. Es wurde nichts "
-            f"durchsucht — dies ist kein Negativbefund. Aufgeführt sind: "
+            f"durchsucht — {EXTERN_KEIN_BEFUND}. Aufgeführt sind: "
             f"{sorted(register)}."
         )
         return block
 
     treffer, wurzeln, protokoll, dokumentpfade = [], [], [], []
+    # Je berücksichtigter Quelle, aus der KEIN Dokument gelesen wurde, genau
+    # ein Eintrag (ursache, text). Die Ursache ist "not_bound" (lokale Quelle
+    # ohne brauchbare Bindung — Normalzustand eines frisch entpackten Pakets)
+    # oder "unreachable" (die Quelle hätte gelesen werden sollen, aber es kam
+    # kein Dokument an). Daraus entsteht unten der Zustand.
+    ungelesen = []
+    # Quellen, aus denen gelesen wurde, aber nicht alles Geöffnete: auch das
+    # ist eine Lücke, und sie gehört in den Grund statt nur in die Notizen.
+    teilweise = []
+    # Fail closed ohne Teilergebnis: (zustand, grund), sobald ein fremder
+    # Tresor nicht vertrauenswürdig ist oder ein gezähltes Budget sprengt.
+    abbruch = None
+
+    def nicht_gelesen(ursache, text, notiz=True):
+        """Eine Quelle ohne gelesenes Dokument festhalten — nie still."""
+        if notiz:
+            block["notes"].append(text)
+        ungelesen.append((ursache, text))
+
     for xid in sorted(register):
         zeile = register[xid]
         if quellen_filter and xid not in quellen_filter:
@@ -4055,26 +4116,39 @@ def build_external_result(snapshot, query, quellen_filter=None):
         }
         block["sources"].append(eintrag)
         if status["modus"] == "unbound":
-            block["notes"].append(status["grund"])
+            nicht_gelesen("not_bound", status["grund"])
             continue
         if status["modus"] == "netz" and not _netz_erlaubt():
             eintrag["bound"] = False
-            block["notes"].append(
-                f"{xid}: {EXTERN_OFFLINE_ENV} ist gesetzt — nicht abgerufen"
+            nicht_gelesen(
+                "unreachable",
+                f"{xid}: {EXTERN_OFFLINE_ENV} ist gesetzt — nicht abgerufen",
             )
             continue
 
         if zeile["art"] == "skillsafe-vault":
             if status["modus"] != "lokal":
-                block["notes"].append(
-                    f"{xid}: ein fremder Tresor wird nur lokal gelesen"
+                nicht_gelesen(
+                    "unreachable",
+                    f"{xid}: ein fremder Tresor wird nur lokal gelesen",
                 )
                 continue
-            fremd, grund = _lese_fremden_tresor(status["wurzel"], status["anker"])
+            try:
+                fremd, grund = _lese_fremden_tresor(
+                    status["wurzel"], status["anker"])
+            except BudgetUeberschritten as exc:
+                abbruch = ("budget_exceeded", f"{xid}: {exc}")
+                break
             if grund:
-                block["state"] = "invalid_external_source"
-                block["reason"] = f"{xid}: {grund}"
-                return block
+                abbruch = ("invalid_external_source", f"{xid}: {grund}")
+                break
+            if not fremd["documents"]:
+                nicht_gelesen(
+                    "unreachable",
+                    f"{xid}: der fremde Tresor enthält kein Dokument unter "
+                    f"knowledge/",
+                )
+                continue
             wurzeln.append([xid, fremd["manifest_sha256"]])
             for dok in fremd["documents"]:
                 dokumentpfade.append(f"{xid}:{dok['path']}")
@@ -4087,14 +4161,12 @@ def build_external_result(snapshot, query, quellen_filter=None):
 
         katalog = kataloge.get(xid)
         if not katalog:
-            block["notes"].append(
+            nicht_gelesen(
+                "unreachable",
                 f"{xid}: kein Katalog sources/derived/{xid}__orchestrator.json "
-                f"— 'vault.py orchestrator-template {xid}' erzeugt das Gerüst"
+                f"— 'vault.py orchestrator-template {xid}' erzeugt das Gerüst",
             )
             continue
-        # Bei einer Netzquelle ist der Wurzel-Hash bewusst None; dann geht der
-        # Bindungsschluessel in den Fingerprint, nicht eine erfundene Zahl.
-        wurzeln.append([xid, katalog["meta"]["generated_from_sha256"] or "netz"])
         # Stufe 1 ist nur Prefilter: der Index wird nie roh geladen, sondern
         # gefiltert, und nur die besten Kandidaten werden überhaupt geöffnet.
         vorauswahl = sorted(
@@ -4103,12 +4175,15 @@ def build_external_result(snapshot, query, quellen_filter=None):
             key=lambda eintrag: (-eintrag[0], eintrag[1]),
         )[:MAX_EXTERN_STUFE1]
         ttl = bindung["cache_ttl_seconds"]
+        gelesen_hier, fehler_hier = 0, 0
         for katalog_score, relpfad, dok in vorauswahl:
             text, _, grund = _extern_dokument_text(
                 status, relpfad, ttl, xid, protokoll)
             if grund:
                 block["notes"].append(f"{xid}/{relpfad}: {grund}")
+                fehler_hier += 1
                 continue
+            gelesen_hier += 1
             dokumentpfade.append(f"{xid}:{relpfad}")
             bestand = _bestand_score(text, query_norm, tokens)
             # Abdeckung 0 fliegt raus, egal wie gut Stufe 1 aussah. Genau hier
@@ -4117,10 +4192,27 @@ def build_external_result(snapshot, query, quellen_filter=None):
                 continue
             treffer.append(_extern_treffer(
                 xid, relpfad, bestand, katalog_score, zeile))
+        if not gelesen_hier:
+            # Die Einzelgründe stehen je Dokument schon in den Notizen.
+            nicht_gelesen(
+                "unreachable",
+                f"{xid}: kein Dokument lesbar ({len(vorauswahl)} aus dem "
+                f"Katalog geöffnet)",
+                notiz=False,
+            )
+            continue
+        if fehler_hier:
+            teilweise.append(
+                f"{xid}: {fehler_hier} von {len(vorauswahl)} aus dem Katalog "
+                f"geöffneten Dokumenten nicht lesbar"
+            )
+        # Nur eine Quelle, aus der wirklich gelesen wurde, geht in den
+        # Fingerprint ein. Bei einer Netzquelle ist der Wurzel-Hash bewusst
+        # None; dann steht dort "netz" und keine erfundene Zahl.
+        wurzeln.append([xid, katalog["meta"]["generated_from_sha256"] or "netz"])
 
-    treffer.sort(key=lambda t: (-t["score"], t["source_id"], t["document"],
-                                t["sentence_index"]))
-    block["hits"] = treffer[:MAX_EXTERN_TREFFER]
+    # Jeder Abruf steht im Log — auch dann, wenn die Suche gleich darauf
+    # fail-closed abbricht. Das Herkunftsprotokoll hängt nicht am Ergebnis.
     if protokoll:
         block["fetched_at"] = date.today().isoformat()
         alter = [e["cache_age_seconds"] for e in protokoll]
@@ -4128,15 +4220,71 @@ def build_external_result(snapshot, query, quellen_filter=None):
             f"{len(protokoll)} Abruf(e), Cache-Alter {min(alter)}–{max(alter)} s"
         )
         _log_abrufe(protokoll)
+
+    if abbruch:
+        # Schon gelesene Dokumente anderer Quellen werden verworfen: ein
+        # Teilergebnis sähe aus wie ein vollständiges.
+        zustand, grund = abbruch
+        block["state"] = zustand
+        block["reason"] = (
+            f"{grund}. Die externe Suche wurde abgebrochen, es liegt kein "
+            f"Ergebnis vor — {EXTERN_KEIN_BEFUND}."
+        )
+        return block
+
+    gelesen = sorted(set(dokumentpfade))
+    # Alles, was hätte gelesen werden sollen und nicht gelesen wurde: ganze
+    # Quellen und einzelne Dokumente. Fehlt dieser Zusatz im Grund, wurde
+    # jedes geöffnete Dokument auch gelesen.
+    luecken = [text for _, text in ungelesen] + teilweise
+    offen = "; ".join(luecken)
+    if not gelesen:
+        # Kein Dokument gelesen heißt: es gibt kein Ergebnis. Der Zustand
+        # nennt die Ursache, bei gemischten Ursachen die schwerwiegendere —
+        # "unreachable" (etwas hätte lesbar sein sollen) vor "not_bound"
+        # (auf diesem Host bewusst nicht eingerichtet).
+        nur_ungebunden = bool(ungelesen) and all(
+            ursache == "not_bound" for ursache, _ in ungelesen)
+        block["state"] = "not_bound" if nur_ungebunden else "unreachable"
+        block["reason"] = (
+            f"Es wurde kein externes Dokument gelesen — {EXTERN_KEIN_BEFUND}. "
+            f"Nicht gelesen: {offen}."
+        )
+        if bindungsfehler:
+            block["reason"] += (
+                f" Die Bindungsdatei {rel(BINDUNG)} ist fehlerhaft "
+                f"(Einzelheiten in notes)."
+            )
+        return block
+
+    block["live"] = True
+    treffer.sort(key=lambda t: (-t["score"], t["source_id"], t["document"],
+                                t["sentence_index"]))
+    block["hits"] = treffer[:MAX_EXTERN_TREFFER]
     if block["hits"]:
         block["state"] = "external_candidates_found"
-    elif block["state"] == "no_external_candidates":
+        if luecken:
+            block["reason"] = (
+                f"Die Treffer stammen nur aus den gelesenen Dokumenten. "
+                f"Nicht gelesen: {offen}."
+            )
+    else:
+        block["state"] = "no_external_candidates"
         ohne = sorted(set(tokens)) if tokens else []
+        # Die Aussage reicht genau so weit wie das Gelesene — nicht bis zu
+        # jedem aufgeführten Dokument.
         block["reason"] = (
-            "Kein aufgeführtes Dokument enthält die Anfragebegriffe "
-            f"{ohne}. Fachbegriffe statt Eigennamen verwenden. Es wird "
-            "bewusst kein bester Fehltreffer geliefert."
+            f"Kein gelesenes Dokument enthält die Anfragebegriffe {ohne} "
+            f"(gelesen: {len(gelesen)}). Fachbegriffe statt Eigennamen "
+            f"verwenden. Es wird bewusst kein bester Fehltreffer geliefert."
         )
+        if luecken:
+            block["reason"] += (
+                f" Der Befund gilt nur für die gelesenen Dokumente. "
+                f"Nicht gelesen: {offen}."
+            )
+    # Ein Fingerprint bezeugt ein Ergebnis. Ohne gelesenes Dokument gibt es
+    # keines; dort bleibt er null, statt einen Nicht-Befund zu bezeugen.
     block["external_fingerprint"] = _sha256_bytes(json.dumps(
         {"algorithm": EXTERN_RETRIEVAL_PROFILE,
          "roots": sorted(wurzeln),
@@ -4145,7 +4293,7 @@ def build_external_result(snapshot, query, quellen_filter=None):
                    t["score"]] for t in block["hits"]]},
         ensure_ascii=False, sort_keys=True, separators=(",", ":"),
     ).encode("utf-8"))
-    block["documents_read"] = sorted(set(dokumentpfade))
+    block["documents_read"] = gelesen
     return block
 
 

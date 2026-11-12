@@ -25,9 +25,10 @@ class VaultRetrievalTests(unittest.TestCase):
     def tearDown(self):
         self.tempdir.cleanup()
 
-    def run_cli(self, *args):
+    def run_cli(self, *args, extra_env=None):
         env = os.environ.copy()
         env["PYTHONDONTWRITEBYTECODE"] = "1"
+        env.update(extra_env or {})
         return subprocess.run(
             [sys.executable, "-B", str(self.root / "scripts/vault.py"), *args],
             cwd=self.root,
@@ -570,12 +571,12 @@ Das Bild zeigt eine grüne Produktionsfreigabe.
             router.write_text(text[:start] + text[ende:], encoding="utf-8")
         return wurzel
 
-    def bind_extern(self, wurzel):
-        result = self.run_cli("extern", "bind", "X-0001", str(wurzel))
+    def bind_extern(self, wurzel, xid="X-0001"):
+        result = self.run_cli("extern", "bind", xid, str(wurzel))
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
-    def build_katalog(self):
-        result = self.run_cli("orchestrator-template", "X-0001")
+    def build_katalog(self, xid="X-0001"):
+        result = self.run_cli("orchestrator-template", xid)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         katalog = json.loads(result.stdout)
         titel = {
@@ -586,7 +587,7 @@ Das Bild zeigt eine grüne Produktionsfreigabe.
         for dok in katalog["documents"]:
             name, tags = titel.get(dok["path"], (dok["path"], []))
             dok["title"], dok["summary"], dok["tags"] = name, "", tags
-        (self.root / "sources/derived/X-0001__orchestrator.json").write_text(
+        (self.root / f"sources/derived/{xid}__orchestrator.json").write_text(
             json.dumps(katalog, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
         )
@@ -818,6 +819,258 @@ Das Bild zeigt eine grüne Produktionsfreigabe.
         _, payload = self.query("Was ist OKF?")
         self.assertTrue(payload["fallback"]["external_lookup_available"])
         self.assertFalse(payload["fallback"]["external_live_lookup_used"])
+
+
+    # ------------------------------- Nicht gelesen ist nicht "nichts gefunden"
+    #
+    # Ein externer Negativbefund setzt voraus, dass mindestens ein Dokument
+    # tatsaechlich gelesen wurde. Wurde keines gelesen, nennt der Zustand die
+    # Ursache. Jeder Test, der eine Netzquelle fuehrt, laeuft mit gesetztem
+    # Offline-Schalter: das Ziel liegt unter .invalid und wird nie abgerufen.
+
+    OFFLINE = {"SKILLSAFE_OFFLINE": "1"}
+    NETZ_ZEILE = (
+        "| X-0002 | Netzquelle | markdown-tree | https://example.invalid/pfad/ "
+        "| fortlaufend | netzquelle | T3 | frei |\n"
+    )
+
+    def install_netzquelle(self, nur_netz=False):
+        """Eine aufgefuehrte Netzquelle samt Katalog ergaenzen."""
+        register = self.root / "sources/EXTERN.md"
+        text = register.read_text(encoding="utf-8")
+        if nur_netz:
+            text = text[:text.index("| X-0001 ")]
+        register.write_text(text + self.NETZ_ZEILE, encoding="utf-8")
+        (self.root / "sources/derived/X-0002__orchestrator.json").write_text(
+            json.dumps({
+                "schema": "skillsafe.orchestrator/v1",
+                "source_id": "X-0002",
+                "segmentation": "satzsegmentierung/v1",
+                # Netzkatalog: ein beweglicher Ref laesst sich nicht pinnen.
+                "generated_from_sha256": None,
+                "document_count": 1,
+                "documents": [{
+                    "path": "netz.md", "sha256": None, "title": "Netzdokument",
+                    "summary": "", "tags": [], "sentence_count": 1,
+                    "token_count": 1, "top_tokens": [],
+                }],
+            }, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+
+    def extern_payload(self, *words, extra_env=None):
+        result = self.run_cli("query", "--extern", *words, extra_env=extra_env)
+        # Der externe Zustand aendert den Exit-Code nie: er folgt allein dem
+        # eingefrorenen Top-Level-Zustand.
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        return json.loads(result.stdout)
+
+    def assert_nichts_gelesen(self, payload, zustand):
+        """Kein Dokument gelesen: eigener Zustand, nie ein Negativbefund."""
+        block = payload["external"]
+        self.assertEqual(block["state"], zustand, block)
+        self.assertFalse(block["live"])
+        self.assertEqual(block["hits"], [])
+        self.assertIsNone(block["external_fingerprint"])
+        self.assertIn("kein Negativbefund", block["reason"])
+        # Der Rat fuer einen echten Fehlschlag der Suche waere hier falsch:
+        # an den Suchbegriffen liegt es nicht.
+        self.assertNotIn("Fachbegriffe", block["reason"])
+        fallback = payload["fallback"]
+        self.assertTrue(fallback["external_lookup_available"])
+        self.assertFalse(fallback["external_live_lookup_used"])
+        self.assertEqual(fallback["external_document_paths"], [])
+        self.assertEqual(fallback["external_reason"], block["reason"])
+        return block
+
+    def test_unbound_source_is_not_bound_and_never_a_negative_finding(self):
+        """Ungebunden heisst: nichts gelesen. Das ist kein 'nichts gefunden'."""
+        wurzel = self.install_extern_fixture()
+        self.bind_extern(wurzel)
+        self.build_katalog()
+        self.release()
+        # Gebunden findet dieselbe Frage den Satz ...
+        self.assertEqual(
+            self.extern_payload("Schimmelbefall")["external"]["state"],
+            "external_candidates_found",
+        )
+        # ... ungebunden wird kein Dokument geoeffnet.
+        result = self.run_cli("extern", "unbind", "X-0001")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        payload = self.extern_payload("Schimmelbefall")
+        block = self.assert_nichts_gelesen(payload, "not_bound")
+        self.assertIn("nicht gebunden", block["reason"])
+        self.assertEqual(
+            [(q["id"], q["mode"], q["bound"]) for q in block["sources"]],
+            [("X-0001", "unbound", False)],
+        )
+
+    def test_vanished_binding_root_is_not_bound(self):
+        """Eine Bindung, deren Wurzel fehlt, ist keine brauchbare Bindung."""
+        wurzel = self.install_extern_fixture()
+        self.bind_extern(wurzel)
+        self.build_katalog()
+        self.release()
+        shutil.rmtree(wurzel)
+        block = self.assert_nichts_gelesen(
+            self.extern_payload("Schimmelbefall"), "not_bound")
+        self.assertIn("Bindungswurzel", block["reason"])
+
+    def test_offline_network_source_is_unreachable_and_never_a_negative_finding(self):
+        """Der Offline-Schalter liest kein Byte — also gibt es keinen Befund."""
+        self.install_extern_fixture()
+        self.install_netzquelle(nur_netz=True)
+        self.release()
+        payload = self.extern_payload("Schimmelbefall", extra_env=self.OFFLINE)
+        block = self.assert_nichts_gelesen(payload, "unreachable")
+        self.assertIn("SKILLSAFE_OFFLINE", block["reason"])
+        self.assertIsNone(block["fetched_at"])
+        self.assertEqual(
+            [(q["id"], q["mode"]) for q in block["sources"]], [("X-0002", "netz")])
+
+    def test_mixed_causes_report_the_more_severe_state(self):
+        """Ungebunden plus offline: 'unreachable' wiegt schwerer als 'not_bound'."""
+        wurzel = self.install_extern_fixture()
+        self.bind_extern(wurzel)
+        self.build_katalog()
+        self.install_netzquelle()
+        self.release()
+        result = self.run_cli("extern", "unbind", "X-0001")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        payload = self.extern_payload("Schimmelbefall", extra_env=self.OFFLINE)
+        block = self.assert_nichts_gelesen(payload, "unreachable")
+        # Beide Ursachen stehen im Grund, nicht nur in den Notizen.
+        self.assertIn("nicht gebunden", block["reason"])
+        self.assertIn("SKILLSAFE_OFFLINE", block["reason"])
+        # Je Quelle entscheidet allein ihre eigene Ursache.
+        for xid, zustand in (("X-0001", "not_bound"), ("X-0002", "unreachable")):
+            with self.subTest(quelle=xid):
+                einzeln = self.extern_payload(
+                    "--source", xid, "Schimmelbefall", extra_env=self.OFFLINE)
+                self.assert_nichts_gelesen(einzeln, zustand)
+
+    def test_negative_finding_requires_a_document_that_was_read(self):
+        """Der Positivfall: gelesen und nichts gefunden bleibt ein Negativbefund."""
+        wurzel = self.install_extern_fixture()
+        self.bind_extern(wurzel)
+        self.build_katalog()
+        self.release()
+        payload = self.extern_payload("himmel")
+        block = payload["external"]
+        self.assertEqual(block["state"], "no_external_candidates")
+        self.assertTrue(block["live"])
+        self.assertEqual(block["hits"], [])
+        self.assertRegex(block["external_fingerprint"], r"^[0-9a-f]{64}$")
+        self.assertIn("Fachbegriffe", block["reason"])
+        self.assertIn("gelesen: 2", block["reason"])
+        # Vollstaendig gelesen: keine Einschraenkung, kein Vorbehalt.
+        self.assertNotIn("kein Negativbefund", block["reason"])
+        self.assertNotIn("Nicht gelesen", block["reason"])
+        fallback = payload["fallback"]
+        self.assertTrue(fallback["external_live_lookup_used"])
+        self.assertEqual(
+            fallback["external_document_paths"],
+            ["X-0001:handbuch/miete.md", "X-0001:handbuch/see.md"],
+        )
+
+    def test_partial_read_scopes_the_finding_to_what_was_read(self):
+        """Eine Quelle gelesen, eine nicht: der Befund reicht so weit wie das Gelesene."""
+        wurzel = self.install_extern_fixture()
+        self.bind_extern(wurzel)
+        self.build_katalog()
+        self.install_netzquelle()
+        self.release()
+
+        payload = self.extern_payload("himmel", extra_env=self.OFFLINE)
+        block = payload["external"]
+        self.assertEqual(block["state"], "no_external_candidates")
+        self.assertTrue(block["live"])
+        self.assertIn("gilt nur für die gelesenen Dokumente", block["reason"])
+        self.assertIn("X-0002", block["reason"])
+        self.assertIn("SKILLSAFE_OFFLINE", block["reason"])
+        gelesen = payload["fallback"]["external_document_paths"]
+        self.assertTrue(gelesen)
+        self.assertTrue(all(pfad.startswith("X-0001:") for pfad in gelesen))
+
+        # Auch ein Treffer verschweigt die ungelesene Quelle nicht.
+        treffer = self.extern_payload(
+            "Schimmelbefall", extra_env=self.OFFLINE)["external"]
+        self.assertEqual(treffer["state"], "external_candidates_found")
+        self.assertIn("nur aus den gelesenen Dokumenten", treffer["reason"])
+        self.assertIn("X-0002", treffer["reason"])
+
+    def test_bound_source_without_a_readable_document_is_unreachable(self):
+        """Gebunden reicht nicht: ohne Katalog oder ohne Datei wird nichts gelesen."""
+        wurzel = self.install_extern_fixture()
+        self.bind_extern(wurzel)
+        self.release()
+        block = self.assert_nichts_gelesen(
+            self.extern_payload("Schimmelbefall"), "unreachable")
+        self.assertIn("kein Katalog", block["reason"])
+
+        self.build_katalog()
+        self.release()
+        for datei in sorted(wurzel.rglob("*.md")):
+            datei.unlink()
+        block = self.assert_nichts_gelesen(
+            self.extern_payload("Schimmelbefall"), "unreachable")
+        self.assertIn("kein Dokument lesbar", block["reason"])
+        self.assertTrue(
+            any("nicht lesbar" in notiz for notiz in block["notes"]), block["notes"])
+
+    def test_single_unreadable_document_is_named_in_the_reason(self):
+        """Eine Luecke im Gelesenen steht im Grund, nicht nur in den Notizen."""
+        wurzel = self.install_extern_fixture()
+        self.bind_extern(wurzel)
+        self.build_katalog()
+        self.release()
+        (wurzel / "handbuch/see.md").unlink()
+        payload = self.extern_payload("himmel")
+        block = payload["external"]
+        self.assertEqual(block["state"], "no_external_candidates")
+        self.assertIn("gelesen: 1", block["reason"])
+        self.assertIn("1 von 2", block["reason"])
+        self.assertIn("gilt nur für die gelesenen Dokumente", block["reason"])
+        self.assertEqual(
+            payload["fallback"]["external_document_paths"],
+            ["X-0001:handbuch/miete.md"],
+        )
+
+    def test_fingerprint_covers_only_sources_that_were_read(self):
+        """Eine Quelle ohne gelesenes Dokument bezeugt nichts."""
+        wurzel = self.install_extern_fixture()
+        zweite = Path(self.tempdir.name) / "extern-zweites-handbuch"
+        (zweite / "handbuch").mkdir(parents=True)
+        (zweite / "handbuch/anderes.md").write_text(
+            "# Anderes\n\nHier steht nichts Einschlaegiges.\n", encoding="utf-8")
+        register = self.root / "sources/EXTERN.md"
+        register.write_text(
+            register.read_text(encoding="utf-8")
+            + "| X-0003 | Zweites Handbuch | markdown-tree | - | 2026-08-06 "
+              "| zweites-handbuch | T3 | frei |\n",
+            encoding="utf-8",
+        )
+        self.bind_extern(wurzel)
+        self.bind_extern(zweite, "X-0003")
+        self.build_katalog()
+        self.build_katalog("X-0003")
+        self.release()
+
+        beide = self.extern_payload("Schimmelbefall")["external"]
+        self.assertEqual(beide["state"], "external_candidates_found")
+        self.assertIsNone(beide["reason"])
+        nur_erste = self.extern_payload(
+            "--source", "X-0001", "Schimmelbefall")["external"]
+        self.assertNotEqual(
+            beide["external_fingerprint"], nur_erste["external_fingerprint"])
+
+        # X-0003 bleibt gebunden und katalogisiert, sein Dokument ist weg.
+        (zweite / "handbuch/anderes.md").unlink()
+        ohne_zweite = self.extern_payload("Schimmelbefall")["external"]
+        self.assertEqual(ohne_zweite["state"], "external_candidates_found")
+        self.assertIn("X-0003", ohne_zweite["reason"])
+        self.assertEqual(
+            ohne_zweite["external_fingerprint"], nur_erste["external_fingerprint"])
 
 
     def test_catalog_hashes_only_where_they_can_stay_true(self):

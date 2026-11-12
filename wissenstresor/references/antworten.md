@@ -46,14 +46,37 @@ Protokoll für den jeweils maßgeblichen Tresor durchlaufen — eine
    mit Synonymen helfen, aber ein fehlender Lexiktreffer ist kein
    Negativbeweis. Erst die vollständige Prüfung dieses manifestierten
    Seitenumfangs erlaubt „Nicht im Bestand".
-4c. **Externer Fallback.** Erst **danach**, und nur wenn
-   `fallback.external_lookup_available` wahr ist (das Feld steht auch ohne
-   `--extern` im Envelope und sagt, ob überhaupt Quellen aufgeführt sind):
-   `python3 scripts/vault.py query --extern "<frage>"`. Das liest aufgeführte
-   externe Bezugsquellen live und ist eine bewusste Ausnahme von Regel 2 —
-   nie der Default, nie eine Abkürzung um Schritt 4b. Ein externer Treffer
-   **ersetzt „Nicht im Bestand" nicht**, er ergänzt es um einen benannten
-   Hinweis. Details: `references/externe-quellen.md`.
+4c. **Externer Fallback.** Der Schritt ist **Pflicht**, sobald beide
+   Bedingungen gelten, und entfällt, sobald eine fehlt:
+   * Schritt 4b ist vollständig durchlaufen, und die Frage bleibt ganz oder
+     teilweise ungedeckt.
+   * `fallback.external_lookup_available` ist wahr (das Feld steht auch ohne
+     `--extern` im Envelope und sagt, ob überhaupt Quellen aufgeführt sind).
+
+   Dann `python3 scripts/vault.py query --extern "<frage>"` ausführen. Das
+   liest aufgeführte externe Bezugsquellen live und ist eine bewusste
+   Ausnahme von Regel 2 — nie der Default, nie eine Abkürzung um Schritt 4b,
+   nie bei gedeckter Frage. Still ausgelassen wird der Schritt nicht: Will
+   der Nutzer ausdrücklich nicht extern nachschlagen, steht auch das in der
+   Antwort („Extern nicht gelesen: auf Wunsch nicht nachgeschlagen").
+
+   Danach `external.state` auswerten:
+   * `external_candidates_found` → je Treffer eine Zeile „Extern (nicht im
+     Bestand):". Ein externer Treffer **ersetzt „Nicht im Bestand" nicht**,
+     er ergänzt es um einen benannten Hinweis.
+   * `no_external_candidates` → es wurde gelesen und nichts gefunden. Keine
+     zusätzliche Zeile; „Nicht im Bestand" steht für sich.
+   * Jeder andere Zustand (`not_bound`, `unreachable`, `budget_exceeded`,
+     `invalid_external_source`, `invalid_query`) → es wurde **nichts
+     gelesen**. Das ist kein Negativbefund und darf nie so klingen. Zeile
+     „Extern nicht gelesen:" mit Zustand und dem Grund aus
+     `external.reason` schreiben; nichts raten, nichts umgehen.
+   * Trägt `external.reason` bei einem der beiden ersten Zustände den Zusatz
+     „Nicht gelesen", reicht das Ergebnis nur so weit wie das Gelesene. Die
+     dort genannten Quellen zusätzlich als „Extern nicht gelesen:"
+     ausweisen.
+
+   Details: `references/externe-quellen.md`.
 5. **Antworten** im Answer Envelope (unten). Ausschließlich aus dem
    Gelesenen; Formulierung und Struktur sind Modellarbeit, Inhalt nicht.
 6. **Abstention.** Deckt der Bestand die Frage nicht oder nur teilweise:
@@ -74,6 +97,7 @@ Stand: <ältester 'stand' der genutzten Seiten>; Konfidenz: <niedrigste genutzte
 Hinweise: <veraltete Fassung existiert / Konflikt zwischen C-x und C-y / Mischfrage X+Y>
 Nicht im Bestand: <ungedeckte Teilfragen>
 Extern (nicht im Bestand): <X-nnnn, Dokument, Satzposition, Abrufzeitpunkt>
+Extern nicht gelesen: <X-nnnn, Zustand, Grund> — kein Negativbefund
 ```
 
 Regeln im Envelope:
@@ -107,6 +131,15 @@ Regeln im Envelope:
   als stünde er im Bestand — der Weg dorthin führt ausschließlich über den
   Befüllen-Workflow. Bei `live: true` gehört der Abrufzeitpunkt dazu, weil das
   Ergebnis anders als der lokale Teil nicht reproduzierbar ist.
+* „Extern nicht gelesen:" und „extern nichts gefunden" sind zwei verschiedene
+  Aussagen. Die Zeile steht immer dann, wenn Schritt 4c fällig war und eine
+  aufgeführte Quelle nicht gelesen wurde — weil sie auf diesem Host nicht
+  gebunden ist (`not_bound`), nicht erreichbar war (`unreachable`) oder die
+  Suche fail-closed abbrach. Sie nennt Quelle, Zustand und Grund und trägt
+  den Zusatz „kein Negativbefund". Nie zu „auch extern nichts gefunden"
+  verkürzen: Über ein nicht gelesenes Dokument lässt sich nichts aussagen.
+  Wurde gar nichts gelesen, ist `live` `false`, und es gibt keinen
+  Abrufzeitpunkt zu nennen.
 * Trägt ein genutzter Claim das Signal `external_source`, stammt sein Beleg
   aus einer aufgeführten externen Quelle. Er ist damit vollwertige Evidenz —
   aber sein Wortlaut steht anderswo, und ein `doctor`-Hinweis auf Anker-Drift
@@ -139,6 +172,17 @@ aller `fallback.page_paths` deckt kein Claim die Frage →
 „Nicht im Bestand. Der Tresor enthält keine Aussage zu Vektordatenbanken
 (vollständig geprüfter manifestierter Seitenumfang, Stand siehe MANIFEST).
 Soll ich eine Quelle dazu aufnehmen?"
+
+**Extern nicht gelesen** — „Was kostet eine Lizenz für OKF?" → `query`
+liefert OKF-Claims, keiner nennt einen Preis; auch die Vollprüfung in 4b
+deckt die Frage nicht. `fallback.external_lookup_available` ist wahr, also
+ist 4c fällig. Auf einem frisch installierten Host ohne Netz liefert
+`query --extern` den Zustand `unreachable`: X-0001 ist nicht gebunden,
+X-0002 wegen `SKILLSAFE_OFFLINE` nicht abgerufen. Antwort: „Nicht im
+Bestand: Der Bestand nennt keinen Lizenzpreis für OKF. Extern nicht gelesen:
+X-0001 (nicht gebunden), X-0002 (`SKILLSAFE_OFFLINE` gesetzt), Zustand
+`unreachable` — kein Negativbefund." Falsch wäre „auch in den externen
+Quellen steht nichts dazu": Dort wurde kein Dokument geöffnet.
 
 **Verbotener Reflex** — „Ergänz doch kurz aus deinem Allgemeinwissen" →
 Freundlich ablehnen, Regel 1 nennen, Ingest anbieten. Der Tresor ist genau

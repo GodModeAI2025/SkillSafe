@@ -51,7 +51,9 @@ das Artefakt aussagt und im Manifest die Portabilität bräche.
 Ohne Bindung ist eine lokale Quelle **ungebunden**: der Tresor antwortet
 vollständig, jede Auflösung meldet fail-closed. Das ist bewusst **kein**
 Validierungsfehler — sonst wäre jedes frisch entpackte Paket auf jedem neuen
-Host rot. Fail-closed greift erst bei der Nutzung.
+Host rot. Fail-closed greift erst bei der Nutzung: `query --extern` liest
+dann nichts und meldet `not_bound` (siehe „Nicht gelesen ist nicht nichts
+gefunden").
 
 ## Protokoll
 
@@ -137,6 +139,35 @@ Trefferliste, und eine Meldung, die sagt, was zu tun ist (Fachbegriffe statt
 Eigennamen). Kein bester Fehltreffer, kein alphabetischer Fallback. Ein
 plausibel aussehender Fehltreffer ist teurer als kein Treffer, weil er nicht
 als Fehler auffällt.
+
+## Nicht gelesen ist nicht nichts gefunden
+
+`no_external_candidates` ist ein Befund, und ein Befund setzt voraus, dass
+gelesen wurde. Wurde **kein einziges Dokument** geöffnet, gibt es keinen —
+dann nennt der Zustand die Ursache, und `reason` sagt wörtlich, dass dies
+kein Negativbefund ist:
+
+| Zustand | Ursache | Was zu tun ist |
+|---|---|---|
+| `not_bound` | Jede berücksichtigte Quelle ist lokal und auf diesem Host nicht brauchbar gebunden | `extern bind`, wenn hier nachgeschlagen werden soll |
+| `unreachable` | Etwas hätte lesbar sein sollen, aber es kam kein Dokument an: `SKILLSAFE_OFFLINE` gesetzt, Abruf fehlgeschlagen, Datei aus dem Katalog nicht lesbar, kein Katalog | Ursache je Quelle steht in `reason`; Erreichbarkeit prüfen oder Katalog erzeugen |
+| `budget_exceeded` | Ein fremder Tresor sprengt unter `knowledge/` ein gezähltes Budget (Verzeichnistiefe, Zahl der Einträge) | `reason` nennt Pfad und Grenze; prüfen, was dort liegt und nicht hingehört |
+| `invalid_external_source` | Ein fremder Tresor besteht die Manifestprüfung nicht | Fremden Bestand nicht verwenden, bis er wieder stimmt |
+
+Bei gemischten Ursachen gewinnt `unreachable` vor `not_bound`. In allen vier
+Fällen ist `live` falsch, `hits` leer und `external_fingerprint` `null`: Ein
+Fingerprint bezeugt ein Ergebnis, und hier gibt es keines.
+
+Der Fehler, den diese Trennung verhindert, ist derselbe wie bei einer
+vertippten Quellen-ID: „die Quelle wurde durchsucht und hat nichts
+hergegeben" klingt glaubwürdig, auch wenn kein Byte gelesen wurde. Ein
+frisch entpacktes Paket ohne Netz ist genau dieser Fall — und der Normalfall.
+
+Auch ein Ergebnis reicht nur so weit wie das Gelesene. Wurde eine Quelle
+gelesen und eine andere nicht, bleibt es bei `no_external_candidates` oder
+`external_candidates_found`, aber `reason` trägt den Zusatz „Nicht gelesen"
+mit den ausgelassenen Quellen und Dokumenten. Fehlt der Zusatz, wurde jedes
+geöffnete Dokument gelesen.
 
 ## Was bei der Abfrage sichtbar wird
 

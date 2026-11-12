@@ -347,7 +347,9 @@ Regel im Paketbau — dieselbe Doppelung wie bei der Dateiart-Allowlist.
 
 **Grenze:** Eine ungebundene Quelle macht `validate` bewusst **nicht** rot.
 Sonst wäre jedes frisch entpackte Paket auf jedem neuen Host rot. Fail-closed
-greift erst bei der Nutzung. Diese Asymmetrie ist eine Entscheidung.
+greift erst bei der Nutzung: `query --extern` liest aus einer ungebundenen
+Quelle nichts und meldet das als eigenen Zustand `not_bound`, ausdrücklich
+nicht als Negativbefund. Diese Asymmetrie ist eine Entscheidung.
 
 ### AD-12 · Der Orchestrator ist Daten, und das Ranking scheitert ehrlich
 
@@ -365,6 +367,15 @@ Seerecht mit 78 Punkten **vor** dem Mietrecht mit 60; Stufe 2 dreht das auf
 Fehltreffer ist teurer als kein Treffer, weil er nicht als Fehler auffällt —
 deshalb kein alphabetischer Fallback und kein „bester Fehltreffer", sondern
 eine Meldung, die sagt, was zu tun ist.
+
+Ehrlich scheitern kann nur, wer gelesen hat. `no_external_candidates` setzt
+deshalb mindestens ein tatsächlich gelesenes Dokument voraus. Wurde keines
+gelesen — die Quelle ungebunden, nicht erreichbar, ein Budget gesprengt —,
+nennt der Zustand die Ursache (`not_bound`, `unreachable`,
+`budget_exceeded`), trägt weder `live: true` noch einen Fingerprint und sagt
+im Grund wörtlich, dass dies kein Negativbefund ist. Ein leeres Ergebnis ohne
+gelesenes Dokument wäre derselbe plausible Fehltreffer mit umgekehrtem
+Vorzeichen: „durchsucht und nichts gefunden", wo nichts durchsucht wurde.
 
 Abgeglichen wird ausschließlich an Tokengrenzen (`_retrieval_tokens`,
 `_phrase_present`). Ein rohes Substring-`in` gibt es im externen Pfad nicht,

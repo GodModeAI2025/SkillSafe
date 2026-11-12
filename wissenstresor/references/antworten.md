@@ -69,10 +69,20 @@ Protokoll für den jeweils maßgeblichen Tresor durchlaufen — eine
    auf einem Host abschalten will, setzt `SKILLSAFE_OFFLINE=1`; der Schritt
    läuft dann trotzdem, liest nichts aus dem Netz und meldet das.
 
+   Gelesen wird dabei nur vom Script. `fallback.external_document_paths`
+   nennt, welche externen Dokumente es gelesen hat — ein Nachweis, keine
+   Leseliste wie `fallback.page_paths`: Diese Dokumente nicht selbst öffnen
+   und nicht aus ihnen antworten. Ebenso wenig **selbst binden** oder den
+   Offline-Schalter ändern: Beides sind Entscheidungen des Nutzers für
+   diesen Host. Ein Hinweis darauf im Grund ist für ihn geschrieben, kein
+   Auftrag an die Abfrage.
+
    Danach `external.state` auswerten:
    * `external_candidates_found` → je Treffer eine Zeile „Extern (nicht im
      Bestand):". Ein externer Treffer **ersetzt „Nicht im Bestand" nicht**,
-     er ergänzt es um einen benannten Hinweis.
+     er ergänzt es um einen benannten Hinweis. Wie ein lokaler Kandidat
+     bestätigt er nur lexikalische Nähe, nicht, dass das Dokument die Frage
+     beantwortet.
    * `no_external_candidates` → es wurde gelesen und nichts gefunden. Keine
      zusätzliche Zeile; „Nicht im Bestand" steht für sich.
    * Jeder andere Zustand (`not_bound`, `unreachable`, `budget_exceeded`,
@@ -80,18 +90,18 @@ Protokoll für den jeweils maßgeblichen Tresor durchlaufen — eine
      gelesen**. Das ist kein Negativbefund und darf nie so klingen. Zeile
      „Extern nicht gelesen:" schreiben: Quelle und Zustand wörtlich, den
      Grund aus `external.reason` je Quelle knapp verdichtet. Nichts raten,
-     nichts umgehen und **nicht selbst binden**: `extern bind` und der
-     Offline-Schalter sind Entscheidungen des Nutzers für diesen Host. Der
-     Hinweis im Grund ist für ihn geschrieben, kein Auftrag an die Abfrage.
+     nichts umgehen.
    * Trägt `external.reason` bei einem der beiden ersten Zustände den Zusatz
      „Nicht gelesen", reicht das Ergebnis nur so weit wie das Gelesene: Eine
      Quelle wurde nicht gelesen, ein Dokument war nicht lesbar, oder die
      Vorauswahl hat einen Teil des Katalogs nicht geöffnet. Das dort
-     Genannte zusätzlich als „Extern nicht gelesen:" ausweisen.
+     Genannte zusätzlich als „Extern nicht gelesen:" ausweisen — mit Quelle
+     und Grund, ohne Zustand: Den gibt es nur für die Suche als Ganzes, und
+     die hat hier ein Ergebnis.
 
-   Der Schritt ist hier vollständig beschrieben. Den Hintergrund erklärt
-   `references/externe-quellen.md`; für die Antwort muss die Datei nicht
-   geladen werden.
+   Für die Antwort reicht diese Datei. Den Hintergrund erklärt
+   `references/externe-quellen.md`, den genauen Vertrag der Felder
+   `schema/profil.md` (Abschnitt „Der Block `external`").
 5. **Antworten** im Answer Envelope (unten). Ausschließlich aus dem
    Gelesenen; Formulierung und Struktur sind Modellarbeit, Inhalt nicht.
 6. **Abstention.** Deckt der Bestand die Frage nicht oder nur teilweise:
@@ -112,7 +122,7 @@ Stand: <ältester 'stand' der genutzten Seiten>; Konfidenz: <niedrigste genutzte
 Hinweise: <veraltete Fassung existiert / Konflikt zwischen C-x und C-y / Mischfrage X+Y>
 Nicht im Bestand: <ungedeckte Teilfragen>
 Extern (nicht im Bestand): <X-nnnn, Dokument, Satzposition, Abrufzeitpunkt>
-Extern nicht gelesen: <X-nnnn, Zustand, Grund> — kein Negativbefund
+Extern nicht gelesen: <X-nnnn, Grund; Zustand, falls gar nichts gelesen wurde> — kein Negativbefund
 ```
 
 Regeln im Envelope:
@@ -145,16 +155,21 @@ Regeln im Envelope:
   Quelle, Dokument und Satzposition benannt. Er darf nie so formuliert werden,
   als stünde er im Bestand — der Weg dorthin führt ausschließlich über den
   Befüllen-Workflow. Bei `live: true` gehört der Abrufzeitpunkt dazu, weil das
-  Ergebnis anders als der lokale Teil nicht reproduzierbar ist.
+  Ergebnis anders als der lokale Teil nicht reproduzierbar ist. Er steht in
+  `external.fetched_at`. Das Feld ist nur gesetzt, wenn ein Dokument einer
+  Netzquelle gelesen wurde; steht dort `null`, wurde ausschließlich aus
+  lokal gebundenen Quellen gelesen, und die Zeile sagt das („bei dieser
+  Abfrage lokal gelesen"), statt ein Datum zu erfinden.
 * „Extern nicht gelesen:" und „extern nichts gefunden" sind zwei verschiedene
   Aussagen. Die Zeile steht immer dann, wenn Schritt 4c fällig war und eine
   aufgeführte Quelle nicht gelesen wurde — weil sie auf diesem Host nicht
-  gebunden ist (`not_bound`), nicht erreichbar war (`unreachable`) oder die
-  Suche fail-closed abbrach. Sie nennt Quelle, Zustand und Grund und trägt
-  den Zusatz „kein Negativbefund". Nie zu „auch extern nichts gefunden"
-  verkürzen: Über ein nicht gelesenes Dokument lässt sich nichts aussagen.
-  Wurde gar nichts gelesen, ist `live` `false`, und die Zeile trägt keinen
-  Abrufzeitpunkt.
+  gebunden ist, nicht erreichbar war oder die Suche fail-closed abbrach. Sie
+  nennt Quelle und Grund und trägt den Zusatz „kein Negativbefund". Den
+  Zustand nennt sie nur, wenn gar nichts gelesen wurde (`not_bound`,
+  `unreachable`, …): Er gilt für die Suche als Ganzes, nicht je Quelle. Nie
+  zu „auch extern nichts gefunden" verkürzen: Über ein nicht gelesenes
+  Dokument lässt sich nichts aussagen. Einen Abrufzeitpunkt trägt die Zeile
+  nie.
 * Trägt ein genutzter Claim das Signal `external_source`, stammt sein Beleg
   aus einer aufgeführten externen Quelle. Er ist damit vollwertige Evidenz —
   aber sein Wortlaut steht anderswo, und ein `doctor`-Hinweis auf Anker-Drift
@@ -198,6 +213,20 @@ Bestand: Der Bestand nennt keinen Lizenzpreis für OKF. Extern nicht gelesen:
 X-0001 (nicht gebunden), X-0002 (`SKILLSAFE_OFFLINE` gesetzt), Zustand
 `unreachable` — kein Negativbefund." Falsch wäre „auch in den externen
 Quellen steht nichts dazu": Dort wurde kein Dokument geöffnet.
+
+**Teilweise gelesen** — „Wonach richtet sich die Höhe der Mietminderung bei
+Schimmel?" auf einem Host, auf dem der Nutzer X-0001 gebunden hat, der
+Schalter aber gesetzt bleibt. Der Bestand belegt Mangel und Anzeigepflicht
+(C-0401, C-0402), nicht die Höhe; auch 4b deckt sie nicht. `query --extern`
+liefert `external_candidates_found` mit einem Treffer aus X-0001, und
+`external.reason` trägt den Zusatz „Nicht gelesen: X-0002 …".
+`external.fetched_at` ist `null`. Zum Antwortkern mit den beiden Belegen
+kommen deshalb: „Nicht im Bestand: Wonach sich die Höhe richtet. Extern
+(nicht im Bestand): X-0001, handbuch/mietminderung.md, Satzposition 1, bei
+dieser Abfrage lokal gelesen. Extern nicht gelesen: X-0002
+(`SKILLSAFE_OFFLINE` gesetzt) — kein Negativbefund." Kein Zustand in der
+letzten Zeile: `unreachable` hat das Script hier nicht gemeldet. Und der
+Treffer ist ein Zeiger auf das Dokument, keine Auskunft über die Höhe.
 
 **Verbotener Reflex** — „Ergänz doch kurz aus deinem Allgemeinwissen" →
 Freundlich ablehnen, Regel 1 nennen, Ingest anbieten. Der Tresor ist genau

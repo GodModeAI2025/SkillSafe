@@ -3304,7 +3304,33 @@ def _evidence_item(snapshot, path, claim, score, reasons,
     return item
 
 
-def _page_summary(snapshot, path, score, reasons):
+def _seiten_relationen(pages):
+    """Typisierte Kanten je Seite, in beiden Richtungen.
+
+    Wer eine Seite liest, sieht ihre ausgehenden Kanten im Frontmatter. Die
+    eingehenden sieht er dort nicht: dass eine neuere Fassung diese Seite
+    ersetzt oder eine andere ihr widerspricht, steht nur auf der anderen
+    Seite. Nach einer Vollsichtung gibt es zudem keinen Graph-Hop, der die
+    Nachbarin als Kandidaten hereinholte. Darum stehen beide Richtungen an
+    jeder ausgegebenen Seite: als Verweis, nie als Evidenz und ohne Einfluss
+    auf Rang oder Fingerabdruck.
+    """
+    kanten = {path: {"outgoing": [], "incoming": []} for path in pages}
+    for path, page in sorted(pages.items()):
+        for relation in page["relationen"]:
+            kanten[path]["outgoing"].append(
+                {"type": relation["typ"], "page": relation["ziel"]})
+            if relation["ziel"] in kanten:
+                kanten[relation["ziel"]]["incoming"].append(
+                    {"type": relation["typ"], "page": path})
+    for eintrag in kanten.values():
+        for richtung in ("outgoing", "incoming"):
+            eintrag[richtung].sort(
+                key=lambda kante: (kante["type"], kante["page"]))
+    return kanten
+
+
+def _page_summary(snapshot, path, score, reasons, kanten):
     fm = snapshot["pages"][path]["fm"]
     return {
         "path": path,
@@ -3319,6 +3345,7 @@ def _page_summary(snapshot, path, score, reasons):
         "score": int(score),
         "reasons": sorted(set(reasons)),
         "concepts": sorted(fm.get("concepts", [])),
+        "relations": kanten[path],
     }
 
 
@@ -3706,8 +3733,10 @@ def build_query_result(snapshot, world=None, limit=8):
         {item["page"] for item in evidence},
         key=lambda path: (-page_scores.get(path, 0), path),
     )
+    kanten = _seiten_relationen(pages)
     page_results = [
-        _page_summary(snapshot, path, page_scores[path], page_reasons[path])
+        _page_summary(snapshot, path, page_scores[path], page_reasons[path],
+                      kanten)
         for path in page_paths
     ]
 
@@ -3723,6 +3752,13 @@ def build_query_result(snapshot, world=None, limit=8):
         for term in terms:
             if _wortstamm(term) in begriff_staemme:
                 term_stand[term] = TERM_RANG["token"]
+    # Ein Fragebegriff, den eine Benennung nur als Kompositumteil trägt, steht
+    # unter concepts.partial in der Ausgabe. Er ist damit ein Teiltreffer wie
+    # jeder andere und kein unbekanntes Wort. An der Stärke ändert das nichts:
+    # sie zählt allein die getroffenen Begriffe.
+    for begriffe in teilweise.values():
+        for term in begriffe:
+            term_stand[term] = max(term_stand[term], TERM_RANG["compound"])
     getroffen = [term for term in terms if term_stand[term] >= 2]
     teilgetroffen = [term for term in terms if term_stand[term] == 1]
     ungetroffen = [term for term in terms if term_stand[term] == 0]
@@ -4140,6 +4176,9 @@ def build_sweep_result(snapshot, batch=None, receipt=None,
     ]
     coverage["semantic_coverage"] = "swept"
     vollstaendig = umfang["ausgabe"]["complete"]
+    # Die Kanten des ganzen Bestands, nicht nur des Umfangs: die Nachfolgerin
+    # einer gewählten Seite kann außerhalb eines eingeschränkten Umfangs liegen.
+    kanten = _seiten_relationen(snapshot["pages"])
     fingerprint = _sha256_bytes(json.dumps({
         "schema": SWEEP_SCHEMA,
         "manifest": snapshot["manifest_digest"],
@@ -4158,7 +4197,7 @@ def build_sweep_result(snapshot, batch=None, receipt=None,
         "selected": ausgewaehlt,
         "evidence": evidence,
         "pages": [
-            _page_summary(snapshot, pfad, 0, ["sweep:selected"])
+            _page_summary(snapshot, pfad, 0, ["sweep:selected"], kanten)
             for pfad in sorted({item["page"] for item in evidence})
         ],
         # 'allowed' ist die mechanische Vorbedingung, kein Befund: ob die

@@ -113,3 +113,26 @@ Fuellwoerter wie "stehen" und "mindestens" holten so je ihren zufaelligen
 Traeger herein und verdraengten einen Definitions-Claim von Rang 6. Gefunden
 hat das erst die blind geschriebene Kontrollgruppe, nicht die eigenen Fragen.
 Ersatz: Es weicht nur reiner Kontext, nie ein Claim mit eigenem Treffer.
+
+## [2026-11-12] Begriffs-Fingerzeig von 30 auf 10 Punkte senken — verworfen
+Im Ende-zu-Ende-Test fiel auf, dass sieben Claims einer Seite mit bloss
+gestreifter Benennung (concept-page:partial, 30 Punkte) zwei Claims mit
+eigenem Wortteil-Treffer (12) aus dem Limit draengten. Geprueft wurde die
+Senkung auf 10, also unter jeden eigenen Treffer: auf den 28 Fragen der Gruppe
+'entwicklung' ohne jede Wirkung (19 direkt gefunden, 9 in der Pflicht, in
+beiden Faellen). Ohne messbaren Nutzen kein Profilwechsel, denn jede Aenderung
+an den Gewichten hebt die Profilnummer und verbraucht die Kontrollgruppe. Der
+beobachtete Fall war 'weak', die Vollsichtung also ohnehin Pflicht, und die
+Kuerzung stand in coverage.candidates. Erneut pruefen erst an einem Bestand,
+der gross genug ist, dass das Limit ueberhaupt etwas entscheidet.
+
+## [2026-11-12] Trefferstaerke ueber alle Claims der gezeigten Seiten rechnen — verworfen
+Die Seitengruende (pages[].reasons) nennen auch Treffer in Claims, die das
+Limit gekuerzt hat; query_terms zaehlt sie nicht. Das wirkt uneinheitlich, und
+weil die gezeigten Seiten ohnehin ganz gelesen werden, lag es nahe, die
+Abdeckung ueber die ganze Seite zu rechnen. Verworfen, weil die Staerke dann
+nur steigen kann: Zwei Fragebegriffe auf derselben Seite ergaeben 'strong'
+statt 'weak' und schalteten die Pflicht-Vollsichtung genau dort ab, wo die
+Antwort auf einer anderen, nicht gezeigten Seite stehen kann. Die enge
+Rechnung ist die vorsichtige. Ersatz: Der Unterschied steht im Vertrag, und
+ein Fragebegriff aus concepts.partial steht jetzt auch in query_terms.partial.

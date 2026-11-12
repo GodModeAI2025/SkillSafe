@@ -249,13 +249,13 @@
         <p class="sub">Belegtes Wissen aus Text, Bildern und PDFs — als Skill, nicht als Server.</p>
         <p class="tagline-en">Für Claude Code und Codex: kontrollierte Begriffswelten, reproduzierbares Hybrid-Retrieval, eine Bedeutungssuche mit Quittung, Wissensgraph-Kontext und geprüfte Bildfundstellen — lokal, nachvollziehbar und ohne Embeddings.</p>
         <div class="cta-row">
-          <a class="btn btn-primary" href="#funktionen">Was v0.12.1 kann</a>
+          <a class="btn btn-primary" href="#funktionen">Was v0.13.0 kann</a>
           <a class="btn btn-ghost" href="#regeln">Die sechs Regeln</a>
           <a class="btn btn-ghost" href="wissenstresor/KONZEPT.md">Konzept lesen</a>
           <a class="btn btn-ghost" href="https://github.com/GodModeAI2025/SkillSafe">GitHub</a>
         </div>
       </div>
-      <div class="stamp"><span><b>VALIDATE</b>0 Fehler<br>6 Seiten · 28 Claims<br>v0.12.1</span></div>
+      <div class="stamp"><span><b>VALIDATE</b>0 Fehler<br>6 Seiten · 28 Claims<br>v0.13.0</span></div>
     </div>
   </section>
 
@@ -471,7 +471,7 @@
   "evidence": []
 }</pre>
       </div>
-      <p class="lede reveal" style="margin-top:20px;">Der erste Treffer stammt aus der überholten Fassung, und das ist Absicht. Das Ranking bewertet Geltung nicht, es markiert sie mit <code>page_status:veraltet</code>. Welche Fassung maßgeblich ist, entscheidet der Antworten-Workflow anhand der <code>ersetzt</code>-Kante im Graph, und er benennt beide. Verstecken wäre die einfachere, aber unehrliche Lösung.</p>
+      <p class="lede reveal" style="margin-top:20px;">Der erste Treffer stammt aus der überholten Fassung, und das ist Absicht. Das Ranking bewertet Geltung nicht, es markiert sie mit <code>page_status:veraltet</code>. Welche Fassung maßgeblich ist, entscheidet der Antworten-Workflow anhand der <code>ersetzt</code>-Kante im Graph, und er benennt beide. Die Kante steht an jeder ausgegebenen Seite unter <code>relations</code>, in beiden Richtungen und auch nach einer Vollsichtung: Wer auf der überholten Seite landet, sieht dort, welche sie ersetzt. Verstecken wäre die einfachere, aber unehrliche Lösung.</p>
       <p class="lede reveal" style="margin-top:20px;">Die zweite Frage zeigt den neuen Weg. Von ihren vier Wörtern erkennt das Ranking keines; nur „Miete" findet es als Teil von „Mietminderung", und das nennt es <code>weak</code>. Also legt <code>sweep</code> alle 28 Claims vor. Dass „nasse Wände" den Schimmelbefall meint, entscheidet das Modell beim Lesen, und die Quittung hält fest, dass dabei kein Claim gefehlt hat.</p>
     </div>
   </section>
@@ -528,7 +528,7 @@
 
 <footer>
   <div class="wrap-wide">
-    <span>SkillSafe v0.12.1 · Apache License 2.0 · Motor bleibt stabil, Treibstoff ist flüchtig.</span>
+    <span>SkillSafe v0.13.0 · Apache License 2.0 · Motor bleibt stabil, Treibstoff ist flüchtig.</span>
     <span><a href="README.md">README</a> · <a href="BETRIEB.md">Betrieb</a> · <a href="wissenstresor/KONZEPT.md">Konzept</a> · <a href="wissenstresor/SKILL.md">Skill-Vertrag</a> · <a href="https://godmodeai2025.github.io/MarkZimmermann/" target="_blank" rel="noopener">Impressum</a></span>
   </div>
 </footer>

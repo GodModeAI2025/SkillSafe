@@ -55,3 +55,4 @@ Eintraege nur ueber `python3 scripts/vault.py log <aktion> "<text>"`.
 ## [2026-11-12] release | v0.12.0 — 6 Seiten, 28 Claims, 4 Quellen (minor)
 ## [2026-11-12] note | Antworten-Vertrag nach Praxistest mit frischem Agenten geschaerft: bei weak und none ersetzt die Vollsichtung Schritt 4 (keine doppelte Lesearbeit); fuer gekuerzte Treffer ist coverage.omitted_pages massgeblich, eine leere Liste bei omitted_direct groesser null heisst nichts weiter zu tun; Umformulieren bei partial ist erlaubt, nie verlangt; Registerangaben eines Belegs (Titel, Stand, Trust, Rechte der Quelle) sind keine Evidenz; der Stand der Belegzeile ist der Seitenstand (references/antworten.md, schema/profil.md)
 ## [2026-11-12] release | v0.12.1 — 6 Seiten, 28 Claims, 4 Quellen (patch)
+## [2026-11-12] release | v0.13.0 — 6 Seiten, 28 Claims, 4 Quellen (minor)

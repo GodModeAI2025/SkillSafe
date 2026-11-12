@@ -361,7 +361,11 @@ Welt gelten beide Begriffe als getroffen. Der `definition_claim` eines direkt
 getroffenen Begriffs bekommt 40 Punkte (`concept-definition:B-nnnn`). Trägt
 eine einwortige Benennung einen Fragebegriff nur als Kompositumteil, steht der
 Begriff in `concepts.partial`: ein Fingerzeig mit 40 Punkten für die Seite
-und 30 für ihre Claims, ohne Begriffserweiterung und nie ein Anker.
+und 30 für ihre Claims, ohne Begriffserweiterung und nie ein Anker. Der
+Fragebegriff selbst steht dann unter `query_terms.partial`. Mit 30 Punkten
+liegt der Fingerzeig über einem einzelnen eigenen Treffer; drängt er dabei
+direkte Kandidaten aus dem Limit, zählt `coverage.candidates.omitted_direct`
+sie.
 
 ### Trefferstärke
 
@@ -373,14 +377,22 @@ Das Ranking gibt an, wie viel der Frage es erkannt hat. Gerechnet wird nur
 * `.matched` — exakt oder als Wortform getroffen, in einem **ausgegebenen**
   Claim, in Titel oder Tags seiner Seite, oder als Teil einer getroffenen
   Benennung;
-* `.partial` — nur als Kompositumteil getroffen;
+* `.partial` — nur als Kompositumteil getroffen: in einem ausgegebenen
+  Claim, in Titel oder Tags seiner Seite, oder in einer Benennung
+  (`concepts.partial`). Zur Abdeckung zählt er nicht;
 * `.unmatched` — nirgends getroffen. Ein Begriff, den nur ein gekürzter
-  Kandidat trägt, steht hier: das Modell hat ihn nicht gesehen;
+  Kandidat trägt, steht hier: das Modell hat ihn nicht gesehen. Die Gründe
+  unter `pages[].reasons` beschreiben dagegen die ganze Seite samt ihrer
+  gekürzten Claims und können einen solchen Begriff deshalb nennen;
 * `coverage.term_coverage_percent` — Anteil von `matched` an `content`,
   ganzzahlig abgerundet; ohne Fragebegriff 100 mit Anker, sonst 0.
 
 Ein **Anker** ist ein direkt getroffener Begriff, eine genannte C- oder
 S-ID, oder die ganze Frage als Phrase in einem Claim.
+
+Zum Text eines Claims zählt beim Abgleich seine Fundstelle. Wer nach „§ 4"
+oder einer Anker-ID fragt, findet so die Claims, die dort belegt sind; ein
+Fragebegriff, der nur in der Fundstelle steht, gilt deshalb als getroffen.
 
 | `coverage.match_strength` | Bedingung |
 |---|---|
@@ -407,6 +419,15 @@ direkte Kandidaten dem Limit zum Opfer fielen und die nicht unter `pages`
 stehen; gibt es mehr, ist `coverage.omitted_pages_truncated` wahr. Eine leere
 Liste bei `omitted_direct` größer null heißt: Jeder gekürzte direkte Kandidat
 liegt auf einer Seite, die ohnehin unter `pages` steht und ganz gelesen wird.
+
+Jede Seite unter `pages` trägt `relations` mit den Listen `outgoing` und
+`incoming`: ihre typisierten Kanten als `{"type", "page"}`, sortiert nach Typ
+und Pfad. Ausgehende Kanten stehen im Frontmatter der Seite, eingehende nur
+auf der jeweils anderen; ohne diese Angabe sähe niemand an einer überholten
+Seite, welche sie ersetzt. Die Angabe ist ein Verweis: Sie hebt keinen Rang,
+macht die Nachbarin nicht zur Evidenz und geht in keinen Fingerabdruck ein.
+Dasselbe Feld tragen die Seiten einer Quittung der Vollsichtung, dort über
+den ganzen Bestand gerechnet, auch wenn der Umfang eingeschränkt war.
 
 **Kontext weicht, Treffer nie.** Trägt die Auswahl einen Fragebegriff nicht,
 rückt der beste gekürzte Kandidat nach, der ihn selbst trägt, und verdrängt

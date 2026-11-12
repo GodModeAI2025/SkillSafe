@@ -29,7 +29,7 @@ geschützte `dir_fd`-Operationen fail-closed ab.
 📖 **Konzept & Architekturentscheidungen:** [`wissenstresor/KONZEPT.md`](wissenstresor/KONZEPT.md)
 🌐 **Landingpage:** [`index.html`](index.html) (GitHub-Pages-fähig, Source = repo root)
 
-**Aktueller Release: v0.12.1** (Profil `oksv-lite/1.3`) mit Begriffswelten,
+**Aktueller Release: v0.13.0** (Profil `oksv-lite/1.3`) mit Begriffswelten,
 deterministischem Hybrid-Retrieval, geprüften Bild-/PDF-Regionen und einem
 reproduzierbaren `.skill`-Paket für Claude Code und Codex. Der
 Frontmatter-Parser lehnt Verschachtelung fail-closed ab statt sie still
@@ -77,9 +77,21 @@ verdoppeln; für gekürzte Treffer zählt `coverage.omitted_pages`; Umformuliere
 ist erlaubt und nie verlangt; und Registerangaben einer Quelle (Titel, Stand,
 Trust, Rechte) sind keine Evidenz.
 
-Abnahme: 130 Tests bestanden · 37 manifestierte Dateien · 39 sichere
+v0.13.0 schließt Lücken, die frische Agenten im Ende-zu-Ende-Test
+benannt haben. Jede ausgegebene Seite nennt jetzt ihre typisierten Kanten in
+beiden Richtungen (`pages[].relations`): Wer nach einer Vollsichtung auf einer
+überholten Seite landet, sieht dort, welche sie ersetzt, statt im Graph
+nachschlagen zu müssen. Ein Fragebegriff, den eine Benennung nur als Wortteil
+trägt, steht einheitlich unter `query_terms.partial`. Und der
+Antworten-Vertrag sagt genauer, wann ein Ergebnis `partial` ist, dass der
+Plan-Aufruf der Vollsichtung entbehrlich ist, dass man Claims im Zweifel in
+die Quittung aufnimmt und dass der externe Fallback eine Option bleibt, keine
+Pflicht. Rangfolge, Punktzahlen, Trefferstärke und Fingerabdrücke sind
+unverändert; das Profil bleibt `hybrid-local/v2`.
+
+Abnahme: 132 Tests bestanden · 37 manifestierte Dateien · 39 sichere
 Paketeinträge · SHA-256
-`a9f7a880a36f592bf24ef9b2267710902473da09c59b111f2722b9cb51d7ca4e`.
+`83f32c9b501060f7183ee3f3d770dd37bf241791dfca7a10e19a29a2398c2e3a`.
 Dazu 2 aufgeführte externe Bezugsquellen · 2 Satzanker.
 
 Alles läuft mit der Python-Standardbibliothek, gemessen mit CPython 3.9.6 und

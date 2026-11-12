@@ -89,6 +89,13 @@ maschinenlesbar (Antworten warnen vor veralteten Fassungen),
 und Kanten sind der einzige erlaubte Weg über Domänengrenzen — die
 Quellentrennung bleibt baulich.
 
+Jede Seite, die `query` oder eine Quittung von `sweep` ausgibt, nennt ihre
+Kanten in beiden Richtungen (`pages[].relations`). Die ausgehenden stehen im
+Frontmatter der Seite, die eingehenden nur auf der jeweils anderen: Wer eine
+überholte Seite liest, sähe dort sonst nicht, welche sie ersetzt. Nach einer
+Vollsichtung gibt es zudem keinen Graph-Hop, der die Nachfolgerin als
+Kandidaten hereinholte. Die Angabe ist ein Verweis und nie Evidenz.
+
 ### AD-03 · Type-Onboarding: unbekannter Typ stoppt den Ingest
 
 **Entscheidung:** `schema/types.yaml` ist die einzige Quelle erlaubter

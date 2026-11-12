@@ -267,6 +267,46 @@ class QuerySignalTests(VaultCase):
         self.assertTrue(payload["fallback"]["exhaustive_review_required"])
         self.assertIn(
             "C-0302", [item["claim_id"] for item in payload["evidence"]])
+        # Die Ausgabe widerspricht sich nicht: Was unter concepts.partial als
+        # Wortteil steht, ist auch in der Begriffsliste ein Teiltreffer und
+        # kein unbekanntes Wort. Zur Abdeckung zählt es trotzdem nicht.
+        begriffe = payload["coverage"]["query_terms"]
+        self.assertEqual(begriffe["partial"], ["herkunft"])
+        self.assertNotIn("herkunft", begriffe["unmatched"])
+        self.assertNotIn("herkunft", begriffe["matched"])
+        self.assertEqual(payload["coverage"]["term_coverage_percent"], 0)
+
+    def test_pages_name_their_typed_edges_in_both_directions(self):
+        """Wer okf.md liest, sieht dort nicht, dass okf-v02.md sie ersetzt.
+
+        Die Kante steht im Frontmatter der neuen Fassung. Die Seitenangabe
+        nennt sie deshalb an beiden Enden, und zwar als Verweis: Sie hebt
+        keinen Rang und macht die Nachbarin nicht zur Evidenz.
+        """
+        _, payload = self.query("Was ist OKF?")
+        seiten = {page["path"]: page for page in payload["pages"]}
+        alt = seiten["knowledge/demo-okf/okf.md"]
+        neu = seiten["knowledge/demo-okf/okf-v02.md"]
+        kante_alt = {"type": "ersetzt", "page": "knowledge/demo-okf/okf-v02.md"}
+        kante_neu = {"type": "ersetzt", "page": "knowledge/demo-okf/okf.md"}
+        self.assertIn(kante_alt, alt["relations"]["incoming"])
+        self.assertIn(kante_neu, neu["relations"]["outgoing"])
+        self.assertNotIn(kante_alt, alt["relations"]["outgoing"])
+        for page in payload["pages"]:
+            with self.subTest(page=page["path"]):
+                self.assertEqual(
+                    set(page["relations"]), {"outgoing", "incoming"})
+                for richtung in ("outgoing", "incoming"):
+                    kanten = page["relations"][richtung]
+                    self.assertEqual(kanten, sorted(
+                        kanten, key=lambda k: (k["type"], k["page"])))
+                    for kante in kanten:
+                        self.assertEqual(set(kante), {"type", "page"})
+        # Jede ausgehende Kante steht am Ziel als eingehende, wortgleich mit
+        # dem Frontmatter auf der Platte.
+        text = (self.root / "knowledge/demo-okf/okf-v02.md").read_text(
+            encoding="utf-8")
+        self.assertIn("ersetzt -> demo-okf/okf.md", text)
 
     def install_second_world(self):
         """Welt 2 mit dem Alias 'Verträge', Welt 1 bekommt 'Vertrag'."""
@@ -543,6 +583,13 @@ class SweepTests(VaultCase):
             [page["path"] for page in fertig["pages"]],
             ["knowledge/demo-okf/okf.md"],
         )
+        # Der gewählte Claim liegt auf einer überholten Seite, und nach einer
+        # Vollsichtung gibt es keinen Graph-Hop, der die Nachfolgerin
+        # hereinholte. Die Quittung nennt sie deshalb an der Seite.
+        self.assertIn(
+            {"type": "ersetzt", "page": "knowledge/demo-okf/okf-v02.md"},
+            fertig["pages"][0]["relations"]["incoming"],
+        )
         # Dieselbe Quittung, derselbe Stand: derselbe Fingerabdruck.
         wieder = self.run_cli(
             "sweep", self.FRAGE, "--size", "10", "--receipt", *quittung)
@@ -631,6 +678,24 @@ class SweepTests(VaultCase):
         _, seite = self.sweep(
             self.FRAGE, "--page", "knowledge/demo-okf/fakten.md")
         self.assertEqual(seite["scope"]["claims_in_scope"], 2)
+
+    def test_receipt_names_the_successor_even_outside_the_scope(self):
+        """Der Umfang begrenzt, was gelesen wird, nicht was der Graph weiß."""
+        umfang = ("--page", "knowledge/demo-okf/okf.md")
+        _, gelesen = self.stapel(self.FRAGE, *umfang)
+        quittung = [
+            f"{nummer}:{siegel}=" + ("C-0002" if "C-0002" in ids else "-")
+            for nummer, (siegel, ids) in sorted(gelesen.items())
+        ]
+        _, fertig = self.sweep(self.FRAGE, *umfang, "--receipt", *quittung)
+        self.assertEqual(fertig["state"], "sweep_complete", fertig)
+        self.assertFalse(fertig["abstention"]["allowed"])
+        # okf-v02.md liegt außerhalb des Umfangs und wurde nicht vorgelegt.
+        self.assertEqual(fertig["coverage"]["claims_swept"], 5)
+        self.assertIn(
+            {"type": "ersetzt", "page": "knowledge/demo-okf/okf-v02.md"},
+            fertig["pages"][0]["relations"]["incoming"],
+        )
 
     def test_invalid_arguments_are_no_negative_finding(self):
         faelle = [

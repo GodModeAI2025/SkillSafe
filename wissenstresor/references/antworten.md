@@ -39,15 +39,25 @@ Protokoll für den jeweils maßgeblichen Tresor durchlaufen — eine
    | Stärke | Heißt | Was zu tun ist |
    |---|---|---|
    | `strong` | Jeder Inhaltsbegriff ist exakt, als Wortform oder über einen kuratierten Begriff getroffen | Weiter mit Schritt 3 und 4: Kandidaten lesen und antworten. Decken sie die Frage nicht, Schritt 4b. |
-   | `partial` | Ein Begriff oder eine ID trägt, aber `unmatched` oder `partial` ist nicht leer | Weiter mit Schritt 3 und 4. Steht unter den ungetroffenen Begriffen das, wonach gefragt wird, danach Schritt 4b. |
-   | `weak` | Nur Wortteil- oder Zufallstreffer | Schritt 4 entfällt, direkt zu Schritt 4b. Die Kandidaten sind Fingerzeige, keine Antwort. |
+   | `partial` | Ein Anker trägt (ein kuratierter Begriff, eine genannte ID oder die ganze Frage als Wortfolge in einem Claim), oder mindestens zwei Begriffe sind getroffen und das sind mindestens 60 % — aber `unmatched` oder `partial` ist nicht leer | Weiter mit Schritt 3 und 4. Steht unter den ungetroffenen Begriffen das, wonach gefragt wird, danach Schritt 4b. |
+   | `weak` | Weniger als das: ein einzelner getroffener Begriff ohne Anker, Wortteil- oder Zufallstreffer | Schritt 4 entfällt, direkt zu Schritt 4b. Die Kandidaten sind Fingerzeige, keine Antwort. |
    | `none` | Kein Kandidat | Schritt 4 entfällt, direkt zu Schritt 4b. |
 
    Bei `weak` und `none` steht zusätzlich
    `fallback.exhaustive_review_required: true`. Die Vollsichtung legt dann
    ohnehin jeden Claim vor; die Kandidatenseiten vorher zu lesen wäre
-   dieselbe Arbeit zweimal. `partial` in `query_terms` heißt: nur als Teil
-   eines zusammengesetzten Worts gefunden.
+   dieselbe Arbeit zweimal.
+
+   **Zwei Dinge heißen `partial`.** Die Stärke aus der Tabelle, und die
+   Liste `query_terms.partial`. Die Liste nennt Begriffe, die nur als Teil
+   eines zusammengesetzten Worts gefunden wurden: in einem ausgegebenen
+   Claim, in Titel oder Tags seiner Seite oder in einer Benennung
+   (`concepts.partial`). Zur Abdeckung zählen sie nicht. Gerechnet wird
+   `query_terms` allein über die ausgegebenen `evidence`-Claims;
+   `pages[].reasons` beschreibt dagegen die ganze Seite. Ein Begriff kann
+   deshalb dort als Grund stehen und trotzdem `unmatched` sein: Der Claim,
+   der ihn trägt, fiel dem Limit zum Opfer. Und ein Treffer kann in der
+   Fundstelle eines Claims liegen (`source.locator`) statt in seinem Text.
 
    **Umformulieren ist erlaubt, nie verlangt.** Wer bei `partial` vermutet,
    dass der Bestand ein anderes Wort für dieselbe Sache benutzt, darf
@@ -73,7 +83,18 @@ Protokoll für den jeweils maßgeblichen Tresor durchlaufen — eine
    Kurzfassung und Claims gelten als wahr (Regel 2); Fundstellen werden
    zitiert, nicht erneut gegen Rohquelle oder Medienrepräsentation geprüft.
    `media` liefert nur die validierte Region/Position, niemals OCR-Text als
-   eigene Evidenz.
+   eigene Evidenz. Der Abschnitt „Kontext und Grenzen" ordnet ein und nennt
+   den Geltungsbereich; er darf in „Hinweise:" einfließen, trägt aber keine
+   Kernaussage.
+
+   **Nachbarseiten.** Jede Seite unter `pages` nennt ihre typisierten
+   Kanten in `relations`, ausgehend und eingehend. Steht an einer genutzten
+   Seite unter `relations.incoming` eine Kante `ersetzt`, ist die dort
+   genannte Seite die neuere Fassung: sie zusätzlich lesen, auch wenn sie
+   nicht unter `pages` steht, und als maßgeblich benennen. Bei
+   `widerspricht` gilt dasselbe in beiden Richtungen. Die Claims einer so
+   gelesenen Seite sind zitierbar wie die jeder gelesenen Seite. Andere
+   Kantentypen sind Verweise und verpflichten zu nichts.
 4b. **Vollsichtung — die Bedeutungssuche.** Pflicht bei `weak` und `none`
    (dort anstelle von Schritt 4), und immer, bevor irgendein Teil der Frage
    als „Nicht im Bestand" ausgewiesen wird. Hier liest das Modell jeden
@@ -81,10 +102,14 @@ Protokoll für den jeweils maßgeblichen Tresor durchlaufen — eine
    fehlt.
 
    ```
-   python3 scripts/vault.py sweep "<frage>"              # Plan: Zahl der Stapel
+   python3 scripts/vault.py sweep "<frage>"              # Plan: Zahl der Stapel (entbehrlich, s. u.)
    python3 scripts/vault.py sweep "<frage>" --batch 1    # Stapel lesen, Siegel notieren
    python3 scripts/vault.py sweep "<frage>" --receipt 1:<siegel>=C-0401,C-0402 2:<siegel>=-
    ```
+
+   Die Zahl der Stapel steht schon in `fallback.sweep.batches` der Abfrage.
+   Der Plan-Aufruf ist nur nötig, wenn `--size`, `--domain` oder `--page`
+   den Zuschnitt ändern.
 
    * **Jeden Stapel lesen**, in der Konversation. Die Ausgabe nie in eine
      Datei umleiten, um nur das Siegel herauszuziehen: das Siegel belegt,
@@ -94,12 +119,23 @@ Protokoll für den jeweils maßgeblichen Tresor durchlaufen — eine
      Teil davon, auch in anderer Wortwahl, als Oberbegriff, als Folge oder
      als Gegenteil? Deren IDs gehören hinter das `=`. Trägt kein Claim des
      Stapels etwas bei, steht dort `-`. Ein Urteil je Stapel ist Pflicht.
+   * **Im Zweifel aufnehmen.** Hinter das `=` gehört jeder Claim, auf den
+     sich die Antwort stützen wird, auch einer, der nur einordnet oder
+     einschränkt. Ein zu viel gewählter Claim kostet eine Seite Lesearbeit,
+     ein zu wenig gewählter fehlt in der Antwort.
    * **Die Frage nicht verändern.** Das Siegel bindet Stand, Frage,
      Stapelgröße und Umfang. Groß-/Kleinschreibung und Satzzeichen sind
-     egal, ein anderes Wort ist eine andere Frage.
+     egal, ein anderes Wort ist eine andere Frage. Am sichersten steht sie
+     einmal in einer Shell-Variablen (`F='…'`) und in jedem Aufruf als
+     `"$F"`. Jede weitere Frage braucht ihre eigene Sichtung, auch wenn
+     dieselben Stapel gerade erst gelesen wurden.
    * **Quittung auswerten.** `sweep_complete` liefert die ausgewählten
      Claims als vollwertige `evidence` (Rolle `sweep_selected`) und ihre
-     Seiten in `pages`; diese Seiten lesen wie in Schritt 4.
+     Seiten in `pages`; diese Seiten lesen wie in Schritt 4, samt der
+     Nachbarseiten aus `relations`. Eine Vollsichtung kennt keinen
+     Graph-Hop: Liegt ein gewählter Claim auf einer überholten Seite
+     (`page_status:veraltet`), nennt nur `relations.incoming` die
+     Nachfolgerin.
      `sweep_incomplete` und `invalid_receipt` liefern nichts: fehlende
      Stapel nachholen, nie raten.
    * **Große Bestände.** `fallback.sweep.batches` nennt den Aufwand vorab.
@@ -111,14 +147,23 @@ Protokoll für den jeweils maßgeblichen Tresor durchlaufen — eine
 
    `search` darf mit Synonymen helfen, ersetzt die Vollsichtung aber nicht:
    ein fehlender Lexiktreffer ist kein Negativbeweis.
-4c. **Externer Fallback.** Erst **danach**, und nur wenn
+4c. **Externer Fallback.** Eine Option, keine Pflicht: Die Abstention aus
+   Schritt 6 braucht ihn nicht. Erst **danach**, und nur wenn
    `fallback.external_lookup_available` wahr ist (das Feld steht auch ohne
    `--extern` im Envelope und sagt, ob überhaupt Quellen aufgeführt sind):
    `python3 scripts/vault.py query --extern "<frage>"`. Das liest aufgeführte
    externe Bezugsquellen live und ist eine bewusste Ausnahme von Regel 2 —
    nie der Default, nie eine Abkürzung um Schritt 4b. Ein externer Treffer
    **ersetzt „Nicht im Bestand" nicht**, er ergänzt es um einen benannten
-   Hinweis. Details: `references/externe-quellen.md`.
+   Hinweis. Der Aufruf schreibt nie in den Skill-Ordner; nur der Abzug einer
+   Netzquelle landet im Cache-Verzeichnis des Nutzers. Details:
+   `references/externe-quellen.md`.
+
+   Ein leerer `external`-Block ist nur dann ein Befund, wenn auch gelesen
+   wurde. Nennt `external.notes` die Quellen als nicht gebunden oder nicht
+   abgerufen, sagt `no_external_candidates` nichts über sie aus: dann heißt
+   es „externe Quellen nicht erreichbar", nie „auch extern nichts gefunden".
+   Ein ergebnisloser Versuch gehört höchstens als ein Satz in „Hinweise:".
 5. **Antworten** im Answer Envelope (unten). Ausschließlich aus dem
    Gelesenen; Formulierung und Struktur sind Modellarbeit, Inhalt nicht.
 6. **Abstention.** Deckt der Bestand die Frage nicht oder nur teilweise:
@@ -138,6 +183,7 @@ Protokoll für den jeweils maßgeblichen Tresor durchlaufen — eine
 Belege:
 - C-0301 (S-0004, §3, §4, §4.1 und §11, Wortlaut) — Stand 2026-07-28
 - C-0310 (S-0004, §5 und §13.2, Auslegung) — eigene Einordnung
+- C-0401 (X-0001, A-0004, Wortlaut) — Stand 2026-08-06, externe Bezugsquelle
 
 Stand: <ältester 'stand' der genutzten Seiten>; Konfidenz: <niedrigste genutzte>
 [Nur falls zutreffend:]
@@ -197,8 +243,11 @@ Regeln im Envelope:
   Ergebnis anders als der lokale Teil nicht reproduzierbar ist.
 * Trägt ein genutzter Claim das Signal `external_source`, stammt sein Beleg
   aus einer aufgeführten externen Quelle. Er ist damit vollwertige Evidenz —
-  aber sein Wortlaut steht anderswo, und ein `doctor`-Hinweis auf Anker-Drift
-  gehört dann in „Hinweise:".
+  aber sein Wortlaut steht anderswo. Die Belegzeile hat dieselbe Form wie
+  jede andere: Quelle ist die `X-nnnn`, Fundstelle die Anker-ID. Liegt aus
+  der Pflege ein `doctor`-Hinweis auf Anker-Drift vor, gehört er in
+  „Hinweise:". Eigens dafür läuft `doctor` beim Antworten nicht: Regel 2
+  gilt auch hier.
 * Ein Treffer auf einer Seite mit `status: veraltet` ist kein Fehler des
   Rankings. Die Gewichte bewerten Geltung nicht, sie hängen nur das Signal
   `page_status:veraltet` an; über die Begriffserweiterung kann eine überholte

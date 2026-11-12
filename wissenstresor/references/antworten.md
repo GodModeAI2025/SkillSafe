@@ -19,19 +19,38 @@ Protokoll für den jeweils maßgeblichen Tresor durchlaufen — eine
    Profil, Quarantäne, Index, Graph und Manifest vor der Ausgabe und liefert
    genau ein JSON-Dokument. Es sucht erschöpfend über validierte Claims,
    gewichtet exakte Begriffe, Alias-/Begriffswelt-Treffer, lexikalische
-   Treffer und maximal einen Graph-Hop. Kein Treffer im Router allein ist
-   noch kein Negativbefund.
+   Treffer, Wortformen und maximal einen Graph-Hop. Kein Treffer im Router
+   allein ist noch kein Negativbefund.
 2. **Status auswerten.**
-   * `candidates_found` → ausschließlich die gelieferten `evidence`-Claims
-     prüfen. Dieser Status bestätigt Relevanzkandidaten, noch nicht die
-     semantische Deckung der ganzen Frage. Decken sie nur das Subjekt, aber
-     nicht das erfragte Merkmal, vor einer Abstention Schritt 4b ausführen.
+   * `candidates_found` → die gelieferten `evidence`-Claims sind
+     Relevanzkandidaten, noch keine Deckung der Frage. Wie belastbar sie
+     sind, sagt Schritt 2b.
    * `no_candidates` → kein semantischer Negativbefund. Evidenz bleibt leer;
-     alle unter `fallback.page_paths` genannten Seiten in Schritt 4b prüfen.
+     Schritt 4b ist Pflicht.
    * `ambiguous` → genannte Begriffswelt klären und mit
      `--world BW-nnnn` erneut abfragen.
    * `invalid_vault`, `vault_busy` oder `snapshot_changed` → nichts ausgeben,
      `doctor` ausführen und den Bestand reparieren bzw. Release abwarten.
+2b. **Trefferstärke auswerten.** Das Ranking erkennt Wörter, Wortformen und
+   kuratierte Begriffe, keine Bedeutung. `coverage.match_strength` sagt, wie
+   viel der Frage es damit erkannt hat, und `coverage.query_terms` nennt die
+   Begriffe einzeln:
+
+   | Stärke | Heißt | Was zu tun ist |
+   |---|---|---|
+   | `strong` | Jeder Inhaltsbegriff ist exakt, als Wortform oder über einen kuratierten Begriff getroffen | Kandidaten lesen und antworten. Decken sie die Frage nicht, Schritt 4b. |
+   | `partial` | Ein Begriff oder eine ID trägt, aber `unmatched` oder `partial` ist nicht leer | Die ungetroffenen Begriffe ansehen. Ist darunter das, wonach gefragt wird: höchstens zweimal mit anderer Wortwahl neu abfragen, danach Schritt 4b. |
+   | `weak` | Nur Wortteil- oder Zufallstreffer | Schritt 4b ist Pflicht. Die Kandidaten sind Fingerzeige, keine Antwort. |
+   | `none` | Kein Kandidat | Schritt 4b ist Pflicht. |
+
+   Bei `weak` und `none` steht zusätzlich
+   `fallback.exhaustive_review_required: true`. `partial` in
+   `query_terms` heißt: nur als Teil eines zusammengesetzten Worts gefunden.
+
+   Meldet `coverage.candidates.omitted_direct` mehr als null, hat das Limit
+   Treffer abgeschnitten: mit `--limit 20` erneut abfragen oder die Seiten
+   aus `coverage.omitted_pages` zusätzlich lesen. Ein gekürzter Treffer ist
+   kein gelesener Treffer.
 3. **Domänen trennen.** Berühren die gelieferten Seiten mehrere Domänen,
    **Mischfrage** melden und den Antwortkern pro Domäne getrennt schreiben.
    Nie Inhalte still über Domänengrenzen hinweg verschmelzen.
@@ -40,12 +59,42 @@ Protokoll für den jeweils maßgeblichen Tresor durchlaufen — eine
    zitiert, nicht erneut gegen Rohquelle oder Medienrepräsentation geprüft.
    `media` liefert nur die validierte Region/Position, niemals OCR-Text als
    eigene Evidenz.
-4b. **Semantischer Fallback.** Bei `no_candidates` oder wenn die Kandidaten
-   die erfragte Aussage nicht decken, jede Seite aus `fallback.page_paths`
-   lesen und alle Claims semantisch gegen die Frage prüfen. `search` darf
-   mit Synonymen helfen, aber ein fehlender Lexiktreffer ist kein
-   Negativbeweis. Erst die vollständige Prüfung dieses manifestierten
-   Seitenumfangs erlaubt „Nicht im Bestand".
+4b. **Vollsichtung — die Bedeutungssuche.** Pflicht bei `weak` und `none`,
+   und immer, bevor irgendein Teil der Frage als „Nicht im Bestand"
+   ausgewiesen wird. Hier liest das Modell jeden Claim und urteilt nach
+   Bedeutung; das Script sorgt dafür, dass keiner fehlt.
+
+   ```
+   python3 scripts/vault.py sweep "<frage>"              # Plan: Zahl der Stapel
+   python3 scripts/vault.py sweep "<frage>" --batch 1    # Stapel lesen, Siegel notieren
+   python3 scripts/vault.py sweep "<frage>" --receipt 1:<siegel>=C-0401,C-0402 2:<siegel>=-
+   ```
+
+   * **Jeden Stapel lesen**, in der Konversation. Die Ausgabe nie in eine
+     Datei umleiten, um nur das Siegel herauszuziehen: das Siegel belegt,
+     dass der Stapel ausgegeben wurde, und ist wertlos, wenn ihn niemand
+     gelesen hat.
+   * **Je Stapel urteilen:** Welche Claims beantworten die Frage oder einen
+     Teil davon, auch in anderer Wortwahl, als Oberbegriff, als Folge oder
+     als Gegenteil? Deren IDs gehören hinter das `=`. Trägt kein Claim des
+     Stapels etwas bei, steht dort `-`. Ein Urteil je Stapel ist Pflicht.
+   * **Die Frage nicht verändern.** Das Siegel bindet Stand, Frage,
+     Stapelgröße und Umfang. Groß-/Kleinschreibung und Satzzeichen sind
+     egal, ein anderes Wort ist eine andere Frage.
+   * **Quittung auswerten.** `sweep_complete` liefert die ausgewählten
+     Claims als vollwertige `evidence` (Rolle `sweep_selected`) und ihre
+     Seiten in `pages`; diese Seiten lesen wie in Schritt 4.
+     `sweep_incomplete` und `invalid_receipt` liefern nichts: fehlende
+     Stapel nachholen, nie raten.
+   * **Große Bestände.** `fallback.sweep.batches` nennt den Aufwand vorab.
+     Stapel dürfen parallel von Subagenten gelesen werden; jeder gibt genau
+     `<stapel>:<siegel>=<IDs oder ->` zurück. `--domain` und `--page`
+     schränken den Umfang ein und sparen Lesearbeit, erlauben aber nie
+     „Nicht im Bestand", nur „in diesem Umfang nicht gefunden"
+     (`abstention.allowed: false`).
+
+   `search` darf mit Synonymen helfen, ersetzt die Vollsichtung aber nicht:
+   ein fehlender Lexiktreffer ist kein Negativbeweis.
 4c. **Externer Fallback.** Erst **danach**, und nur wenn
    `fallback.external_lookup_available` wahr ist (das Feld steht auch ohne
    `--extern` im Envelope und sagt, ob überhaupt Quellen aufgeführt sind):
@@ -59,6 +108,11 @@ Protokoll für den jeweils maßgeblichen Tresor durchlaufen — eine
 6. **Abstention.** Deckt der Bestand die Frage nicht oder nur teilweise:
    den ungedeckten Teil wörtlich als „Nicht im Bestand" ausweisen —
    optional mit dem Hinweis, welche Quelle man dafür einlesen könnte.
+   Voraussetzung ist eine Quittung aus Schritt 4b mit
+   `state: sweep_complete` und `abstention.allowed: true`. Ohne sie gibt es
+   kein „Nicht im Bestand", auch nicht nach `strong`: Dass das Ranking
+   einen Begriff kennt, beweist nicht, dass der Bestand zur gefragten
+   Eigenschaft schweigt.
 
 ## Answer Envelope (feste Form)
 
@@ -73,12 +127,21 @@ Stand: <ältester 'stand' der genutzten Seiten>; Konfidenz: <niedrigste genutzte
 [Nur falls zutreffend:]
 Hinweise: <veraltete Fassung existiert / Konflikt zwischen C-x und C-y / Mischfrage X+Y>
 Nicht im Bestand: <ungedeckte Teilfragen>
+Sichtung: <claims_swept> von <claims_total> Claims, Quittung <erste 12 Zeichen von sweep_fingerprint>
 Extern (nicht im Bestand): <X-nnnn, Dokument, Satzposition, Abrufzeitpunkt>
 ```
 
 Regeln im Envelope:
 
 * Jede Kernaussage referenziert mindestens eine Claim-ID.
+* Die Zeile „Sichtung:" steht immer dann, wenn eine Vollsichtung lief, und
+  sie ist Pflicht neben jedem „Nicht im Bestand". Bei eingeschränktem
+  Umfang nennt sie ihn („Sichtung: Domäne demo-okf, 26 von 28 Claims") und
+  die Abstention lautet „in diesem Umfang nicht gefunden".
+* Ein per Vollsichtung gefundener Claim ist Evidenz wie jeder andere. Dass
+  das Ranking ihn nicht fand, ist kein Makel des Claims, sondern ein Hinweis
+  für die Pflege: Dem Bestand fehlt für diese Wortwahl ein Alias oder ein
+  Tag (`references/begriffswelten.md`).
 * `Auslegung`-Claims werden ausdrücklich als eigene Einordnung markiert —
   nie mit dem Wortlaut der Quelle verwechselt.
 * Der genannte Stand ist der **älteste** Stand der genutzten Seiten
@@ -129,16 +192,26 @@ C-0301 folgende, und ein Satz dazu, dass die Fassung v0.1 als überholt im
 Bestand bleibt (C-0001 folgende, `okf.md`). Beide Fassungen benennen, eine
 als maßgeblich.
 
+**Umschreibung** — „Kann ich bei nassen Wänden die Miete kürzen?" →
+`query` liefert `weak`: kein Begriff der Frage ist getroffen, nur „Miete"
+als Teil von „Mietminderung". Also Vollsichtung: Der Stapel enthält C-0401
+(Schimmelbefall berechtigt zur Mietminderung) und C-0402 (Anzeige an den
+Vermieter). Quittung `1:<siegel>=C-0401,C-0402` → `sweep_complete`.
+Antwort aus beiden Claims, mit der Zeile „Sichtung: 28 von 28 Claims".
+Die Wortwahl „nasse Wände" steht in keinem Claim; gefunden hat sie das
+Lesen, nicht das Ranking.
+
 **Nur das Subjekt gefunden** — „Wie groß ist OKF?" → `query` liefert
-OKF-Claims als Kandidaten, aber keiner nennt eine Größe → „Nicht im Bestand:
+OKF-Claims, womöglich sogar `strong`, aber keiner nennt eine Größe. Vor der
+Abstention die Vollsichtung; erst ihre Quittung erlaubt: „Nicht im Bestand:
 Der Bestand definiert OKF, enthält aber keine Größenangabe."
 
 **Negativbefund** — „Welche Vektordatenbank empfiehlt der Bestand?" →
-`query` liefert `no_candidates`; nach vollständiger semantischer Prüfung
-aller `fallback.page_paths` deckt kein Claim die Frage →
-„Nicht im Bestand. Der Tresor enthält keine Aussage zu Vektordatenbanken
-(vollständig geprüfter manifestierter Seitenumfang, Stand siehe MANIFEST).
-Soll ich eine Quelle dazu aufnehmen?"
+`query` liefert `weak` oder `none`; die Vollsichtung legt alle Claims vor,
+keiner deckt die Frage, die Quittung lautet überall `-` →
+„Nicht im Bestand. Der Tresor enthält keine Aussage zu Vektordatenbanken.
+Sichtung: 28 von 28 Claims, Quittung 3f9a1c0b77de. Soll ich eine Quelle
+dazu aufnehmen?"
 
 **Verbotener Reflex** — „Ergänz doch kurz aus deinem Allgemeinwissen" →
 Freundlich ablehnen, Regel 1 nennen, Ingest anbieten. Der Tresor ist genau

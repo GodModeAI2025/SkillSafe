@@ -74,3 +74,42 @@ Profils und ausdruecklich NICHT durch den alten Eintrag mitverworfen. Eine
 Uebernahme als optionales Feld gueltig_bis bleibt offen; sie braucht dann ein
 Bezugsdatum als Eingabe (kein impliziter Vergleich gegen "heute"), weil die
 Query-Ausgabe sonst tagesabhaengig wird und die Determinismus-Zusage bricht.
+
+## [2026-11-12] RETRIEVAL_STOPWORDS um Funktionswoerter erweitern — verworfen
+Die alte Liste formt auch extern-zweistufig/v1 und die nachrechenbaren
+Katalogzahlen (token_count, top_tokens) in sources/derived/. Jede Erweiterung
+haette dort Werte verschoben, ohne dass sich an einer externen Quelle etwas
+geaendert haette. Ersatz: eigene Liste FUNKTIONSWOERTER, nur im lokalen
+Ranking hybrid-local/v2. Nebenbefund, bewusst nicht behoben: in der alten
+Liste steht 'für' in Umlautschreibung, geprueft wird gegen das normalisierte
+'fuer'; der Eintrag hat nie getroffen. Wer das korrigiert, zieht die Kataloge
+neu. Details: KONZEPT.md AD-14.
+
+## [2026-11-12] Kompositum nur bei vollstaendiger Zerlegung gegen das Bestandsvokabular — verworfen
+Die strengere Regel (beide Teile muessen als eigenes Wort im Bestand stehen)
+haette "Miete" nicht zur "Mietminderung" gefuehrt, solange "Minderung" nirgends
+allein steht, also gerade in kleinen Bestaenden nichts gefunden. Ersatz:
+Kopf-/Schwanz-Abgleich mit Mindestlaenge vier auf beiden Seiten der Naht,
+schwach gewichtet, nie ein Anker. Preis: gelegentliche Zufallstreffer
+("after" in "dauerhafter"), sichtbar am Grund compound:.
+
+## [2026-11-12] Verbformen auf -t und Partizipien in wortform/v1 — verworfen
+Ein -t zu streichen fuehrt "bestaetigt" zu "bestaetigen", aber auch "Recht"
+zu "rech", "Wert" zu "wer" und "Seite" ueber "seit" zu "sei". Nach casefold
+ist ein Substantiv nicht mehr von einer Verbform zu unterscheiden. Die Regel
+haette mehr Kollisionen als Treffer gebracht. Was deshalb nicht trifft, steht
+als unmatched im Ergebnis und faellt in die Vollsichtung.
+
+## [2026-11-12] Trefferstaerke 'partial' schon ab 50 Prozent — verworfen
+Bei zwei Fragebegriffen reichte dann ein einziger Zufallstreffer, um die
+Pflicht-Vollsichtung abzuschalten; gemessen an einer Frage nach dem
+Verfallsdatum, bei der nur das Allerweltswort "Eintrag" traf. Ersatz: ohne
+Anker mindestens zwei getroffene Begriffe und mindestens 60 Prozent.
+
+## [2026-11-12] Nachruecken auf Kosten des rangniedrigsten Kandidaten — verworfen
+Die erste Fassung der Regel "jeder Fragebegriff bleibt vertreten" liess den
+rangniedrigsten Kandidaten weichen, dessen Begriffe anderswo vertreten waren.
+Fuellwoerter wie "stehen" und "mindestens" holten so je ihren zufaelligen
+Traeger herein und verdraengten einen Definitions-Claim von Rang 6. Gefunden
+hat das erst die blind geschriebene Kontrollgruppe, nicht die eigenen Fragen.
+Ersatz: Es weicht nur reiner Kontext, nie ein Claim mit eigenem Treffer.

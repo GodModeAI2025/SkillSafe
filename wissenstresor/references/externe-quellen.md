@@ -109,8 +109,8 @@ Host rot. Fail-closed greift erst bei der Nutzung.
 Ohne `--extern` verlässt **kein Byte** den Skill-Ordner, weder zur Platte noch
 ins Netz. Das Flag macht am Aufruf sichtbar, dass hier bewusst eine Ausnahme
 von Regel 2 (Vertrauen zur Abfragezeit) gemacht wird. Es gehört an das Ende
-des Antworten-Workflows, nicht an den Anfang: erst `no_candidates`, dann die
-vollständige Prüfung von `fallback.page_paths`, dann erst extern.
+des Antworten-Workflows, nicht an den Anfang: erst die lokale Abfrage, dann
+die Vollsichtung mit Quittung (`sweep`), dann erst extern.
 
 Das Ranking `extern-zweistufig/v1` arbeitet in zwei Stufen:
 

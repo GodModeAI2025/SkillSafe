@@ -1,4 +1,4 @@
-# Wissenstresor — Konzept (Profil oksv-lite/1.2)
+# Wissenstresor — Konzept (Profil oksv-lite/1.3)
 
 Ein lokaler, evidenzgebundener Wissensspeicher als **purer Skill**: Der
 Skill-Ordner selbst ist das Wissensartefakt. Kein Server, keine Datenbank,
@@ -23,7 +23,7 @@ als Ordner- und Regelgrenzen ab:
 |---|---|---|
 | Engine | SKILL.md, scripts/, schema/, references/ | ändert sich nur durch bewusste Motor-Releases; genau ein ausführbares Script (AD-09) |
 | Content | knowledge/, sources/, INDEX, ROUTER, graph/ | validate erzwingt Profil; raw/ nur reguläre registrierte Dateien; Medienregionen und Begriffs-IDs streng referenziert; Links/Aliasse verboten |
-| Assurance | doctor + Lint-Workflow (Smoke-Evals im Entwicklungs-Workspace, nicht im Paket) | nur diagnostisch; **Gold-Holdouts gehören NIE in den Skill** (Leakage) |
+| Assurance | doctor + Lint-Workflow (Smoke-Evals und Recall-Gold im Entwicklungs-Workspace, nicht im Paket) | nur diagnostisch; **Gold-Holdouts gehören NIE in den Skill** (Leakage) |
 | Release | VERSION, MANIFEST.sha256, log.md | exklusiver Lock; vorbereiteter Endstand; Rollback bei behandelten Fehlern; Manifest zuletzt |
 
 Eine Randnotiz zur Zonenzuordnung: `schema/begriffswelten.json` liegt
@@ -42,7 +42,8 @@ manifestierten Release-Snapshot und rankt danach natürliche Einheiten —
 Seiten und Claims — mit festen Ganzzahlgewichten aus:
 
 1. exaktem Vorzugsbegriff oder Alias einer kontrollierten Begriffswelt,
-2. lexikalischen Token-/Phrasentreffern,
+2. lexikalischen Token-/Phrasentreffern samt ihren Wortformen (Flexion,
+   `-ung`, Kompositumteile; `wortform/v1`),
 3. genau einem begrenzten Begriffs- oder Seitengraph-Hop.
 
 Erst danach liest das Modell die gelieferten Seiten und formuliert aus den
@@ -59,9 +60,10 @@ Tausenderbereich liefern Claims, Begriffe und Graphkanten bereits starke
 retrievalfähige Einheiten. Sie behalten Fundstelle, Status, Stand und
 Quellenbezug. Feste Gewichte und stabile Tie-Breaker machen zwei Läufe
 byteidentisch. Das Ranking scannt zwar alle Claims, bewertet aber keine
-semantischen Paraphrasen: `no_candidates` löst deshalb eine vollständige
-Modellprüfung der angegebenen Fallback-Seiten aus. Erst deren Ergebnis darf
-„Nicht im Bestand" begründen. Embeddings würden hier zusätzliche Modell-
+semantischen Paraphrasen. Es weist deshalb selbst aus, wie viel der Frage es
+erkannt hat, und bei schwacher Deckung ist die Vollsichtung Pflicht: Das
+Modell liest jeden Claim, das Script prüft die Quittung (AD-14). Erst sie
+darf „Nicht im Bestand" begründen. Embeddings würden hier zusätzliche Modell-
 und Datenschutzgrenzen einführen, ohne die Evidenzgrenze zu ersetzen.
 
 **Grenze:** Bei Millionen Dokumenten oder bewusst unscharfer externer Suche
@@ -414,6 +416,88 @@ Schalter. Wer ein Paket weitergibt, gibt seine aufgeführten Netzquellen mit.
 Das ist die gewollte Folge der Gleichbehandlung und steht so in `README.md`
 und `BETRIEB.md`.
 
+### AD-14 · Bedeutung liest das Modell, Vollständigkeit belegt das Script
+
+**Entscheidung:** Der Tresor bekommt eine Bedeutungssuche, aber keinen
+Bedeutungsindex. Drei Bausteine tragen sie gemeinsam:
+
+1. **Das Ranking wird ehrlich.** `hybrid-local/v2` weist aus, welche
+   Fragebegriffe es erkannt hat (`coverage.match_strength`,
+   `coverage.query_terms`), meldet jede Kürzung durch das Limit und macht bei
+   `weak` und `none` die Vollsichtung zur Pflicht.
+2. **Wortformen sind keine Bedeutungsfrage.** `wortform/v1` gleicht Flexion,
+   Umlaut-Plural, `-ung` und Kompositumteile ab, nachrechenbar und mit eigenem
+   Grund am Treffer. Mehr nicht.
+3. **Die Vollsichtung ist die Bedeutungssuche.** `sweep` legt jeden Claim in
+   Stapeln vor, das Modell urteilt nach Bedeutung, und das Script prüft per
+   Siegel und Quittung, dass kein Stapel fehlt. „Nicht im Bestand" setzt eine
+   vollständige Quittung voraus.
+
+**Begründung:** Gemessen wurde zuerst, was ist. 28 umformulierte Fragen gegen
+den Demo-Bestand unter `hybrid-local/v1`: 15 gefunden, 5 nur jenseits des
+Limits, 5 verfehlt bei `candidates_found`, 3 verfehlt und gemeldet. Zehn von
+dreizehn Verfehlungen waren also still. Die Rückfallebene gab es, aber sie
+sprang nur bei null Kandidaten an, und eine natürliche Frage teilt fast immer
+ein Wort mit irgendeinem Claim: „darf", „wird", „muss". Ein Zufallstreffer
+auf einem Hilfsverb schaltete genau die Prüfung ab, die die Frage gebraucht
+hätte. Dazu war die Rückfallebene eine Anweisung („alle Seiten lesen") und
+kein geprüfter Schritt.
+
+Daraus folgt die Arbeitsteilung, die AD-05 schon vorgibt. Was ein Script
+entscheiden kann, entscheidet es: ob ein Wort der Frage im Ergebnis vorkommt,
+ob das Limit etwas abschnitt, ob jeder Stapel ausgegeben und beurteilt wurde.
+Was Urteil braucht, bleibt beim Modell: ob „nasse Wände" den Claim zum
+Schimmelbefall meint. In einem Skill ist der Leser mit Sprachverständnis
+ohnehin anwesend. Bei höchstens 9.999 kurzen Claims ist sein vollständiges
+Lesen ein stärkeres Relevanzurteil als jede Nachbarschaft in einem
+Einbettungsraum, und es lässt sich durch Bauart vollständig machen. Ein
+Ähnlichkeitsranking, lexikalisch wie vektoriell, liefert immer etwas zurück
+und kann Abwesenheit nie belegen. Die Frage „übersieht er nichts" beantwortet
+deshalb kein besseres Ranking, sondern nur ein Verfahren, das alles vorlegt
+und das nachweist.
+
+Gemessen nach dem Umbau, Limit 8: Von den 28 Fragen findet das Ranking 19
+direkt, 9 gehen in die Pflicht-Vollsichtung, keine bleibt still. Diese Zahl
+ist geschönt, weil Funktionswortliste und Schwellen an genau diesen Fragen
+eingestellt wurden. Die ehrlichere stammt aus einer Kontrolle: 56 Fragen von
+einem zweiten Agenten, der nur die Claim-Texte kannte und ihren Wortlaut mit
+Absicht mied, einmal gegen den fertigen Stand gemessen. Dort findet das
+Ranking 17 direkt, 37 gehen in die Pflicht-Vollsichtung, 2 tragen einen
+Hinweis, keine bleibt still. Etwa ein Drittel also: Das Ranking ist eine
+Abkürzung für Fragen in der Sprache des Bestands. Bedeutung findet das Lesen.
+
+Die Kontrolle fand außerdem einen Fehler, den die eigenen Fragen nicht
+zeigten. Eine frühere Fassung der Nachrück-Regel ließ den rangniedrigsten
+Kandidaten weichen, sobald ein ungedeckter Fragebegriff einen Träger hatte;
+Füllwörter wie „stehen" holten so ihren zufälligen Träger herein und
+verdrängten einen Definitions-Claim von Rang 6. Seither weicht nur reiner
+Kontext. Mit dieser Korrektur stehen 18 von 56 direkt, 37 in der Pflicht, 1
+mit Hinweis; diese zweite Zahl ist nicht mehr blind gemessen und steht
+deshalb neben der ersten, nicht an ihrer Stelle.
+
+**Grenze:** Die Quittung belegt Vorlage und Urteil, nicht Sorgfalt. Sie
+schützt gegen Abkürzen und Vergessen; wer die Stapelausgabe umleitet und nur
+das Siegel herauszieht, hält eine gültige Quittung über nichts. Das steht so
+im Antworten-Workflow, weil kein Script es verhindern kann.
+
+Die Vollsichtung kostet Lesearbeit im Verhältnis zum Bestand. Im Demo-Bestand
+ist es ein Stapel mit rund 11.000 Zeichen; ein synthetischer Bestand mit
+1.506 Seiten und 7.528 Claims braucht 189 Stapel. `--domain` und `--page`
+senken den Aufwand, erlauben dann aber nur „in diesem Umfang nicht gefunden".
+Wo auch das zu teuer wird, greift die Grenze aus AD-01.
+
+`strong` kann irren. Gemessen sind 0 stille Verfehlungen auf 84 Fragen, und
+das ist eine kleine, selbst gebaute Stichprobe an einem Bestand mit 28
+Claims. Deshalb erlaubt `strong` nie eine Abstention, und deshalb liegt das
+Gold außerhalb des Skills: Ein eigener Bestand braucht eigene Fragen, gemessen
+mit `tools/recall_check.py` im Entwicklungs-Workspace. Steht eine Goldfrage
+wörtlich im Bestand, misst sie nur noch, ob er sich selbst wiederfindet; ein
+Wächter im selben Werkzeug bricht dann ab.
+
+Wortformen kollidieren. „Zeit" und „Zeitung", „Bild" und „Bildung" teilen
+eine Familie, „Nutzer" und „Nutzen" ebenso. Das erzeugt zusätzliche
+Kandidaten, nie Evidenz, und jeder trägt seinen Grund (`stem:`, `compound:`).
+
 ## Verhältnis zu OKF v0.2
 
 OKF v0.2 (2026-07-24) macht Provenienz, Vertrauen, Lebenszyklus und
@@ -447,11 +531,12 @@ denselben Weg wie jede andere Quelle.
 ## Antwort- und Befüll-Pfad (Kurzfassung)
 
 **Antworten:** `query` → Snapshot-/Manifest-Gate → Begriff/Alias +
-Lexik + ein Graph-Hop → genau die Kandidatenseiten lesen → Answer Envelope
-mit Claim-Belegen, ältestem Stand, niedrigster Konfidenz, Konflikt- und
-Supersession-Hinweisen → bei fehlenden oder unzureichenden Kandidaten die
-`fallback.page_paths` semantisch vollständig prüfen → erst danach Lücken als
-„Nicht im Bestand" ausweisen.
+Lexik + Wortform + ein Graph-Hop → Trefferstärke lesen → genau die
+Kandidatenseiten lesen → bei `weak`, `none` und vor jeder Abstention die
+Vollsichtung: `sweep` legt jeden Claim vor, das Modell urteilt, die Quittung
+wird geprüft → Answer Envelope mit Claim-Belegen, ältestem Stand, niedrigster
+Konfidenz, Konflikt- und Supersession-Hinweisen → Lücken nur mit vollständiger
+Quittung als „Nicht im Bestand" ausweisen.
 Kurzfassungen und Claims gelten zur Abfragezeit als wahr — wer pro Anfrage
 gegen Rohquelle oder Medienrepräsentation re-verifiziert, zahlt doppelt und
 macht den Tresor sinnlos (Kompressionsregel).
@@ -475,9 +560,14 @@ Modell) — der Linter repariert nur Metadaten und Router, nie Inhalte.
 * Kuratierte Bestände bis in den niedrigen Tausenderbereich an Seiten;
   darüber Vektorindex/Volltext-Engine erwägen (→ OKSV-Vollausbau).
 * Kontrollierte Begriffswelten decken nur kuratierte Synonyme. Nicht
-  gepflegte Sprache kann weiterhin verfehlt werden; lexikalische
-  Claim-Suche liefert deshalb nur Kandidaten. `no_candidates` ist ein
-  Rückfallsignal zur vollständigen Seitenprüfung, kein Negativbefund.
+  gepflegte Sprache wird vom Ranking weiterhin verfehlt, gemessen bei rund
+  zwei von drei bewusst umformulierten Fragen; es liefert deshalb nur
+  Kandidaten und weist aus, was es nicht erkannt hat. `weak` und `none` sind
+  Rückfallsignale zur Vollsichtung, kein Negativbefund.
+* Die Vollsichtung ist so vollständig wie ihr Umfang und so gut wie ihr
+  Leser. Ihre Quittung belegt, dass jeder Stapel vorgelegt und beurteilt
+  wurde, nicht mit welcher Sorgfalt; und sie deckt nur, was als Claim im
+  Bestand steht, nicht was beim Befüllen nie extrahiert wurde (AD-14).
 * Externe Bezugsquellen altern außerhalb der eigenen Kontrolle. Anker-Drift
   ist deshalb gelb und kein Release-Blocker; die Trefferqualität des
   Nachschlagens hängt an fremder Dokumentqualität. Ein fremder Baum kann
@@ -592,6 +682,22 @@ Konzeptdokument · ein Symlink im Zielordner trägt den Export nicht heraus,
 ein Abbruch lässt das Ziel unverändert, ein früherer Export wird ersetzt
 statt übermischt · Ziel im Tresor, in `.claude`/`.codex` oder mit fremdem
 Inhalt bricht ab · `stats` läuft auch auf einem roten Bestand ohne Traceback.
+
+**Auffindbarkeit und Vollsichtung (seit v0.12.0, gemessen am 2026-11-12):**
+`tools/recall_check.py` gegen `tests/gold/recall-demo.json`, Limit 8 ·
+Gruppe „entwicklung" (28 Fragen): 19 direkt gefunden, 9 in der
+Pflicht-Vollsichtung, 0 still · Gruppe „kontrolle" (56 blind geschriebene
+Fragen): 18 direkt gefunden, bei 38 steht die Seite des Claims unter `pages`,
+37 in der Pflicht-Vollsichtung, 1 mit Hinweis, 0 still · 27 Negativfragen,
+keine erhält ohne Quittung ein „Nicht im Bestand" · die Vollsichtung legt bei
+Stapelgrößen 5, 7, 40 und 200 jeden der 28 Claims genau einmal vor ·
+falsches Siegel, fehlender, doppelter oder fremder Stapel, andere Frage,
+andere Stapelgröße und neuer Release machen die Quittung ungültig und liefern
+keine Evidenz · ein eingeschränkter Umfang quittiert vollständig und erlaubt
+trotzdem keine Abstention · Regions-Text und Alttext erscheinen in keinem
+Stapel · keine Goldfrage steht im Skill-Ordner. Zeitmessung am synthetischen
+Bestand mit 1.506 Seiten und 7.528 Claims: `query` rund 3,5 Sekunden, davon
+knapp 3 für das unveränderte Validierungs-Gate.
 
 **Funktional:** Der Antworten-Workflow nutzt den stabilen JSON-Vertrag und
 formuliert weiterhin ein Answer Envelope mit Claim-Belegen, Stand und

@@ -18,6 +18,8 @@ Kommandos:
   search <begriff>   Deterministische Volltextsuche (Plan B des Routers)
   query <frage>      Lokales Hybrid-Retrieval als stabiler JSON-Vertrag
                      (--extern: zusätzlich aufgeführte externe Quellen lesen)
+  sweep <frage>      Vollsichtung: jeden Claim in Stapeln vorlegen und die
+                     Quittung prüfen (--batch n | --receipt …)
   media-template ID  JSON-Gerüst für eine registrierte Bild-/PDF-Quelle
   extern             Aufgeführte externe Bezugsquellen: list/bind/unbind
   anchor-template    Sätze eines externen Dokuments mit Index und Digest
@@ -164,9 +166,24 @@ QUERY_SCHEMA = "skillsafe.query/v1"
 ANCHORS_SCHEMA = "skillsafe.anchors/v1"
 ORCHESTRATOR_SCHEMA = "skillsafe.orchestrator/v1"
 BINDING_SCHEMA = "skillsafe.bindung/v1"
-RETRIEVAL_PROFILE = "hybrid-local/v1"
+RETRIEVAL_PROFILE = "hybrid-local/v2"
 EXTERN_RETRIEVAL_PROFILE = "extern-zweistufig/v1"
 SEGMENTATION_PROFILE = "satzsegmentierung/v1"
+# Wortform ist kein Bedeutungsmodell: nur Flexion, Umlaut-Plural, -ung und
+# Kompositumteile, alles nachrechenbar. Bedeutung liest das Modell in der
+# Vollsichtung ('sweep'); diese Stufe sorgt nur dafür, dass eine Frage nicht
+# an einer Endung scheitert.
+WORTFORM_PROFILE = "wortform/v1"
+SWEEP_SCHEMA = "skillsafe.sweep/v1"
+SWEEP_STANDARD_GROESSE = 40
+SWEEP_MIN_GROESSE = 5
+SWEEP_MAX_GROESSE = 200
+SWEEP_SIEGEL_LAENGE = 16
+SWEEP_QUITTUNG_RE = re.compile(
+    r"^(\d{1,6}):([0-9a-f]{16})=(-|C-\d{4}(?:,C-\d{4})*)$"
+)
+KOMPOSITUM_MIN_TEIL = 4
+MAX_OMITTED_PAGES = 20
 MAX_JSON_BYTES = 2 * 1024 * 1024
 MAX_QUERY_LENGTH = 1000
 MAX_QUERY_LIMIT = 20
@@ -279,6 +296,86 @@ RETRIEVAL_STOPWORDS = {
     "a", "an", "and", "are", "for", "from", "how", "in", "is", "of", "on",
     "or", "the", "to", "what", "which", "with",
 }
+
+# Funktionswörter des lokalen Rankings hybrid-local/v2, in der normalisierten
+# Schreibung von _retrieval_norm (ae/oe/ue/ss). Bewusst eine ZWEITE Liste und
+# keine Erweiterung von RETRIEVAL_STOPWORDS: die alte Liste formt auch
+# 'extern-zweistufig/v1' und die nachrechenbaren Katalogzahlen (token_count,
+# top_tokens). Sie bleibt unberührt, damit sich dort kein Wert verschiebt.
+#
+# Aufgenommen sind nur geschlossene Wortklassen (Artikel, Pronomen,
+# Präpositionen, Konjunktionen, Hilfs- und Modalverben, Partikeln) plus die
+# bedeutungsleeren Stützverben 'gibt' und 'machen'. Gemessen am Demo-Bestand:
+# ohne diese Liste traf eine Alltagsfrage nach Mietkürzung bei feuchten
+# Wänden über ihr 'darf' einen Claim zu Agenten-Parametern, lieferte
+# 'candidates_found' und schaltete damit genau die Vollprüfung ab, die die
+# Frage gebraucht hätte.
+#
+# Homographen sind der Preis: nach casefold ist 'Macht' nicht mehr von 'macht'
+# zu unterscheiden, 'Waren' nicht von 'waren', 'Soll' nicht von 'soll'. Sie
+# stehen trotzdem hier, weil die Folge harmlos ist und die umgekehrte nicht:
+# eine Frage ohne Inhaltswort endet in 'match_strength: none' und damit in
+# der Pflicht-Vollsichtung, nie in einem stillen Fehltreffer. Als kuratiertes
+# Label einer Begriffswelt bleibt jedes dieser Wörter exakt auffindbar, weil
+# Begriffe gegen die ungefilterte Frage abgeglichen werden.
+FUNKTIONSWOERTER = frozenset("""
+der die das den dem des ein eine einen einem einer eines kein keine keinen
+keinem keiner keines
+ich du er sie es wir ihr mich dich sich uns euch mir dir ihm ihn ihnen
+mein meine meinen meinem meiner meines dein deine deinen deinem deiner deines
+sein seine seinen seinem seiner seines ihre ihren ihrem ihrer ihres
+unser unsere unseren unserem unserer euer eure euren
+man jemand niemand etwas nichts alles alle allen aller allem
+dies diese diesen diesem dieser dieses jene jenen jenem jener jenes
+welche welcher welches welchen welchem solche solchen solchem solcher solches
+selbst selber
+was wer wen wem wessen wie wo wann warum weshalb wieso wozu womit wodurch
+wofuer woher wohin woran worauf woraus worin worueber wovon wieviel wieviele
+an auf aus bei bis durch fuer gegen hinter in mit nach neben ohne seit ueber
+um unter von vor waehrend wegen zu zwischen ab am ans aufs beim im ins vom
+zum zur ausser entlang gegenueber innerhalb ausserhalb laut statt trotz per
+pro
+und oder aber denn sondern doch jedoch dass ob weil wenn als falls sofern
+obwohl bevor nachdem damit sodass sowie sowohl weder noch entweder bzw
+beziehungsweise
+bin bist ist sind seid war warst waren wart gewesen sei seien waere waeren
+haben habe hast hat habt hatte hattest hatten hattet gehabt haette haetten
+werden werde wirst wird werdet wurde wurdest wurden wurdet geworden worden
+wuerde wuerden
+koennen kann kannst koennt konnte konnten koennte koennten
+muessen muss musst muesst musste mussten muesste muessten
+sollen soll sollst sollt sollte sollten wollen will willst wollt wollte
+wollten
+duerfen darf darfst duerft durfte durften duerfte duerften
+moegen mag magst moegt mochte mochten moechte moechten moechtest
+gibt gab mache machen macht tun tue tut
+nicht nie niemals auch nur schon bereits sehr mehr weniger viel viele vielen
+wenig wenige so dann da hier dort heute jetzt immer oft mal einmal eben halt
+ja nein eigentlich ueberhaupt genau etwa ungefaehr circa ca ganz gar zwar
+bitte danke gerne vielleicht wohl eher fast kaum bloss lediglich ausserdem
+zudem daher deshalb deswegen darum also somit dabei dafuer dagegen danach
+daran darauf daraus darin darueber darunter davon davor dazu dadurch hierzu
+hierfuer wobei
+andere anderen anderer anderes anderem anders
+a an the and or but if then else of on in at by for from with without to
+into onto over under about as is are was were be been being am do does did
+done doing have has had having will would shall should can could may might
+must not no nor so than that this these those there here it its you he she
+we they me him her them my your his our their what which whom whose when
+where why how all any both each few more most other some such only own same
+too very just now after before between during through against while because
+until above below again further once also off out up down
+""".split())
+
+# wortform/v1 — Endungen in fester Reihenfolge, je mit der Mindestlänge des
+# verbleibenden Stamms. '-er' und '-em' verlangen vier Zeichen, sonst wird aus
+# 'andere' über 'ander' ein 'and'.
+WORTFORM_ENDUNGEN = (("en", 3), ("em", 4), ("er", 4), ("es", 3),
+                     ("e", 3), ("n", 3), ("s", 3))
+# Ein Plural- oder Genitiv-s wird nur nach diesen Konsonanten entfernt. Ohne
+# die Einschränkung würde aus 'Prozess' ein 'Proze' und aus 'Status' ein
+# 'Statu'.
+WORTFORM_S_VORGAENGER = frozenset("bcdfghklmnprtvw")
 
 
 class RollbackIncompleteError(RuntimeError):
@@ -985,6 +1082,98 @@ def _retrieval_tokens(value):
 def _phrase_present(haystack, needle):
     """Normalisierte Phrase nur an Token-Grenzen finden."""
     return bool(needle) and f" {needle} " in f" {haystack} "
+
+
+# --------------------------------------------------------- wortform/v1
+#
+# Drei Abgleichsstufen, streng in dieser Reihenfolge und jede mit eigenem
+# Grund im Ergebnis: 'token' (exakt), 'stem' (dieselbe Wortform-Familie) und
+# 'compound' (Kopf oder Schwanz eines Kompositums). Keine der drei rät eine
+# Bedeutung. "feuchte Wände" findet auch danach keinen "Schimmelbefall" — das
+# leistet erst die Vollsichtung, in der das Modell jeden Claim liest.
+def _inhaltstokens(value):
+    """Inhaltstragende Tokens des lokalen Rankings: ohne Funktionswörter."""
+    return tuple(
+        token for token in _retrieval_tokens(value)
+        if token not in FUNKTIONSWOERTER
+    )
+
+
+def _wortform_flexion(stamm):
+    for _ in range(3):
+        for endung, minimum in WORTFORM_ENDUNGEN:
+            if (not stamm.endswith(endung)
+                    or len(stamm) - len(endung) < minimum):
+                continue
+            if endung == "s" and stamm[-2] not in WORTFORM_S_VORGAENGER:
+                continue
+            stamm = stamm[:-len(endung)]
+            break
+        else:
+            break
+    return stamm
+
+
+def _wortstamm(token):
+    """Versionierter Schlüssel einer Wortform-Familie (wortform/v1).
+
+    Eingabe ist ein Token aus ``_retrieval_norm``. Die Umlaut-Digraphen
+    werden gefaltet, damit 'Wände' zu 'Wand' und 'Mängel' zu 'Mangel' findet;
+    danach fallen Flexionsendungen und einmalig '-ung', damit 'Prüfungen' zu
+    'prüfen' findet. Der Schlüssel ist kein Wort und wird nie ausgegeben, er
+    dient nur dem Vergleich — beide Seiten laufen durch dieselbe Funktion.
+
+    Bewusst NICHT geleistet: Partizipien ('geprüft'), finite Verbformen auf
+    '-t', unregelmäßige Formen ('gilt'/'gelten'), '-heit', '-keit', '-lich'.
+    Jede dieser Regeln brächte mehr Kollisionen als Treffer, und was hier
+    nicht trifft, landet als 'unmatched' sichtbar im Ergebnis.
+    """
+    if len(token) < 4 or any(char.isdigit() for char in token):
+        return token
+    stamm = _wortform_flexion(
+        token.replace("ae", "a").replace("oe", "o").replace("ue", "u")
+    )
+    if stamm.endswith("ung") and len(stamm) - 3 >= 4:
+        stamm = _wortform_flexion(stamm[:-3])
+    return stamm
+
+
+def _stamm_norm(value):
+    """Wie ``_retrieval_norm``, aber wortweise auf den Wortstamm gebracht.
+
+    Funktionswörter bleiben stehen: nur so liegen die Wörter einer
+    mehrteiligen Phrase auf beiden Seiten an derselben Stelle.
+    """
+    return " ".join(_wortstamm(wort) for wort in _retrieval_norm(value).split())
+
+
+def _kompositum_teil(teile, ganze):
+    """Ist eine Form aus ``teile`` Kopf oder Schwanz einer Form aus ``ganze``?
+
+    Geprüft wird nur am Wortanfang und am Wortende, und beide Seiten der
+    Nahtstelle brauchen mindestens ``KOMPOSITUM_MIN_TEIL`` Zeichen. Damit
+    findet 'Miete' die 'Mietminderung' und 'Nachweis' den 'Herkunftsnachweis'
+    (das Fugen-s zählt zum Rest), aber 'himmel' nie 'schimmel': der Rest 'sc'
+    ist kein Wortteil. Ein Wörterbuch gibt es nicht, also bleibt die Stufe
+    schwach gewichtet und zählt nie als verstandener Begriff.
+    """
+    for teil in teile:
+        if len(teil) < KOMPOSITUM_MIN_TEIL:
+            continue
+        for ganz in ganze:
+            if len(ganz) - len(teil) < KOMPOSITUM_MIN_TEIL:
+                continue
+            if ganz.startswith(teil) or ganz.endswith(teil):
+                return True
+    return False
+
+
+def _kompositum(links, rechts):
+    """Symmetrischer Kompositumabgleich zweier Tokens über Token und Stamm."""
+    formen_links = {links, _wortstamm(links)}
+    formen_rechts = {rechts, _wortstamm(rechts)}
+    return (_kompositum_teil(formen_links, formen_rechts)
+            or _kompositum_teil(formen_rechts, formen_links))
 
 
 # ------------------------------------------------- satzsegmentierung/v1
@@ -2722,11 +2911,27 @@ def _query_base(query, state, *, manifest_digest=None, version=None,
             "semantic_coverage": "not_assessed",
             "mode": "exhaustive_validated_claim_ranking",
             "claims_scanned": 0,
+            # Seit hybrid-local/v2: wie gut das Ranking die Frage verstanden
+            # hat. Die Felder stehen in jedem Zustand, auch im Fehlerfall,
+            # damit ein Konsument nie auf einen fehlenden Schlüssel prüft.
+            "wortform": WORTFORM_PROFILE,
+            "match_strength": "none",
+            "term_coverage_percent": 0,
+            "query_terms": {
+                "content": [], "matched": [], "partial": [], "unmatched": [],
+            },
+            "candidates": {
+                "total": 0, "returned": 0,
+                "omitted_direct": 0, "omitted_context": 0,
+            },
+            "omitted_pages": [],
+            "omitted_pages_truncated": False,
         },
         "fallback": {
             "exhaustive_review_required": False,
             "reason": None,
             "page_paths": [],
+            "sweep": None,
             # Gegenstück zu page_paths: was ein Mensch AUSSERHALB des Bestands
             # nachlesen müsste. Nur Hinweis, nie Ersatz für "Nicht im Bestand".
             #
@@ -2740,7 +2945,7 @@ def _query_base(query, state, *, manifest_digest=None, version=None,
             "external_reason": None,
             "external_document_paths": [],
         },
-        "concepts": {"matched": [], "expanded": []},
+        "concepts": {"matched": [], "expanded": [], "partial": []},
         # Externe Bezugsquellen stehen bewusst in einem eigenen Block und nie
         # in 'evidence': ein externer Satz ist ein Zeiger, kein kuratierter
         # Claim dieses Bestands. Der Top-Level-'state' bleibt eingefroren,
@@ -2891,27 +3096,93 @@ def _load_released_query_snapshot(query):
 
 
 def _match_concepts(query_norm, concepts, world=None):
-    phrase_matches = {}
-    matched_labels = {}
+    """Begriffe über ihre kuratierten Benennungen finden: exakt, sonst Wortform.
+
+    Die exakte Stufe ist unverändert die aus hybrid-local/v1. Die
+    Wortform-Stufe füllt nur Lücken: eine Benennung, deren Wortstamm-Phrase
+    schon exakt getroffen wurde, wird nicht ein zweites Mal über eine andere
+    Schreibung einem weiteren Begriff zugeschlagen. Ohne diese Rangfolge
+    zöge "Regeln" neben dem exakt benannten Begriff auch jeden mit dem Alias
+    "Regel" aus einer anderen Welt herein.
+
+    Mehrdeutig ist eine Wortform nur über Weltgrenzen hinweg. Innerhalb einer
+    Welt wäre der Zustand unauflösbar, weil '--world' dort nichts trennt;
+    zwei Begriffe derselben Welt gelten dann beide als getroffen.
+    """
+    query_stamm = " ".join(_wortstamm(wort) for wort in query_norm.split())
+    kandidaten = []
     for concept_id, concept in sorted(concepts.items()):
         if world is not None and concept.get("world") != world:
             continue
         labels = [concept.get("preferred", "")] + concept.get("aliases", [])
         for label in labels:
             normalized = _retrieval_norm(label)
-            if _phrase_present(query_norm, normalized):
-                phrase_matches.setdefault(normalized, []).append(concept_id)
-                matched_labels.setdefault(concept_id, []).append(label)
+            if normalized:
+                kandidaten.append((concept_id, label, normalized,
+                                   _stamm_norm(label)))
+
+    phrase_matches = {}
+    matched_labels = {}
+    modes = {}
+    exakt_gedeckt = set()
+    for concept_id, label, normalized, stamm in kandidaten:
+        if _phrase_present(query_norm, normalized):
+            phrase_matches.setdefault(normalized, []).append(concept_id)
+            matched_labels.setdefault(concept_id, []).append(label)
+            modes[concept_id] = "exact"
+            exakt_gedeckt.add(stamm)
     ambiguous = {
         phrase: sorted(ids)
         for phrase, ids in sorted(phrase_matches.items())
         if len(set(ids)) > 1
     }
+
+    wortform_matches = {}
+    for concept_id, label, normalized, stamm in kandidaten:
+        if (concept_id in modes and modes[concept_id] == "exact"
+                or stamm in exakt_gedeckt
+                or not _phrase_present(query_stamm, stamm)):
+            continue
+        eintrag = wortform_matches.setdefault(stamm, {"ids": [], "label": label})
+        eintrag["ids"].append(concept_id)
+        matched_labels.setdefault(concept_id, []).append(label)
+        modes.setdefault(concept_id, "wortform")
+    for _, eintrag in sorted(wortform_matches.items()):
+        welten = {concepts[cid].get("world") for cid in eintrag["ids"]}
+        if len(welten) > 1:
+            ambiguous[_retrieval_norm(eintrag["label"])] = sorted(
+                set(eintrag["ids"]))
+
     direct = sorted(matched_labels)
     return direct, {
         cid: sorted(set(labels), key=lambda value: (_retrieval_norm(value), value))
         for cid, labels in matched_labels.items()
-    }, ambiguous
+    }, ambiguous, modes
+
+
+def _match_concepts_teilweise(terms, concepts, direct, world=None):
+    """Einwortige Benennungen, die einen Fragebegriff als Kompositumteil tragen.
+
+    Das ist ein Fingerzeig und kein Begriffstreffer: "Herkunft" berührt den
+    Alias "Herkunftsnachweis", benennt den Begriff aber nicht. Deshalb gibt es
+    hier weder Begriffserweiterung noch Definitions-Bonus, und die Stufe zählt
+    nie als Anker für die Trefferstärke.
+    """
+    teilweise = {}
+    for concept_id, concept in sorted(concepts.items()):
+        if concept_id in direct:
+            continue
+        if world is not None and concept.get("world") != world:
+            continue
+        labels = [concept.get("preferred", "")] + concept.get("aliases", [])
+        for label in labels:
+            woerter = _retrieval_norm(label).split()
+            if len(woerter) != 1:
+                continue
+            for term in terms:
+                if _kompositum(term, woerter[0]):
+                    teilweise.setdefault(concept_id, set()).add(term)
+    return {cid: sorted(terms) for cid, terms in sorted(teilweise.items())}
 
 
 def _concept_expansion(concepts, direct):
@@ -2944,11 +3215,187 @@ def _concept_expansion(concepts, direct):
     ]
 
 
+def _evidence_item(snapshot, path, claim, score, reasons,
+                   role="retrieval_candidate"):
+    """Ein Claim als Evidenz-Eintrag: dieselbe Form für query und sweep."""
+    fm = snapshot["pages"][path]["fm"]
+    # Präfix-Dispatch: X- steht im Extern-Register, S- im Quellen-
+    # register. Ohne diesen Zweig lieferte .get() still ein leeres
+    # dict, und der Claim bekäme eine leere Quellenangabe — ein
+    # Bug, der aussieht wie eine Antwort.
+    if claim.get("extern"):
+        extern_zeile = snapshot["extern"]["register"].get(
+            claim["quelle"], {})
+        source = {
+            "titel": extern_zeile.get("titel"),
+            "stand": extern_zeile.get("stand"),
+            "trust": extern_zeile.get("trust"),
+            "rechte": extern_zeile.get("rechte"),
+            "kind": "extern",
+        }
+    else:
+        source = dict(snapshot["register"].get(claim["quelle"], {}))
+        source["kind"] = "lokal"
+    item = {
+        "claim_id": claim["id"],
+        "role": role,
+        "page": path,
+        "page_status": fm.get("status"),
+        "page_confidence": fm.get("confidence"),
+        "page_reviewed_by": fm.get("geprueft_von"),
+        "page_reviewed_at": fm.get("geprueft_am"),
+        "page_trust_tier": _trust_tier(fm.get("geprueft_von")),
+        "score": int(score),
+        "reasons": sorted(set(reasons)),
+        "kind": claim["art"],
+        "text": claim["text"],
+        "source": {
+            "id": claim["quelle"],
+            "kind": source.get("kind"),
+            "title": source.get("titel"),
+            "stand": source.get("stand"),
+            "trust": source.get("trust"),
+            "rights": source.get("rechte"),
+            "locator": claim["fundstelle"],
+        },
+        "signals": [],
+        "media": None,
+        "anchor": None,
+    }
+    if claim["art"] == "Auslegung":
+        item["signals"].append("interpretation")
+    if fm.get("status") != "aktiv":
+        item["signals"].append(f"page_status:{fm.get('status')}")
+    if fm.get("confidence") == "niedrig":
+        item["signals"].append("low_confidence")
+    if source.get("trust") == "T3":
+        item["signals"].append("source_trust:T3")
+    # Nur die unterste Stufe wird als Signal geführt, analog zu
+    # source_trust:T3. Der Tier ist abgeleitet, geht nie in den Score
+    # ein und ist keine Zugriffskontrolle (OKF v0.2 §5.3).
+    if item["page_trust_tier"] == TIER_UNVERIFIED:
+        item["signals"].append(f"trust_tier:{TIER_UNVERIFIED}")
+    region_id = claim.get("region")
+    representation = snapshot["media"].get(claim["quelle"])
+    if region_id and representation:
+        region = representation["regions"].get(region_id, {})
+        item["media"] = {
+            "representation": representation["path"],
+            "media_type": representation["media_type"],
+            "region_id": region_id,
+            "region_kind": region.get("kind"),
+            "confidence": region.get("confidence"),
+        }
+    # Satzanker: wie bei Medienregionen wird nur die geprüfte
+    # Fundstelle ausgegeben, nie der externe Satz selbst. Der Wortlaut
+    # bleibt untrusted Quelldatum in der Ankerdatei.
+    anchor_id = claim.get("anker")
+    ankerdatei = snapshot["extern"]["anchors"].get(claim["quelle"])
+    if anchor_id and ankerdatei:
+        anker = ankerdatei["anchors"].get(anchor_id, {})
+        item["anchor"] = {
+            "anchor_id": anchor_id,
+            "document": anker.get("document"),
+            "sentence_index": anker.get("sentence_index"),
+            "block": anker.get("block"),
+            "text_sha256": anker.get("text_sha256"),
+        }
+        item["signals"].append("external_source")
+    return item
+
+
+def _page_summary(snapshot, path, score, reasons):
+    fm = snapshot["pages"][path]["fm"]
+    return {
+        "path": path,
+        "title": fm.get("title"),
+        "domain": fm.get("domain"),
+        "status": fm.get("status"),
+        "confidence": fm.get("confidence"),
+        "stand": fm.get("stand"),
+        "reviewed_by": fm.get("geprueft_von"),
+        "reviewed_at": fm.get("geprueft_am"),
+        "trust_tier": _trust_tier(fm.get("geprueft_von")),
+        "score": int(score),
+        "reasons": sorted(set(reasons)),
+        "concepts": sorted(fm.get("concepts", [])),
+    }
+
+
+def _wortform_varianten(terms, tokenmengen):
+    """Je Fragebegriff die Bestandstokens gleicher Wortform und die Kompositum-
+    Nachbarn. Einmal je Abfrage über das ganze Vokabular gerechnet, damit der
+    Abgleich je Claim nur noch ein Mengenschnitt ist."""
+    vokabular = set()
+    for tokens in tokenmengen:
+        vokabular |= tokens
+    staemme = {token: _wortstamm(token) for token in sorted(vokabular)}
+    varianten = {}
+    for term in terms:
+        stamm = _wortstamm(term)
+        term_formen = {term, stamm}
+        gleiche, teile = set(), set()
+        for token, token_stamm in staemme.items():
+            if token == term:
+                continue
+            if token_stamm == stamm:
+                gleiche.add(token)
+                continue
+            token_formen = {token, token_stamm}
+            if (_kompositum_teil(term_formen, token_formen)
+                    or _kompositum_teil(token_formen, term_formen)):
+                teile.add(token)
+        varianten[term] = (gleiche, teile)
+    return varianten
+
+
+def _term_treffer(term, tokens, varianten):
+    """Beste Abgleichsstufe eines Fragebegriffs in einer Tokenmenge."""
+    if term in tokens:
+        return "token"
+    gleiche, teile = varianten[term]
+    if gleiche & tokens:
+        return "stem"
+    if teile & tokens:
+        return "compound"
+    return None
+
+
+TERM_RANG = {"token": 3, "stem": 2, "compound": 1}
+# Ganzzahlgewichte von hybrid-local/v2. Die Zeile 'token' ist unverändert die
+# aus v1; 'stem' und 'compound' liegen je Feld darunter. Die Staffel hält
+# eine Ordnung fest, die sich in der Messung als tragend erwiesen hat: ein
+# Claim, der einen Fragebegriff selbst trägt (mindestens 12), steht immer vor
+# einem, der ihn nur über Titel oder Tags seiner Seite erbt (höchstens 10),
+# und beide vor dem reinen Graph-Nachbarn (5).
+SEITEN_GEWICHTE = {
+    "token": {"title": 30, "tag": 24, "claim": 12},
+    "stem": {"title": 24, "tag": 20, "claim": 10},
+    "compound": {"title": 12, "tag": 10, "claim": 5},
+}
+CLAIM_GEWICHTE = {"token": 20, "stem": 16, "compound": 12}
+KONTEXT_GEWICHTE = {"token": 10, "stem": 8, "compound": 6}
+
+
+def _sweep_stapel(seiten, groesse):
+    """Seiten in feste Stapel packen. Eine Seite wird nie zerschnitten: ihr
+    Titel ist der Kontext, in dem ihre Claims lesbar sind."""
+    stapel, aktuell, zahl = [], [], 0
+    for path, claims in seiten:
+        if aktuell and zahl + len(claims) > groesse:
+            stapel.append(aktuell)
+            aktuell, zahl = [], 0
+        aktuell.append((path, claims))
+        zahl += len(claims)
+    if aktuell:
+        stapel.append(aktuell)
+    return stapel
+
+
 def build_query_result(snapshot, world=None, limit=8):
     """Reines, ganzzahlig geranktes Hybrid-Retrieval über validierte Claims."""
     query = snapshot["query"]
     query_norm = _retrieval_norm(query)
-    query_tokens = set(_retrieval_tokens(query))
     query_claim_ids = set(re.findall(r"(?i)(?<![A-Z0-9])C-\d{4}(?![A-Z0-9])",
                                      query))
     query_claim_ids = {value.upper() for value in query_claim_ids}
@@ -2958,6 +3405,15 @@ def build_query_result(snapshot, world=None, limit=8):
     query_concept_ids = set(re.findall(r"(?i)(?<![A-Z0-9])B-\d{4}(?![A-Z0-9])",
                                        query))
     query_concept_ids = {value.upper() for value in query_concept_ids}
+    # Die Ziffern einer genannten ID sind kein Inhaltswort. Blieben sie
+    # stehen, gälte "C-0001" als Frage mit einem unverstandenen Begriff.
+    id_ziffern = {
+        value.split("-")[1]
+        for value in query_claim_ids | query_source_ids | query_concept_ids
+    }
+    terms = sorted({
+        token for token in _inhaltstokens(query) if token not in id_ziffern
+    })
     concepts = snapshot["concepts"]
     worlds = snapshot["worlds"]
     if world is not None and world not in worlds:
@@ -2969,7 +3425,7 @@ def build_query_result(snapshot, world=None, limit=8):
             warnings=snapshot["warnings"],
         )
 
-    direct, matched_labels, ambiguous = _match_concepts(
+    direct, matched_labels, ambiguous, concept_modes = _match_concepts(
         query_norm, concepts, world=world
     )
     for concept_id in sorted(query_concept_ids):
@@ -2978,6 +3434,7 @@ def build_query_result(snapshot, world=None, limit=8):
                 and concept_id not in direct):
             direct.append(concept_id)
             matched_labels[concept_id] = [concept_id]
+            concept_modes[concept_id] = "id"
     direct.sort()
     if ambiguous:
         details = [
@@ -2992,63 +3449,115 @@ def build_query_result(snapshot, world=None, limit=8):
         )
     expansion = _concept_expansion(concepts, direct)
     expanded_weights = {item["id"]: item["weight"] for item in expansion}
+    teilweise = _match_concepts_teilweise(terms, concepts, direct, world=world)
+    definitionen = {
+        concepts[cid]["definition_claim"]: cid
+        for cid in direct if concepts[cid].get("definition_claim")
+    }
+    # Fragebegriffe, die eine getroffene Benennung selbst trägt. Sie gelten
+    # als verstanden, auch wenn kein Claim sie wörtlich wiederholt.
+    begriff_staemme = set()
+    for cid in direct:
+        for label in matched_labels.get(cid, []):
+            begriff_staemme.update(_stamm_norm(label).split())
 
-    page_scores, page_reasons = {}, {}
     pages = snapshot["pages"]
+    seiten_tokens = {}
     for path, page in sorted(pages.items()):
         fm = page["fm"]
-        score, reasons = 0, []
+        tag_tokens = set()
+        for tag in fm.get("tags", []):
+            tag_tokens.update(_inhaltstokens(tag))
+        seiten_tokens[path] = {
+            "title": set(_inhaltstokens(fm.get("title", ""))),
+            "tag": tag_tokens,
+            "claims": {
+                claim["id"]: set(_inhaltstokens(
+                    f"{claim['text']} {claim['fundstelle']}"))
+                for claim in page["claims"]
+            },
+        }
+    varianten = _wortform_varianten(terms, (
+        tokens
+        for eintrag in seiten_tokens.values()
+        for tokens in [eintrag["title"], eintrag["tag"],
+                       *eintrag["claims"].values()]
+    ))
+
+    page_scores, page_reasons, starke_seiten = {}, {}, set()
+    seiten_begriffe = {}
+    for path, page in sorted(pages.items()):
+        fm = page["fm"]
+        tokens = seiten_tokens[path]
+        score, reasons, stark = 0, [], False
         page_concepts = set(fm.get("concepts", []))
         for cid in sorted(page_concepts & set(direct)):
             score += 120
+            stark = True
             reasons.append(f"concept:{cid}:direct")
         for cid in sorted(page_concepts & set(expanded_weights)):
             weight = expanded_weights[cid]
             score += weight
+            stark = True
             reasons.append(f"concept:{cid}:expanded:{weight}")
+        for cid in sorted(page_concepts & set(teilweise)):
+            score += 40
+            reasons.append(f"concept:{cid}:partial")
 
         title_norm = _retrieval_norm(fm.get("title", ""))
-        title_tokens = set(_retrieval_tokens(fm.get("title", "")))
-        tag_tokens = set()
-        for tag in fm.get("tags", []):
-            tag_tokens.update(_retrieval_tokens(tag))
         claim_text = " ".join(
             f"{claim['text']} {claim['fundstelle']}" for claim in page["claims"]
         )
+        claim_tokens = set()
+        for einzeln in tokens["claims"].values():
+            claim_tokens |= einzeln
         page_claim_ids = {claim["id"] for claim in page["claims"]}
         page_source_ids = {claim["quelle"] for claim in page["claims"]}
         for claim_id in sorted(query_claim_ids & page_claim_ids):
             score += 180
+            stark = True
             reasons.append(f"id:{claim_id}")
         for source_id in sorted(query_source_ids & page_source_ids):
             score += 100
+            stark = True
             reasons.append(f"id:{source_id}")
         claim_norm = _retrieval_norm(claim_text)
-        claim_tokens = set(_retrieval_tokens(claim_text))
         if query_norm and _phrase_present(title_norm, query_norm):
             score += 80
+            stark = True
             reasons.append("exact:title")
         if query_norm and _phrase_present(claim_norm, query_norm):
             score += 60
+            stark = True
             reasons.append("exact:claim")
-        for token in sorted(query_tokens):
-            if token in title_tokens:
-                score += 30
-                reasons.append(f"token:{token}:title")
-            if token in tag_tokens:
-                score += 24
-                reasons.append(f"token:{token}:tag")
-            if token in claim_tokens:
-                score += 12
-                reasons.append(f"token:{token}:claim")
+        kopf = {}
+        for term in terms:
+            for feld, menge in (("title", tokens["title"]),
+                                ("tag", tokens["tag"]),
+                                ("claim", claim_tokens)):
+                stufe = _term_treffer(term, menge, varianten)
+                if stufe is None:
+                    continue
+                score += SEITEN_GEWICHTE[stufe][feld]
+                reasons.append(f"{stufe}:{term}:{feld}")
+                if stufe != "compound":
+                    stark = True
+                if feld != "claim" and (
+                        TERM_RANG[stufe] > TERM_RANG.get(kopf.get(term), 0)):
+                    kopf[term] = stufe
+        seiten_begriffe[path] = kopf
         if score:
             page_scores[path] = score
             page_reasons[path] = reasons
+            if stark:
+                starke_seiten.add(path)
 
     # Ein Graph-Hop ergänzt Kontext, bleibt aber niedriger gewichtet als
-    # jeder direkte Begriffs-/Lexikaltreffer.
+    # jeder direkte Begriffs-/Lexikaltreffer. Er geht nur von Seiten aus, die
+    # mehr tragen als einen Kompositumteil: sonst zöge ein einziges zufällig
+    # passendes Wortende die ganze Nachbarschaft als Kandidaten herein.
     graph_boost = {}
-    for source in sorted(page_scores):
+    for source in sorted(starke_seiten):
         for relation in pages[source]["relationen"]:
             target = relation["ziel"]
             graph_boost[target] = max(graph_boost.get(target, 0), 10)
@@ -3061,7 +3570,7 @@ def build_query_result(snapshot, world=None, limit=8):
         page_scores[path] = page_scores.get(path, 0) + boost
         page_reasons.setdefault(path, []).append("graph:one-hop")
 
-    evidence = []
+    kandidaten = []
     for path, page in sorted(pages.items()):
         if path not in page_scores:
             continue
@@ -3078,139 +3587,178 @@ def build_query_result(snapshot, world=None, limit=8):
             claim_norm = _retrieval_norm(
                 f"{claim['text']} {claim['fundstelle']}"
             )
-            claim_tokens = set(_retrieval_tokens(claim_norm))
+            claim_tokens = seiten_tokens[path]["claims"][claim["id"]]
             score = concept_base
             reasons = []
+            # 'direkt' heißt: der Claim selbst trägt den Treffer. Alles
+            # andere ist Kontext seiner Seite und darf beim Kürzen fehlen.
+            direkt = False
+            eigene = {}
             if concept_base:
                 reasons.append("concept-page")
+            elif page_concepts & set(teilweise):
+                score += 30
+                reasons.append("concept-page:partial")
+            if claim["id"] in definitionen:
+                score += 40
+                direkt = True
+                reasons.append(f"concept-definition:{definitionen[claim['id']]}")
             if claim["id"] in query_claim_ids:
                 score += 240
+                direkt = True
                 reasons.append(f"id:{claim['id']}")
             if claim["quelle"] in query_source_ids:
                 score += 140
+                direkt = True
                 reasons.append(f"id:{claim['quelle']}")
             if query_norm and _phrase_present(claim_norm, query_norm):
                 score += 80
+                direkt = True
                 reasons.append("exact:claim")
-            matched_tokens = sorted(query_tokens & claim_tokens)
-            if matched_tokens:
-                score += 20 * len(matched_tokens)
-                reasons.extend(f"token:{token}" for token in matched_tokens)
+            for term in terms:
+                stufe = _term_treffer(term, claim_tokens, varianten)
+                if stufe is None:
+                    continue
+                eigene[term] = stufe
+                score += CLAIM_GEWICHTE[stufe]
+                direkt = True
+                reasons.append(f"{stufe}:{term}")
+            # Kontext der Seite: ein Fragebegriff in Titel oder Tags hebt
+            # jeden Claim der Seite, der ihn nicht schon selbst trägt. Das
+            # ersetzt den pauschalen 'page-metadata'-Füller aus v1, der auch
+            # Geschwister eines einzelnen Zufallstreffers zu Kandidaten
+            # machte und damit echte Treffer aus dem Limit drängte.
+            for term, stufe in sorted(seiten_begriffe[path].items()):
+                if term in eigene:
+                    continue
+                score += KONTEXT_GEWICHTE[stufe]
+                reasons.append(f"page-{stufe}:{term}")
             if not score and path in graph_boost:
                 score = 5
                 reasons.append("graph:one-hop")
-            elif not score and page_scores[path]:
-                score = 10
-                reasons.append("page-metadata")
             if score <= 0:
                 continue
-            # Präfix-Dispatch: X- steht im Extern-Register, S- im Quellen-
-            # register. Ohne diesen Zweig lieferte .get() still ein leeres
-            # dict, und der Claim bekäme eine leere Quellenangabe — ein
-            # Bug, der aussieht wie eine Antwort.
-            if claim.get("extern"):
-                extern_zeile = snapshot["extern"]["register"].get(
-                    claim["quelle"], {})
-                source = {
-                    "titel": extern_zeile.get("titel"),
-                    "stand": extern_zeile.get("stand"),
-                    "trust": extern_zeile.get("trust"),
-                    "rechte": extern_zeile.get("rechte"),
-                    "kind": "extern",
-                }
-            else:
-                source = dict(snapshot["register"].get(claim["quelle"], {}))
-                source["kind"] = "lokal"
-            item = {
-                "claim_id": claim["id"],
-                "role": "retrieval_candidate",
-                "page": path,
-                "page_status": fm.get("status"),
-                "page_confidence": fm.get("confidence"),
-                "page_reviewed_by": fm.get("geprueft_von"),
-                "page_reviewed_at": fm.get("geprueft_am"),
-                "page_trust_tier": _trust_tier(fm.get("geprueft_von")),
-                "score": int(score),
-                "reasons": sorted(set(reasons)),
-                "kind": claim["art"],
-                "text": claim["text"],
-                "source": {
-                    "id": claim["quelle"],
-                    "kind": source.get("kind"),
-                    "title": source.get("titel"),
-                    "stand": source.get("stand"),
-                    "trust": source.get("trust"),
-                    "rights": source.get("rechte"),
-                    "locator": claim["fundstelle"],
-                },
-                "signals": [],
-                "media": None,
-                "anchor": None,
-            }
-            if claim["art"] == "Auslegung":
-                item["signals"].append("interpretation")
-            if fm.get("status") != "aktiv":
-                item["signals"].append(f"page_status:{fm.get('status')}")
-            if fm.get("confidence") == "niedrig":
-                item["signals"].append("low_confidence")
-            if source.get("trust") == "T3":
-                item["signals"].append("source_trust:T3")
-            # Nur die unterste Stufe wird als Signal geführt, analog zu
-            # source_trust:T3. Der Tier ist abgeleitet, geht nie in den Score
-            # ein und ist keine Zugriffskontrolle (OKF v0.2 §5.3).
-            if item["page_trust_tier"] == TIER_UNVERIFIED:
-                item["signals"].append(f"trust_tier:{TIER_UNVERIFIED}")
-            region_id = claim.get("region")
-            representation = snapshot["media"].get(claim["quelle"])
-            if region_id and representation:
-                region = representation["regions"].get(region_id, {})
-                item["media"] = {
-                    "representation": representation["path"],
-                    "media_type": representation["media_type"],
-                    "region_id": region_id,
-                    "region_kind": region.get("kind"),
-                    "confidence": region.get("confidence"),
-                }
-            # Satzanker: wie bei Medienregionen wird nur die geprüfte
-            # Fundstelle ausgegeben, nie der externe Satz selbst. Der Wortlaut
-            # bleibt untrusted Quelldatum in der Ankerdatei.
-            anchor_id = claim.get("anker")
-            ankerdatei = snapshot["extern"]["anchors"].get(claim["quelle"])
-            if anchor_id and ankerdatei:
-                anker = ankerdatei["anchors"].get(anchor_id, {})
-                item["anchor"] = {
-                    "anchor_id": anchor_id,
-                    "document": anker.get("document"),
-                    "sentence_index": anker.get("sentence_index"),
-                    "block": anker.get("block"),
-                    "text_sha256": anker.get("text_sha256"),
-                }
-                item["signals"].append("external_source")
-            evidence.append(item)
-    evidence.sort(key=lambda item: (-item["score"], item["claim_id"], item["page"]))
-    evidence = evidence[:limit]
+            kandidaten.append({
+                "claim": claim, "path": path, "score": int(score),
+                "reasons": reasons, "direkt": direkt, "eigene": eigene,
+            })
+    def rangfolge(kandidat):
+        return (-kandidat["score"], kandidat["claim"]["id"], kandidat["path"])
+
+    kandidaten.sort(key=rangfolge)
+    gezeigt, gekuerzt = kandidaten[:limit], kandidaten[limit:]
+
+    # ---- Kontext weicht, Treffer nie. Ein Begriffstreffer hebt jeden Claim
+    # seiner Seite um 100 Punkte; ein wörtlicher Treffer auf einer anderen
+    # Seite bringt 20. Fragt jemand nach zwei Dingen, füllte das erste allein
+    # das Limit und das zweite verschwand, obwohl es im Bestand steht. Darum
+    # rückt für jeden Fragebegriff, den die Auswahl nicht trägt, der beste
+    # gekürzte Kandidat nach, der ihn selbst trägt — aber ausschließlich auf
+    # Kosten eines reinen Kontext-Kandidaten, also eines Claims, der nur über
+    # seine Seite in die Auswahl kam und dessen Seite auch ohne ihn vertreten
+    # bleibt. Ein Claim mit eigenem Treffer wird nie verdrängt.
+    #
+    # Die erste Fassung ließ den rangniedrigsten Kandidaten weichen, dessen
+    # Begriffe anderswo vertreten waren. Eine Kontrollfrage, die an dieser
+    # Regel nicht mitgebaut hatte, zeigte den Fehler: Füllwörter wie
+    # "stehen" und "mindestens" holten je ihren zufälligen Träger herein, und
+    # der Definitions-Claim auf Rang 6 flog dafür hinaus.
+    def getragen(kandidat):
+        begriffe = dict(seiten_begriffe.get(kandidat["path"], {}))
+        begriffe.update(kandidat["eigene"])
+        return {term for term, stufe in begriffe.items()
+                if TERM_RANG[stufe] >= TERM_RANG["stem"]}
+
+    for term in terms:
+        if (_wortstamm(term) in begriff_staemme
+                or any(term in getragen(k) for k in gezeigt)):
+            continue
+        nachruecker = next(
+            (k for k in gekuerzt
+             if TERM_RANG.get(k["eigene"].get(term), 0) >= TERM_RANG["stem"]),
+            None,
+        )
+        if nachruecker is None:
+            continue
+        je_seite = {}
+        for kandidat in gezeigt:
+            je_seite[kandidat["path"]] = je_seite.get(kandidat["path"], 0) + 1
+        weichen = next(
+            (position for position in range(len(gezeigt) - 1, -1, -1)
+             if not gezeigt[position]["direkt"]
+             and je_seite[gezeigt[position]["path"]] > 1),
+            None,
+        )
+        if weichen is None:
+            continue
+        gekuerzt.remove(nachruecker)
+        gekuerzt.append(gezeigt[weichen])
+        gezeigt[weichen] = nachruecker
+    gezeigt.sort(key=rangfolge)
+    gekuerzt.sort(key=rangfolge)
+    evidence = [
+        _evidence_item(snapshot, k["path"], k["claim"], k["score"],
+                       k["reasons"])
+        for k in gezeigt
+    ]
 
     page_paths = sorted(
         {item["page"] for item in evidence},
         key=lambda path: (-page_scores.get(path, 0), path),
     )
-    page_results = []
-    for path in page_paths:
-        fm = pages[path]["fm"]
-        page_results.append({
-            "path": path,
-            "title": fm.get("title"),
-            "domain": fm.get("domain"),
-            "status": fm.get("status"),
-            "confidence": fm.get("confidence"),
-            "stand": fm.get("stand"),
-            "reviewed_by": fm.get("geprueft_von"),
-            "reviewed_at": fm.get("geprueft_am"),
-            "trust_tier": _trust_tier(fm.get("geprueft_von")),
-            "score": int(page_scores[path]),
-            "reasons": sorted(set(page_reasons[path])),
-            "concepts": sorted(fm.get("concepts", [])),
+    page_results = [
+        _page_summary(snapshot, path, page_scores[path], page_reasons[path])
+        for path in page_paths
+    ]
+
+    # ---- Wie gut wurde die Frage verstanden? Gerechnet wird nur über das,
+    # was tatsächlich ausgegeben wird: ein Begriff, den allein ein gekürzter
+    # Kandidat trägt, hat das Modell nicht gesehen und gilt als ungetroffen.
+    term_stand = {term: 0 for term in terms}
+    for k in gezeigt:
+        for term, stufe in list(k["eigene"].items()) + list(
+                seiten_begriffe.get(k["path"], {}).items()):
+            term_stand[term] = max(term_stand[term], TERM_RANG[stufe])
+    if evidence:
+        for term in terms:
+            if _wortstamm(term) in begriff_staemme:
+                term_stand[term] = TERM_RANG["token"]
+    getroffen = [term for term in terms if term_stand[term] >= 2]
+    teilgetroffen = [term for term in terms if term_stand[term] == 1]
+    ungetroffen = [term for term in terms if term_stand[term] == 0]
+    anker = bool(evidence) and (bool(direct) or any(
+        reason == "exact:claim" or reason.startswith("id:")
+        for k in gezeigt for reason in k["reasons"]
+    ))
+    if terms:
+        abdeckung = 100 * len(getroffen) // len(terms)
+    else:
+        abdeckung = 100 if anker else 0
+    if not evidence:
+        staerke = "none"
+    elif abdeckung == 100:
+        staerke = "strong"
+    elif anker or (len(getroffen) >= 2 and abdeckung >= 60):
+        staerke = "partial"
+    else:
+        staerke = "weak"
+
+    gezeigte_seiten = set(page_paths)
+    verdeckt = {}
+    for k in gekuerzt:
+        if not k["direkt"] or k["path"] in gezeigte_seiten:
+            continue
+        eintrag = verdeckt.setdefault(k["path"], {
+            "path": k["path"], "claims": 0,
+            "best_claim": k["claim"]["id"], "best_score": k["score"],
         })
+        eintrag["claims"] += 1
+    omitted_pages = sorted(
+        verdeckt.values(), key=lambda e: (-e["best_score"], e["path"]))
+    alle_seiten = sorted(
+        (path, [claim["id"] for claim in page["claims"]])
+        for path, page in pages.items() if page["claims"]
+    )
 
     state = "candidates_found" if evidence else "no_candidates"
     matched_output = [
@@ -3219,6 +3767,7 @@ def build_query_result(snapshot, world=None, limit=8):
             "world": concepts[cid]["world"],
             "preferred": concepts[cid]["preferred"],
             "matched_labels": matched_labels[cid],
+            "match": concept_modes.get(cid, "exact"),
         }
         for cid in direct
     ]
@@ -3229,6 +3778,15 @@ def build_query_result(snapshot, world=None, limit=8):
             "preferred": concepts[item["id"]]["preferred"],
         }
         for item in expansion
+    ]
+    partial_output = [
+        {
+            "id": cid,
+            "world": concepts[cid]["world"],
+            "preferred": concepts[cid]["preferred"],
+            "terms": begriffe,
+        }
+        for cid, begriffe in teilweise.items()
     ]
     fingerprint_data = {
         "algorithm": RETRIEVAL_PROFILE,
@@ -3247,17 +3805,47 @@ def build_query_result(snapshot, world=None, limit=8):
         query, state, manifest_digest=snapshot["manifest_digest"],
         version=snapshot["version"], warnings=snapshot["warnings"],
     )
+    schwach = staerke in {"none", "weak"}
     result.update({
         "coverage": {
             "retrieval_complete": True,
             "semantic_coverage": "not_assessed",
             "mode": "exhaustive_validated_claim_ranking",
             "claims_scanned": len(snapshot["claims"]),
+            "wortform": WORTFORM_PROFILE,
+            "match_strength": staerke,
+            "term_coverage_percent": abdeckung,
+            "query_terms": {
+                "content": terms,
+                "matched": getroffen,
+                "partial": teilgetroffen,
+                "unmatched": ungetroffen,
+            },
+            "candidates": {
+                "total": len(kandidaten),
+                "returned": len(gezeigt),
+                "omitted_direct": sum(1 for k in gekuerzt if k["direkt"]),
+                "omitted_context": sum(
+                    1 for k in gekuerzt if not k["direkt"]),
+            },
+            "omitted_pages": omitted_pages[:MAX_OMITTED_PAGES],
+            "omitted_pages_truncated": len(omitted_pages) > MAX_OMITTED_PAGES,
         },
         "fallback": {
-            "exhaustive_review_required": not evidence,
-            "reason": None if evidence else "no_retrieval_candidates",
+            "exhaustive_review_required": schwach,
+            "reason": (
+                "no_retrieval_candidates" if not evidence
+                else "weak_candidates_only" if schwach else None
+            ),
             "page_paths": sorted(snapshot["pages"]),
+            # Der Aufwand der Vollsichtung steht hier, damit die Entscheidung
+            # dafür keine Schätzung ist.
+            "sweep": {
+                "claims": len(snapshot["claims"]),
+                "batch_size": SWEEP_STANDARD_GROESSE,
+                "batches": len(_sweep_stapel(
+                    alle_seiten, SWEEP_STANDARD_GROESSE)),
+            },
             "external_lookup_available": bool(
                 snapshot["extern"]["register"]),
             "external_live_lookup_used": False,
@@ -3267,6 +3855,7 @@ def build_query_result(snapshot, world=None, limit=8):
         "concepts": {
             "matched": matched_output,
             "expanded": expanded_output,
+            "partial": partial_output,
         },
         "pages": page_results,
         "evidence": evidence,
@@ -3296,6 +3885,318 @@ def cmd_query(question_words, world=None, limit=8, extern=False,
         result["fallback"]["external_document_paths"] = gelesen
     _emit_query_json(result)
     if result["state"] in {"candidates_found", "no_candidates"}:
+        return 0
+    return 2
+
+
+# ------------------------------------------------------- Vollsichtung
+#
+# 'query' ist die Abkürzung, 'sweep' ist die Zusage. Das Ranking kann eine
+# Frage nur an Wörtern, Wortformen und kuratierten Begriffen erkennen; ob ein
+# Claim sie der BEDEUTUNG nach beantwortet, kann nur beurteilen, wer ihn
+# liest. Die Vollsichtung legt dem Modell deshalb jeden Claim des Umfangs vor,
+# in festen Stapeln, und nimmt je Stapel ein Urteil entgegen.
+#
+# Was das Script dabei beweist und was nicht: Jeder Stapel trägt ein Siegel,
+# das nur seine Ausgabe nennt. Eine Quittung mit allen Siegeln belegt, dass
+# jeder Stapel für genau diesen Stand und genau diese Frage ausgegeben wurde
+# und dass zu jedem ein ausdrückliches Urteil vorliegt. Sie belegt nicht, dass
+# das Modell sorgfältig gelesen hat. Das Siegel schützt gegen Abkürzen und
+# Vergessen, nicht gegen einen Leser, der vorsätzlich täuscht.
+def _sweep_umfang(snapshot, domaenen, seiten):
+    """Seiten im Umfang bestimmen. Ohne Filter ist es der ganze Bestand."""
+    pages = snapshot["pages"]
+    domaenen = sorted(set(domaenen or []))
+    seiten = sorted(set(seiten or []))
+    bekannte = {page["fm"].get("domain") for page in pages.values()}
+    fehler = [f"Unbekannte Domäne {name!r}" for name in domaenen
+              if name not in bekannte]
+    fehler += [f"Unbekannte Seite {pfad!r}" for pfad in seiten
+               if pfad not in pages]
+    if fehler:
+        return None, fehler
+    if domaenen or seiten:
+        gewaehlt = sorted(
+            pfad for pfad, page in pages.items()
+            if page["fm"].get("domain") in domaenen or pfad in seiten
+        )
+    else:
+        gewaehlt = sorted(pages)
+    belegt = [(pfad, pages[pfad]["claims"]) for pfad in gewaehlt
+              if pages[pfad]["claims"]]
+    im_umfang = sum(len(claims) for _, claims in belegt)
+    gesamt = len(snapshot["claims"])
+    return {
+        "seiten": belegt,
+        "ausgabe": {
+            "domains": domaenen,
+            "pages": seiten,
+            "pages_in_scope": len(belegt),
+            "claims_in_scope": im_umfang,
+            "claims_total": gesamt,
+            # 'complete' ist gezählt, nicht aus den Filtern geschlossen: ein
+            # Filter, der zufällig alles trifft, ist vollständig, und ein
+            # leerer Aufruf über einen leeren Bestand ebenfalls.
+            "complete": im_umfang == gesamt,
+        },
+    }, []
+
+
+def _sweep_siegel(snapshot, groesse, nummer, claim_ids):
+    """Kurzer Digest über Stand, Frage, Stapelgröße, Nummer und Inhalt.
+
+    Die Frage geht normalisiert ein, damit Anführungszeichen und Leerraum
+    zwischen zwei Aufrufen nichts verschieben. Der Manifest-Digest bindet den
+    Wortlaut jedes Claims, ohne dass er hier noch einmal gehasht wird.
+    """
+    daten = [SWEEP_SCHEMA, snapshot["manifest_digest"],
+             _retrieval_norm(snapshot["query"]), groesse, nummer,
+             list(claim_ids)]
+    return _sha256_bytes(json.dumps(
+        daten, ensure_ascii=False, separators=(",", ":"),
+    ).encode("utf-8"))[:SWEEP_SIEGEL_LAENGE]
+
+
+def _sweep_basis(query, state, snapshot=None, errors=None, warnings=None):
+    return {
+        "schema": SWEEP_SCHEMA,
+        "profile": PROFIL,
+        "state": state,
+        "query": query,
+        "vault": {
+            "version": snapshot["version"] if snapshot else None,
+            "manifest_sha256": (
+                snapshot["manifest_digest"] if snapshot else None),
+        },
+        "warnings": sorted(set(warnings or [])),
+        "errors": list(errors or []),
+    }
+
+
+def build_sweep_result(snapshot, batch=None, receipt=None,
+                       groesse=SWEEP_STANDARD_GROESSE, domaenen=None,
+                       seiten=None):
+    """Plan, einzelner Stapel oder Quittungsprüfung einer Vollsichtung."""
+    query = snapshot["query"]
+    warnings = snapshot["warnings"]
+
+    def abbruch(meldungen):
+        return _sweep_basis(query, "invalid_query", snapshot,
+                            errors=meldungen, warnings=warnings)
+
+    if not SWEEP_MIN_GROESSE <= groesse <= SWEEP_MAX_GROESSE:
+        return abbruch([
+            f"--size muss zwischen {SWEEP_MIN_GROESSE} und "
+            f"{SWEEP_MAX_GROESSE} liegen"
+        ])
+    if batch is not None and receipt is not None:
+        return abbruch(["--batch und --receipt schließen einander aus"])
+    umfang, fehler = _sweep_umfang(snapshot, domaenen, seiten)
+    if fehler:
+        return abbruch(fehler)
+    stapel = _sweep_stapel(umfang["seiten"], groesse)
+    stapel_ids = [
+        [claim["id"] for _, claims in gruppe for claim in claims]
+        for gruppe in stapel
+    ]
+    siegel = [
+        _sweep_siegel(snapshot, groesse, nummer, ids)
+        for nummer, ids in enumerate(stapel_ids, 1)
+    ]
+    kopf = {
+        "scope": umfang["ausgabe"],
+        "batch_size": groesse,
+        "batches_total": len(stapel),
+    }
+
+    if batch is None and receipt is None:
+        result = _sweep_basis(query, "plan", snapshot, warnings=warnings)
+        result.update(kopf)
+        result["batches"] = [
+            {
+                "batch": nummer,
+                "claims": len(ids),
+                "pages": len(gruppe),
+                "first_claim": ids[0],
+                "last_claim": ids[-1],
+            }
+            for nummer, (gruppe, ids) in enumerate(zip(stapel, stapel_ids), 1)
+        ]
+        return result
+
+    if batch is not None:
+        if not 1 <= batch <= len(stapel):
+            return abbruch([
+                f"--batch {batch} liegt außerhalb von 1 bis {len(stapel)}"
+            ])
+        gruppe = stapel[batch - 1]
+        result = _sweep_basis(query, "batch", snapshot, warnings=warnings)
+        result.update(kopf)
+        result["batch"] = batch
+        result["pages"] = [
+            {
+                "path": pfad,
+                "title": snapshot["pages"][pfad]["fm"].get("title"),
+                "domain": snapshot["pages"][pfad]["fm"].get("domain"),
+                "status": snapshot["pages"][pfad]["fm"].get("status"),
+                "stand": snapshot["pages"][pfad]["fm"].get("stand"),
+                "tags": list(snapshot["pages"][pfad]["fm"].get("tags", [])),
+                "claims": [
+                    {
+                        "claim_id": claim["id"],
+                        "kind": claim["art"],
+                        "source_id": claim["quelle"],
+                        "text": claim["text"],
+                    }
+                    for claim in claims
+                ],
+            }
+            for pfad, claims in gruppe
+        ]
+        result["seal"] = siegel[batch - 1]
+        return result
+
+    # ---- Quittung. Jeder Fehler ist fail-closed: ohne vollständige,
+    # stimmige Quittung gibt es weder Evidenz noch eine erlaubte Abstention.
+    urteile, meldungen = {}, []
+    for eintrag in receipt:
+        treffer = SWEEP_QUITTUNG_RE.fullmatch(eintrag)
+        if not treffer:
+            meldungen.append(
+                f"Quittungseintrag {eintrag!r} hat nicht die Form "
+                f"<stapel>:<siegel>=<C-nnnn,…|->"
+            )
+            continue
+        nummer = int(treffer.group(1))
+        gewaehlt = ([] if treffer.group(3) == "-"
+                    else treffer.group(3).split(","))
+        if nummer in urteile:
+            meldungen.append(f"Stapel {nummer} ist doppelt quittiert")
+            continue
+        if not 1 <= nummer <= len(stapel):
+            meldungen.append(
+                f"Stapel {nummer} gibt es in diesem Umfang nicht "
+                f"(1 bis {len(stapel)})"
+            )
+            continue
+        if treffer.group(2) != siegel[nummer - 1]:
+            meldungen.append(
+                f"Stapel {nummer}: Siegel gehört nicht zu diesem Stand, "
+                f"dieser Frage, dieser Stapelgröße oder diesem Umfang"
+            )
+            continue
+        fremde = sorted(set(gewaehlt) - set(stapel_ids[nummer - 1]))
+        if fremde:
+            meldungen.append(
+                f"Stapel {nummer}: {', '.join(fremde)} steht nicht in "
+                f"diesem Stapel"
+            )
+            continue
+        urteile[nummer] = sorted(set(gewaehlt))
+    fehlend = [nummer for nummer in range(1, len(stapel) + 1)
+               if nummer not in urteile]
+    gesichtet = sum(len(stapel_ids[nummer - 1]) for nummer in urteile)
+    coverage = {
+        "claims_total": umfang["ausgabe"]["claims_total"],
+        "claims_in_scope": umfang["ausgabe"]["claims_in_scope"],
+        "claims_swept": gesichtet,
+        "batches_total": len(stapel),
+        "batches_confirmed": len(urteile),
+        "scope_complete": umfang["ausgabe"]["complete"],
+        "semantic_coverage": "not_assessed",
+    }
+    if meldungen or fehlend:
+        state = "invalid_receipt" if meldungen else "sweep_incomplete"
+        result = _sweep_basis(query, state, snapshot, errors=meldungen,
+                              warnings=warnings)
+        result.update(kopf)
+        result.update({
+            "coverage": coverage,
+            "missing_batches": fehlend,
+            "selected": [],
+            "evidence": [],
+            "pages": [],
+            "abstention": {
+                "allowed": False,
+                "reason": (
+                    "Quittung ist fehlerhaft" if meldungen
+                    else "nicht jeder Stapel ist quittiert"),
+            },
+            "sweep_fingerprint": None,
+        })
+        return result
+
+    ausgewaehlt = sorted(
+        claim_id for ids in urteile.values() for claim_id in ids)
+    claim_seite = {
+        claim["id"]: (pfad, claim)
+        for pfad, claims in umfang["seiten"] for claim in claims
+    }
+    evidence = [
+        _evidence_item(snapshot, claim_seite[claim_id][0],
+                       claim_seite[claim_id][1], 0, ["sweep:selected"],
+                       role="sweep_selected")
+        for claim_id in ausgewaehlt
+    ]
+    coverage["semantic_coverage"] = "swept"
+    vollstaendig = umfang["ausgabe"]["complete"]
+    fingerprint = _sha256_bytes(json.dumps({
+        "schema": SWEEP_SCHEMA,
+        "manifest": snapshot["manifest_digest"],
+        "query": _retrieval_norm(query),
+        "batch_size": groesse,
+        "seals": siegel,
+        "selected": ausgewaehlt,
+    }, ensure_ascii=False, sort_keys=True,
+        separators=(",", ":")).encode("utf-8"))
+    result = _sweep_basis(query, "sweep_complete", snapshot,
+                          warnings=warnings)
+    result.update(kopf)
+    result.update({
+        "coverage": coverage,
+        "missing_batches": [],
+        "selected": ausgewaehlt,
+        "evidence": evidence,
+        "pages": [
+            _page_summary(snapshot, pfad, 0, ["sweep:selected"])
+            for pfad in sorted({item["page"] for item in evidence})
+        ],
+        # 'allowed' ist die mechanische Vorbedingung, kein Befund: ob die
+        # ausgewählten Claims die Frage decken, beurteilt das Modell. Ein
+        # eingeschränkter Umfang erlaubt nie ein "Nicht im Bestand", nur ein
+        # "in diesem Umfang nicht gefunden".
+        "abstention": {
+            "allowed": vollstaendig,
+            "reason": (
+                "jeder Claim des Bestands wurde vorgelegt und je Stapel "
+                "quittiert"
+                if vollstaendig else
+                "Umfang ist eingeschränkt: nur 'in diesem Umfang nicht "
+                "gefunden' ist gedeckt, nicht 'Nicht im Bestand'"),
+        },
+        "sweep_fingerprint": fingerprint,
+    })
+    return result
+
+
+def cmd_sweep(question_words, batch=None, receipt=None,
+              groesse=SWEEP_STANDARD_GROESSE, domaenen=None, seiten=None):
+    query = " ".join(question_words)
+    snapshot, error = _load_released_query_snapshot(query)
+    if error is not None:
+        # Dieselbe fail-closed-Sperre wie bei 'query': ohne grünen,
+        # manifestierten Stand wird kein einziger Claim vorgelegt.
+        _emit_query_json(_sweep_basis(
+            query, error["state"], errors=error["errors"],
+            warnings=error["warnings"],
+        ))
+        return 1
+    result = build_sweep_result(
+        snapshot, batch=batch, receipt=receipt, groesse=groesse,
+        domaenen=domaenen, seiten=seiten,
+    )
+    _emit_query_json(result)
+    if result["state"] in {"plan", "batch", "sweep_complete"}:
         return 0
     return 2
 
@@ -4670,6 +5571,15 @@ def cmd_stats():
     print(f"  Externe Bezugsquellen: {len(extern_kontext['register'])}, "
           f"Satzanker: {anker}, "
           f"Kataloge: {len(extern_kontext['orchestrators'])}")
+    # Was die Zusage "nichts übersehen" kostet, als Zahl statt als Gefühl:
+    # so viele Stapel liest das Modell bei einer Vollsichtung.
+    stapel = _sweep_stapel(
+        sorted((pfad, s["claims"]) for pfad, s in seiten.items()
+               if s["claims"]),
+        SWEEP_STANDARD_GROESSE,
+    )
+    print(f"  Vollsichtung: {len(claims)} Claims, Stapel: {len(stapel)}, "
+          f"Stapelgröße: {SWEEP_STANDARD_GROESSE}")
     for name, d in (("Domänen", dom), ("Typen", typ), ("Status", status),
                     ("Trust-Tiers", tiers)):
         print(f"  {name}: " + ", ".join(f"{k}={v}" for k, v in sorted(d.items())))
@@ -5528,6 +6438,16 @@ def main():
     # Aufruf sichtbar, dass hier bewusst live nachgeschlagen wird.
     query_parser.add_argument("--extern", action="store_true")
     query_parser.add_argument("--source", dest="quelle", action="append")
+    # Vollsichtung: ohne Schalter der Plan, mit --batch ein Stapel samt
+    # Siegel, mit --receipt die Prüfung der Quittung.
+    sweep_parser = sub.add_parser("sweep")
+    sweep_parser.add_argument("frage", nargs="+")
+    sweep_parser.add_argument("--batch", type=int)
+    sweep_parser.add_argument("--receipt", nargs="*")
+    sweep_parser.add_argument("--size", type=int,
+                              default=SWEEP_STANDARD_GROESSE)
+    sweep_parser.add_argument("--domain", dest="domaene", action="append")
+    sweep_parser.add_argument("--page", dest="seite", action="append")
     media_parser = sub.add_parser("media-template")
     media_parser.add_argument("source_id")
     extern_parser = sub.add_parser("extern")
@@ -5578,6 +6498,10 @@ def main():
             sys.exit(2)
         sys.exit(cmd_query(a.frage, world=a.world, limit=a.limit,
                            extern=a.extern, quellen_filter=a.quelle))
+    elif a.cmd == "sweep":
+        sys.exit(cmd_sweep(a.frage, batch=a.batch, receipt=a.receipt,
+                           groesse=a.size, domaenen=a.domaene,
+                           seiten=a.seite))
     elif a.cmd == "media-template":
         sys.exit(cmd_media_template(a.source_id))
     elif a.cmd == "extern":

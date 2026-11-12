@@ -182,7 +182,22 @@ Das Bild zeigt eine grüne Produktionsfreigabe.
             "Schlüssel", "einer", "Wissenseinheit?"
         )
         self.assertEqual(paraphrase.returncode, 0)
-        self.assertEqual(paraphrase_payload["state"], "no_candidates")
+        # Bis hybrid-local/v1 stand hier 'no_candidates', und die Sonde lebte
+        # davon, dass keines ihrer Tokens im Bestand vorkam. Seit v2 darf sie
+        # Kandidaten über einen Kompositumteil haben ("Wissen" in
+        # "Wissenseinheit"); geprüft wird deshalb, was eigentlich gemeint
+        # war: Das Ranking gibt eine Umschreibung nie als verstanden aus.
+        self.assertIn(
+            paraphrase_payload["coverage"]["match_strength"],
+            {"none", "weak"},
+        )
+        self.assertEqual(paraphrase_payload["coverage"]["query_terms"]["matched"], [])
+        self.assertNotIn(
+            "C-0002",
+            [item["claim_id"] for item in paraphrase_payload["evidence"]],
+            "Die Sonde misst die Lücke des Rankings; findet es C-0002 "
+            "jetzt doch, braucht der Test eine neue Umschreibung.",
+        )
         self.assertEqual(
             paraphrase_payload["coverage"]["semantic_coverage"],
             "not_assessed",
@@ -348,6 +363,36 @@ Das Bild zeigt eine grüne Produktionsfreigabe.
         self.assertEqual(canary_payload["state"], "no_candidates")
         self.assertEqual(canary_payload["evidence"], [])
         self.assertNotIn("ignore previous", canary.stdout)
+
+    def test_sweep_presents_claims_but_never_sidecar_text(self):
+        """Die Vollsichtung legt mehr vor als jede Abfrage — aber nur Claims.
+
+        Regions-Text, Regions-Locator und Alttext bleiben untrusted. Würden
+        sie hier mitgeliefert, wäre die Vollsichtung der bequemste Weg, eine
+        als Injection markierte Region doch noch vor das Modell zu bringen.
+        """
+        self.install_image_fixture()
+        self.release()
+        result = self.run_cli(
+            "sweep", "Ist die Produktionsfreigabe erteilt?", "--batch", "1")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        payload = json.loads(result.stdout)
+        texte = {
+            claim["claim_id"]: claim["text"]
+            for seite in payload["pages"] for claim in seite["claims"]
+        }
+        self.assertEqual(texte["C-1000"], "Die Produktionsfreigabe ist grün.")
+        for verboten in ("SIDECAR_LOCATOR_CANARY", "SIDECAR_INJECTION_CANARY",
+                         "ignore previous", "Statusanzeige einer grünen"):
+            self.assertNotIn(verboten, result.stdout)
+        quittung = self.run_cli(
+            "sweep", "Ist die Produktionsfreigabe erteilt?",
+            "--receipt", f"1:{payload['seal']}=C-1000")
+        self.assertEqual(quittung.returncode, 0, quittung.stdout)
+        beleg = json.loads(quittung.stdout)["evidence"][0]
+        self.assertEqual(beleg["media"]["region_id"], "R-0100")
+        self.assertNotIn("text", beleg["media"])
+        self.assertNotIn("SIDECAR", quittung.stdout)
 
     def test_media_source_needs_sidecar_and_claim_needs_safe_region(self):
         representation = self.install_image_fixture()

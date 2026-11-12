@@ -2,9 +2,9 @@
 """Prüft, ob die in README.md und index.html veröffentlichten Zahlen noch stimmen.
 
 In dieser Form ist das Wächterarbeit, die sonst niemand macht: README und
-Landingpage nennen Version, Bestandszahlen, Testzahl, Paketeinträge und den
-SHA-256 des reproduzierbaren Pakets. Alle sechs sind an echte Ausgabe
-gekoppelt, und genau solche Kopplungen veralten still.
+Landingpage nennen Version, Bestandszahlen, Testzahl, Paketeinträge, den
+SHA-256 des reproduzierbaren Pakets und die Messwerte der Suche. Alle sind an
+echte Ausgabe gekoppelt, und genau solche Kopplungen veralten still.
 
 Read-only, nur Standardbibliothek, kein Schreibzugriff auf das Repository.
 Läuft aus der Repository-Wurzel:
@@ -14,6 +14,7 @@ Läuft aus der Repository-Wurzel:
 Exit 0, wenn alles übereinstimmt, sonst 1 mit einer Liste der Abweichungen.
 """
 
+import importlib.util
 import re
 import subprocess
 import tempfile
@@ -25,9 +26,15 @@ REPOSITORY = Path(__file__).resolve().parents[1]
 SKILL = REPOSITORY / "wissenstresor"
 README = REPOSITORY / "README.md"
 LANDING = REPOSITORY / "index.html"
+RECALL_TOOL = REPOSITORY / "tools" / "recall_check.py"
+# Zeilenbeschriftung der veröffentlichten Messtabelle je Fragengruppe.
+RECALL_ZEILEN = {
+    "entwicklung": "Jetzt, eigene Fragen",
+    "kontrolle": "Jetzt, blinde Kontrolle",
+}
 
 
-def lauf(argv, cwd):
+def lauf(argv, cwd, timeout=120):
     ergebnis = subprocess.run(
         [sys.executable, "-B", *argv],
         cwd=str(cwd),
@@ -35,9 +42,31 @@ def lauf(argv, cwd):
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         check=False,
-        timeout=120,
+        timeout=timeout,
     )
     return ergebnis.returncode, ergebnis.stdout + ergebnis.stderr
+
+
+def recall_stand():
+    """Die Messwerte der Suche, mit demselben Werkzeug wie von Hand."""
+    spec = importlib.util.spec_from_file_location("skillsafe_recall", RECALL_TOOL)
+    werkzeug = importlib.util.module_from_spec(spec)
+    vorher = sys.dont_write_bytecode
+    sys.dont_write_bytecode = True
+    try:
+        spec.loader.exec_module(werkzeug)
+    finally:
+        sys.dont_write_bytecode = vorher
+    fragen, _ = werkzeug.lade_gold(werkzeug.STANDARD_GOLD, SKILL)
+    sichtung = werkzeug.sichtung_pruefen(SKILL, fragen[0]["frage"])
+    zeilen, _ = werkzeug.messe(SKILL, fragen, [], 8, sichtung["seite_von"])
+    werte = {}
+    for gruppe in RECALL_ZEILEN:
+        zahl = werkzeug.zusammenfassung(
+            [zeile for zeile in zeilen if zeile["gruppe"] == gruppe])
+        werte[gruppe] = (zahl["gesamt"], zahl["treffer"], zahl["pflicht"],
+                         zahl["hinweis"], zahl["still"])
+    return werte
 
 
 def ist_stand():
@@ -63,8 +92,10 @@ def ist_stand():
     treffer = re.search(r"verify: (\d+) Dateien", verify)
     stand["manifest"] = int(treffer.group(1)) if treffer else None
 
+    # Die Suite braucht länger als jedes einzelne Kommando; auf einem
+    # langsamen Runner lag sie schon vor der Recall-Messung nahe an 120 s.
     rc, tests = lauf(["-m", "unittest", "discover", "-s", "tests", "-t", "."],
-                     REPOSITORY)
+                     REPOSITORY, timeout=900)
     if rc != 0:
         raise SystemExit(f"Testsuite ist rot:\n{tests[-2000:]}")
     treffer = re.search(r"Ran (\d+) tests", tests)
@@ -93,6 +124,8 @@ def ist_stand():
     stand["extern"], stand["anker"], stand["kataloge"] = (
         int(wert) for wert in treffer.groups()
     )
+    for gruppe, werte in recall_stand().items():
+        stand[f"recall_{gruppe}"] = werte
     return stand
 
 
@@ -145,6 +178,29 @@ def pruefe(stand):
              "externe Bezugsquellen", stand["extern"], "README.md")
     verlange(readme, r"externe Bezugsquellen · (\d+) Satzanker", "Satzanker",
              stand["anker"], "README.md")
+
+    # Messwerte der Suche: Fragen, direkt gefunden, Pflicht-Vollsichtung, nur
+    # Hinweis, still verfehlt. Die Zeile "Vorher" steht bewusst nicht hier:
+    # sie ist ein einmaliger Messwert des abgelösten Rankings.
+    def verlange_zeile(text, muster, name, erwartet, datei):
+        gefunden = re.search(muster, text)
+        if not gefunden:
+            abweichungen.append(f"{datei}: {name} nicht gefunden (Muster {muster!r})")
+            return
+        ist = tuple(int(wert) for wert in gefunden.groups())
+        if ist != tuple(erwartet):
+            abweichungen.append(
+                f"{datei}: {name} steht auf {ist!r}, echt ist {tuple(erwartet)!r}"
+            )
+
+    zahlen = r" \| (\d+) \| (\d+) \| (\d+) \| (\d+) \| \*\*(\d+)\*\* \|"
+    zellen = "".join([r"<td>(\d+)</td>"] * 5)
+    for gruppe, beschriftung in RECALL_ZEILEN.items():
+        erwartet = stand[f"recall_{gruppe}"]
+        verlange_zeile(readme, r"\| " + re.escape(beschriftung) + zahlen,
+                       f"Messwerte {gruppe!r}", erwartet, "README.md")
+        verlange_zeile(landing, "<td>" + re.escape(beschriftung) + "</td>" + zellen,
+                       f"Messwerte {gruppe!r}", erwartet, "index.html")
     return abweichungen
 
 

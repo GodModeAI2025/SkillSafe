@@ -59,6 +59,15 @@ Ampel und Befundliste sind die Arbeitsgrundlage. Rote Befunde zuerst.
 * **Begriffswelt-Check:** Sind Aliase echte Synonyme oder nur lose
   verwandte Begriffe? Fehlt einer relevanten Seite ihre B-ID? Änderungen
   folgen `references/begriffswelten.md`; Aliastext wird nie zur Evidenz.
+* **Auffindbarkeits-Probe:** Pro Seite zwei Fragen so stellen, wie jemand
+  ohne Kenntnis der Quelle fragen würde, und `query` ausführen. Steht der
+  gemeinte Claim nicht unter den Kandidaten, ist das noch kein Befund: Die
+  Probe besteht, wenn `match_strength` dann `weak` oder `none` meldet. Ein
+  Befund ist `strong` ohne den Claim, denn dann behauptet das Ranking ein
+  Verständnis, das es nicht hat; fast immer steckt ein zu weit gefasster
+  Alias oder Tag dahinter. Fehlt für die Wortwahl der Frage schlicht ein
+  Synonym, ist das ein Alias-Kandidat. Die Probefragen werden nirgends im
+  Tresor abgelegt.
 * **Medien-Check:** Ist jede freigegebene Repräsentation durch mindestens
   einen Claim genutzt, jede Claim-Region weiterhin korrekt lokalisiert und
   jede verdächtige Instruktion markiert? Inhaltliche Änderungen laufen über

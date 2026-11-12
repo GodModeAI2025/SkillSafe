@@ -28,7 +28,9 @@ das WSL; ohne sie bricht `release` fail-closed ab, statt unsicher zu schreiben.
 `tests/test_packaged_vault.py` ruft `doctor`, und `doctor` wird bei jeder
 geänderten manifestierten Datei rot. Gemessen: eine einzige angehängte
 Kommentarzeile in `vault.py` ergibt `2 failed, 66 passed`. Nach `checksum`
-wieder `68 passed`.
+wieder `68 passed`. Seit v0.12.0 misst auch die Klasse `RecallGateTests` in
+`tests/test_vault_recall.py` den eingecheckten Skill; sie scheitert in
+demselben Fenster schon beim Aufbau, weil `query` dann `invalid_vault` liefert.
 
 Wer das nicht weiß, hält ein intaktes Projekt für kaputt und sucht an der
 falschen Stelle.
@@ -68,7 +70,8 @@ cd wissenstresor && python3 scripts/vault.py doctor && python3 scripts/vault.py 
 
 # 5. Paket bauen und veröffentlichte Zahlen nachziehen
 cd .. && python3 tools/build_skill_package.py
-#    README.md und index.html anpassen, dann:
+#    README.md und index.html anpassen (Version, Testzahl, Paket-SHA; nach
+#    einer Änderung am Ranking auch die Messtabelle der Suche), dann:
 python3 tools/check_docs.py
 
 # 6. Alles gemeinsam committen
@@ -76,10 +79,10 @@ git add -A && git commit
 ```
 
 Schritt 5 ist der, den man vergisst. `tools/check_docs.py` fängt das ab: es
-zieht Version, Seiten, Claims, Quellen, manifestierte Dateien, Paketeinträge
-und Paket-SHA aus der echten Ausgabe und vergleicht sie mit `README.md` und
-`index.html`. Es schreibt nichts und baut das Prüfpaket in ein
-Temporärverzeichnis.
+zieht Version, Seiten, Claims, Quellen, manifestierte Dateien, Paketeinträge,
+Paket-SHA und die Messwerte der Suche aus der echten Ausgabe und vergleicht
+sie mit `README.md` und `index.html`. Es schreibt nichts und baut das
+Prüfpaket in ein Temporärverzeichnis.
 
 **Stufenwahl:** `patch` bei Korrekturen, `minor` bei neuem Wissen oder einer
 additiven Profiländerung, `major` erst, wenn ein vorhandener Bestand ohne
@@ -174,7 +177,76 @@ zeitgesteuerte Workflows nach 60 Tagen ohne Repository-Aktivität ab.** Wer das
 Projekt übernimmt und länger nichts committet, muss den Lauf über
 `Actions → gates → Enable workflow` wieder anschalten.
 
+## Auffindbarkeit messen
+
+Ob die Suche findet, was im Bestand steht, ist eine Messfrage und keine
+Überzeugung. Das Werkzeug dafür liegt außerhalb des Skills:
+
+```bash
+python3 tools/recall_check.py            # Demo-Bestand, mit Zeile je Frage
+python3 tools/recall_check.py --kurz     # nur die Zusammenfassung
+python3 tools/recall_check.py --vault <tresor> --gold <gold.json> --min-recall 30
+```
+
+Es stellt jede Frage aus dem Gold einmal an `query` und ordnet den Ausgang ein:
+
+| Ausgang | Heißt | Gate |
+|---|---|---|
+| gefunden | der erwartete Claim steht unter den ersten acht Kandidaten | Gütezahl, Untergrenze über `--min-recall` |
+| verfehlt, Vollsichtung Pflicht | Claim fehlt, `match_strength` ist `weak` oder `none` | keins: das Ergebnis gibt die Lücke zu |
+| verfehlt, mit Hinweis | Claim fehlt bei `partial`; die unverstandenen Wörter sind benannt | optional über `--max-hinweis` |
+| verfehlt, still | Claim fehlt bei `strong` | **hart, immer null** |
+
+Dazu drei Wächter ohne Bezug zur Güte: Die Vollsichtung muss jeden Claim genau
+einmal vorlegen, das Gold darf nicht im Skill-Ordner liegen, und keine
+Goldfrage darf wörtlich im Bestand stehen.
+
+**Die zwei Gruppen im Demo-Gold.** `tests/gold/recall-demo.json` führt 28
+Fragen der Gruppe `entwicklung` und 56 der Gruppe `kontrolle`. An der ersten
+wurden Funktionswortliste und Schwellen eingestellt; ihre 67 Prozent sind
+deshalb geschönt. Die zweite schrieb ein Agent, der nur die Claim-Texte kannte.
+Ihre Zahl ist die ehrliche, und sie ist es nur so lange, wie niemand an ihr
+dreht. Die Untergrenzen beider Gruppen stehen als `MIN_RECALL` in
+`tests/test_vault_recall.py`.
+
+**Wer am Ranking dreht** — Gewichte, Funktionswörter, Wortform-Regeln,
+Schwellen der Trefferstärke —, hebt die Profilnummer (`hybrid-local/v3`),
+misst neu und zieht die Messtabelle in `README.md` und `index.html` nach;
+`check_docs.py` vergleicht beide mit der echten Ausgabe. Wer dabei die Gruppe
+`kontrolle` zum Einstellen benutzt, hat sie verbraucht. Dann braucht es einen
+neuen Kontrollsatz, wieder von jemandem, der weder die Engine noch die alten
+Fragen gesehen hat. Genau so ist am 12. November 2026 der Fehler in der
+Nachrück-Regel gefunden worden, den die eigenen Fragen nicht zeigten.
+
+**Eine Verfehlung beheben.** Liefert eine naheliegende Frage `weak` oder
+`none`, ist das zunächst richtig: Die Vollsichtung findet den Claim. Lohnt
+sich der direkte Treffer, bekommt der Bestand ein Wort in der Sprache der
+Fragenden, als Alias einer Begriffswelt oder als Tag der Seite, und danach ein
+Release. Nie wird die Frage selbst eingetragen. Der Wächter fände sie, und die
+Messung wäre wertlos. Beugungsformen brauchen keinen Alias, die gleicht
+`wortform/v1` ab.
+
+**Fragen schreiben.** So, wie jemand ohne Kenntnis der Quelle fragen würde,
+mit anderen Wörtern als der Claim. Zu jeder Frage die Claims, die sie
+beantworten. Dazu Negativfragen, die zum Bestand passen und von keinem Claim
+gedeckt sind; ohne sie misst man nur, wie gern ein System antwortet.
+
+**Was die Messung nicht sagt.** Sie misst das Ranking, nicht die Antwort. Ob
+das Modell in der Vollsichtung den richtigen Claim auswählt, ist Urteil und
+steht in keiner dieser Zahlen. Und 84 Fragen gegen 28 Claims sind eine kleine,
+selbst gebaute Stichprobe.
+
 ## Störfälle
+
+**`recall_check.py` ist rot.** Die Meldung nennt das Gate. *Stille
+Verfehlung:* Das Ranking hält eine Frage für verstanden und liefert den Claim
+trotzdem nicht. Mit der Zeile der Frage `query` von Hand ausführen und die
+Gründe der Kandidaten lesen; fast immer trägt ein zu weit gefasster Alias oder
+Tag den falschen Anker. *Unter der Untergrenze:* Vergleichen, welche Fragen
+gegenüber dem letzten grünen Stand kippen; meist hat ein Release Tags oder
+Aliase entfernt. *Leck:* Eine Goldfrage steht wörtlich im Skill-Ordner, die
+Meldung nennt die Datei. *Claim wird nicht vorgelegt:* Das Gold nennt eine
+C-ID, die es im Bestand nicht mehr gibt.
 
 **`.vault-release.lock` liegt herum.** Der Lock bleibt nur bei einem
 unvollständigen Rollback liegen; ein gewöhnlicher Abbruch räumt ihn selbst weg.
@@ -267,14 +339,21 @@ Registerzeilen durchsehen.
 
 ## Fallen im Bestand
 
-**Fünf Tabu-Tokens.** `tests/test_vault_retrieval.py` prüft mit der
+**Fünf Sonden-Tokens.** `tests/test_vault_retrieval.py` prüft mit der
 Paraphrasenfrage „Welche Adresse fungiert als dauerhafter Schlüssel einer
-Wissenseinheit?", dass `query` bei fehlender Deckung `no_candidates` liefert.
-Die Sonde lebt davon, dass keines ihrer Tokens im Bestand vorkommt. Wirksam
-sind `adresse`, `fungiert`, `dauerhafter`, `schluessel`, `wissenseinheit`. Sie
-dürfen in keinem Claim-Text, keinem Seitentitel, keinem Tag und in keinem
-`preferred` oder `aliases` einer Begriffswelt stehen. Auf Deutsch heißt das
-etwa „Pflichtfeld" statt „Pflichtschlüssel".
+Wissenseinheit?", dass das Ranking eine Umschreibung nie als verstanden
+ausgibt, und `tests/test_vault_recall.py` führt dieselbe Frage per
+Vollsichtung zu C-0002. Bis v0.11.11 lebte die Sonde davon, dass keines ihrer
+Tokens im Bestand vorkam, und verlangte `no_candidates`. Seit `hybrid-local/v2`
+darf sie Kandidaten über einen Wortteil haben („Wissen" in „Wissenseinheit");
+verlangt wird, dass kein Fragebegriff exakt oder als Wortform trifft und die
+Trefferstärke `weak` oder `none` bleibt. Die Regel ist damit weiter, aber nicht
+weg: `adresse`, `fungiert`, `dauerhafter`, `schluessel` und `wissenseinheit`
+dürfen samt ihren Beugungsformen in keinem Claim-Text, keinem Seitentitel,
+keinem Tag und in keinem `preferred` oder `aliases` einer Begriffswelt stehen.
+Auf Deutsch heißt das etwa „Pflichtfeld" statt „Pflichtschlüssel". Und findet
+das Ranking C-0002 eines Tages doch direkt, braucht der Test eine neue
+Umschreibung, keinen gelockerten Vergleich.
 
 **Fixture-Anker.** Zwei Zeilen in `knowledge/demo-okf/okf.md` sind
 Testfixtures: die `concepts`-Zeile und die `formalisiert`-Relation. Mehrere
@@ -306,6 +385,12 @@ Zwei Dinge, die dort noch nicht stehen:
 
 Die neue Instanz bekommt `tests/` und `tools/` nicht mit, wenn nur der
 Skill-Ordner kopiert wird. Wer dort weiterentwickelt, kopiert beides mit.
+
+Das Gold in `tests/gold/recall-demo.json` gehört zum Demo-Bestand und ist mit
+ihm zu ersetzen: Seine Fragen zeigen auf Claims, die es im neuen Tresor nicht
+gibt, und `recall_check.py` meldet dann, dass die Vollsichtung sie nie vorlegt.
+Eigene Fragen schreiben, Untergrenzen in `MIN_RECALL` neu setzen; Vorgehen
+siehe „Auffindbarkeit messen".
 
 ## Host-Smoke-Test
 

@@ -264,11 +264,12 @@ Mögliche Zustände sind:
 
 * `candidates_found` — mindestens ein kuratierter Claim ist
   Retrieval-Kandidat; semantische Voll- oder Teildeckung wird anschließend
-  anhand der Claims beurteilt, nicht vom Ranking behauptet;
+  anhand der Claims beurteilt, nicht vom Ranking behauptet. Wie belastbar die
+  Kandidaten sind, sagt `coverage.match_strength` (siehe „Trefferstärke");
 * `no_candidates` — das deterministische Ranking fand keinen Kandidaten,
   Evidenz bleibt leer und `semantic_coverage` bleibt `not_assessed`;
-  `fallback.page_paths` nennt den Umfang einer nötigen semantischen
-  Vollprüfung;
+  die Vollsichtung ist Pflicht. `fallback.sweep` nennt ihren Aufwand,
+  `fallback.page_paths` weiterhin den Seitenumfang des Bestands;
   `fallback.external_lookup_available` sagt zusätzlich, ob überhaupt externe
   Bezugsquellen aufgeführt sind — das Feld steht auch ohne `--extern`, weil
   der Antwort-Workflow daran erkennt, ob nach der lokalen Vollprüfung noch
@@ -287,11 +288,12 @@ kein Negativbefund.
 * `invalid_query`, `invalid_vault`, `vault_busy`, `snapshot_changed` —
   fail-closed, immer ohne Evidenz.
 
-Das Ranking `hybrid-local/v1` verwendet ausschließlich Ganzzahlen:
-kontrollierte Begriffe/Aliase, lexikalische Token-Treffer und höchstens einen
-Graph-Hop. `retrieval_complete` bedeutet nur, dass dieser Ranking-Scan alle
-validierten Claims gesehen hat; es ist kein semantischer Vollständigkeits-
-beweis.
+Das Ranking `hybrid-local/v2` verwendet ausschließlich Ganzzahlen:
+kontrollierte Begriffe/Aliase, lexikalische Token-Treffer, Wortformen nach
+`wortform/v1` und höchstens einen Graph-Hop. `retrieval_complete` bedeutet
+nur, dass dieser Ranking-Scan alle validierten Claims gesehen hat; es ist
+kein semantischer Vollständigkeitsbeweis. Den liefert allein die
+Vollsichtung, und auch sie nur in dem Sinn, der unter „Vollsichtung" steht.
 
 Keine Embeddings, niemals. Auf dem **Default-Query-Pfad** verlässt außerdem
 kein Byte den Skill-Ordner: kein Netzwerk, kein Dateizugriff nach außen, kein
@@ -300,6 +302,180 @@ Bezugsquellen — dann live, gekennzeichnet und in einem eigenen Block. Im
 **manifestierten Bestand** gibt es weiterhin keinen Cache; der TTL-Abzug einer
 Netzquelle liegt außerhalb des Skill-Ordners im Nutzer-Cache-Verzeichnis und
 meldet sein Alter in jeder Ausgabe.
+
+### Wortform `wortform/v1`
+
+Ein Fragebegriff trifft einen Bestandsbegriff auf einer von drei Stufen. Die
+Stufe steht als Grund am Treffer und trägt ein eigenes Gewicht:
+
+| Stufe | Grund | Trifft | Claim | Kontext der Seite | Seite: Titel / Tag / Claim |
+|---|---|---|---|---|---|
+| exakt | `token:` | dasselbe Token | 20 | 10 | 30 / 24 / 12 |
+| Wortform | `stem:` | dieselbe Wortform-Familie | 16 | 8 | 24 / 20 / 10 |
+| Kompositum | `compound:` | Kopf oder Schwanz eines zusammengesetzten Worts | 12 | 6 | 12 / 10 / 5 |
+
+„Kontext der Seite" bekommt ein Claim, wenn Titel oder Tags seiner Seite den
+Begriff tragen und er selbst nicht (`page-token:`, `page-stem:`,
+`page-compound:`). Die Staffel hält eine Ordnung fest: ein Claim mit eigenem
+Treffer steht immer vor einem, der den Begriff nur von seiner Seite erbt, und
+beide vor dem reinen Graph-Nachbarn (5).
+
+Die Wortform-Familie wird aus dem normalisierten Token gebildet: Umlaut-
+Digraphen falten (`ae`→`a`, `oe`→`o`, `ue`→`u`), dann höchstens dreimal die
+erste passende Endung aus `en`, `em`, `er`, `es`, `e`, `n`, `s` entfernen,
+dann einmal `-ung` und danach erneut die Endungen. Der Reststamm behält
+mindestens drei Zeichen, bei `-er`, `-em` und `-ung` vier; ein `-s` fällt nur
+nach `b c d f g h k l m n p r t v w`, damit „Prozess" und „Status" ganz
+bleiben. Tokens unter vier Zeichen und Tokens mit Ziffern bleiben
+unverändert. So finden „Wände" und „Wand",
+„Vertrauensstufen" und „Vertrauensstufe", „Prüfungen" und „prüfen"
+zueinander.
+
+Ein Kompositumteil zählt nur am Wortanfang oder Wortende, und beide Seiten
+der Nahtstelle brauchen mindestens vier Zeichen. „Miete" findet
+„Mietminderung", „Nachweis" den „Herkunftsnachweis"; „himmel" findet nie
+„schimmel", weil der Rest „sc" kein Wortteil ist. Ein Wörterbuch gibt es
+nicht, deshalb bleibt die Stufe schwach und zählt nie als verstandener
+Begriff.
+
+**Nicht geleistet**, und zwar mit Absicht: Partizipien („geprüft"), finite
+Verbformen auf `-t` („bestätigt"), unregelmäßige Formen („gilt"/„gelten"),
+`-heit`, `-keit`, `-lich`. Und vor allem keine Bedeutung: „nasse Wände" findet
+auf keiner Stufe den „Schimmelbefall". Was hier nicht trifft, steht als
+`unmatched` im Ergebnis.
+
+Funktionswörter (Artikel, Pronomen, Präpositionen, Konjunktionen, Hilfs- und
+Modalverben, Partikeln) zählen im lokalen Ranking nicht als Fragebegriff. Die
+Liste ist eine eigene und lässt die ältere Stoppwortliste unberührt, an der
+`extern-zweistufig/v1` und die nachrechenbaren Katalogzahlen hängen.
+Homographen wie „Macht"/„macht" gelten als Funktionswort; als kuratierte
+Benennung einer Begriffswelt bleiben sie exakt auffindbar, weil Begriffe
+gegen die ungefilterte Frage abgeglichen werden.
+
+Begriffe einer Begriffswelt werden zuerst exakt, sonst über die Wortform
+ihrer Benennung getroffen (`concepts.matched[].match` ist `exact`,
+`wortform` oder `id`). Die exakte Stufe hat Vorrang: Ist eine Phrase exakt
+getroffen, zieht ihre Wortform keinen zweiten Begriff herein. Treffen zwei
+Welten nur über die Wortform, ist die Frage `ambiguous`; innerhalb einer
+Welt gelten beide Begriffe als getroffen. Der `definition_claim` eines direkt
+getroffenen Begriffs bekommt 40 Punkte (`concept-definition:B-nnnn`). Trägt
+eine einwortige Benennung einen Fragebegriff nur als Kompositumteil, steht der
+Begriff in `concepts.partial`: ein Fingerzeig mit 40 Punkten für die Seite
+und 30 für ihre Claims, ohne Begriffserweiterung und nie ein Anker.
+
+### Trefferstärke
+
+Das Ranking gibt an, wie viel der Frage es erkannt hat. Gerechnet wird nur
+über das, was es tatsächlich ausgibt:
+
+* `coverage.query_terms.content` — die Fragebegriffe: Inhaltstokens ohne
+  Funktionswörter und ohne die Ziffern genannter IDs;
+* `.matched` — exakt oder als Wortform getroffen, in einem **ausgegebenen**
+  Claim, in Titel oder Tags seiner Seite, oder als Teil einer getroffenen
+  Benennung;
+* `.partial` — nur als Kompositumteil getroffen;
+* `.unmatched` — nirgends getroffen. Ein Begriff, den nur ein gekürzter
+  Kandidat trägt, steht hier: das Modell hat ihn nicht gesehen;
+* `coverage.term_coverage_percent` — Anteil von `matched` an `content`,
+  ganzzahlig abgerundet; ohne Fragebegriff 100 mit Anker, sonst 0.
+
+Ein **Anker** ist ein direkt getroffener Begriff, eine genannte C- oder
+S-ID, oder die ganze Frage als Phrase in einem Claim.
+
+| `coverage.match_strength` | Bedingung |
+|---|---|
+| `none` | kein Kandidat |
+| `strong` | Abdeckung 100 % |
+| `partial` | ein Anker, oder mindestens zwei getroffene Begriffe bei mindestens 60 % |
+| `weak` | alles andere |
+
+`fallback.exhaustive_review_required` ist genau bei `weak` und `none` wahr,
+`fallback.reason` dann `weak_candidates_only` oder
+`no_retrieval_candidates`. Der Top-Level-`state` bleibt davon unberührt und
+eingefroren.
+
+`strong` heißt: das Ranking hat jedes Wort der Frage wiedererkannt. Es heißt
+nicht, dass die Kandidaten die Frage beantworten, und es erlaubt nie ein
+„Nicht im Bestand". Auch eine Frage nach etwas, das der Bestand nicht enthält,
+kann `strong` sein, wenn sie nur bekannte Wörter benutzt.
+
+`coverage.candidates` zählt `total`, `returned`, `omitted_direct` und
+`omitted_context`. Direkt ist ein Kandidat, der den Treffer selbst trägt
+(eigener Begriffstreffer, ID, Phrase, Definition); Kontext ist, wer nur über
+seine Seite hereinkam. `coverage.omitted_pages` nennt bis zu 20 Seiten, deren
+direkte Kandidaten dem Limit zum Opfer fielen und die nicht unter `pages`
+stehen.
+
+**Kontext weicht, Treffer nie.** Trägt die Auswahl einen Fragebegriff nicht,
+rückt der beste gekürzte Kandidat nach, der ihn selbst trägt, und verdrängt
+den rangniedrigsten reinen Kontext-Kandidaten, dessen Seite auch ohne ihn
+vertreten bleibt. Ein Kandidat mit eigenem Treffer wird nie verdrängt. Gibt es
+keinen Kontext zum Weichen, bleibt die Rangfolge stehen und die Kürzung wird
+gemeldet.
+
+## Vollsichtung (`sweep`)
+
+Schema `skillsafe.sweep/v1`. Die Vollsichtung ist die Bedeutungssuche des
+Tresors: Sie legt jeden Claim eines Umfangs vor, das Modell liest und urteilt,
+und das Script prüft, dass keiner ausgelassen wurde. Vor jeder Ausgabe gilt
+dieselbe Sperre wie bei `query`: Validierung, Index, Graph, Quarantäne und
+Manifest müssen grün sein.
+
+```text
+vault.py sweep "<frage>" [--size n] [--domain d]… [--page p]…
+vault.py sweep "<frage>" … --batch <n>
+vault.py sweep "<frage>" … --receipt <stapel>:<siegel>=<C-nnnn,…|-> …
+```
+
+* **Plan** (ohne Schalter): `state: plan`, der Umfang in `scope` und je
+  Stapel Nummer, Claim- und Seitenzahl. Der Plan nennt kein Siegel.
+* **Stapel** (`--batch`): `state: batch`, die Seiten des Stapels mit Titel,
+  Domäne, Status, Stand, Tags und je Claim `claim_id`, `kind`, `source_id`
+  und `text`, dazu `seal`. Ausgegeben werden ausschließlich kuratierte
+  Claims; Regions-Text, Anker-Text und Alttext bleiben untrusted und
+  erscheinen nie.
+* **Quittung** (`--receipt`): je Stapel genau ein Eintrag mit Siegel und
+  Urteil, entweder den IDs der relevanten Claims dieses Stapels oder `-`.
+
+Stapel entstehen deterministisch: Seiten nach Pfad sortiert, eine Seite wird
+nie zerschnitten, ein Stapel schließt, sobald die nächste Seite die Größe
+überschritte. `--size` liegt zwischen 5 und 200, Standard ist 40. `--domain`
+und `--page` schränken den Umfang ein; `scope.complete` ist gezählt und nur
+wahr, wenn jeder Claim des Bestands im Umfang liegt.
+
+Das **Siegel** sind die ersten 16 Hexzeichen des SHA-256 über Schema,
+Manifest-Digest, normalisierte Frage, Stapelgröße, Stapelnummer und die
+Claim-IDs des Stapels. Es bindet damit Stand, Frage und Zuschnitt. Ein neuer
+Release, ein anderes Wort in der Frage oder eine andere Stapelgröße machen es
+ungültig; Groß-/Kleinschreibung und Satzzeichen der Frage nicht.
+
+Zustände der Quittungsprüfung:
+
+* `sweep_complete` — jeder Stapel des Umfangs trägt ein gültiges Siegel und
+  ein Urteil. `evidence` enthält die ausgewählten Claims in derselben Form
+  wie bei `query`, mit Rolle `sweep_selected`; `pages` ihre Seiten;
+  `coverage.semantic_coverage` ist `swept`; `sweep_fingerprint` fasst Stand,
+  Frage, Siegel und Auswahl zusammen;
+* `sweep_incomplete` — Stapel fehlen, `missing_batches` nennt sie;
+* `invalid_receipt` — falsches Siegel, doppelter oder unbekannter Stapel,
+  Claim aus einem anderen Stapel, kaputte Form;
+* `invalid_query` — unbekannte Domäne oder Seite, Größe oder Stapelnummer
+  außerhalb des Zulässigen. Ausdrücklich kein Negativbefund.
+
+Außer bei `sweep_complete` bleiben `evidence` und `selected` leer.
+
+`abstention.allowed` ist die mechanische Vorbedingung für „Nicht im
+Bestand": wahr nur bei `sweep_complete` **und** `scope.complete`. Ein
+eingeschränkter Umfang erlaubt höchstens „in diesem Umfang nicht gefunden".
+Ob die ausgewählten Claims die Frage decken, beurteilt das Modell; das Feld
+ist eine Erlaubnis, kein Befund.
+
+**Was die Quittung belegt und was nicht.** Sie belegt, dass jeder Stapel für
+genau diesen Stand und genau diese Frage ausgegeben wurde und dass zu jedem
+ein ausdrückliches Urteil vorliegt. Sie belegt nicht, dass sorgfältig gelesen
+wurde. Das Siegel schützt gegen Abkürzen und Vergessen, nicht gegen einen
+Leser, der vorsätzlich täuscht: Wer die Stapelausgabe in eine Datei umleitet
+und nur das Siegel herauszieht, hält eine gültige Quittung über nichts.
 
 ## Externe Bezugsquellen (`sources/EXTERN.md`)
 

@@ -11,6 +11,11 @@ Arbeitsweise: kontrollierte Begriffswelten, lexikalisches Ranking, ein
 Graph-Hop und danach ausschließlich belegte Claims. Bilder, Scans und PDFs
 werden über geprüfte Regionen an diese Claims gebunden.
 
+Was anders heißt als im Bestand, findet kein Ranking. Dafür gibt es die
+**Vollsichtung**: Das Modell liest jeden Claim und urteilt nach Bedeutung,
+das Script weist nach, dass keiner gefehlt hat — siehe
+[Bedeutungssuche](#bedeutungssuche-finden-was-anders-heißt).
+
 Fremdes Material, das anderswo weitergepflegt wird, muss dafür nicht
 einwandern: Es wird **satzweise** über Anker belegt und im Fallback live
 nachgeschlagen — siehe [Externe Quellen satzweise referenzieren](#externe-quellen-satzweise-referenzieren).
@@ -24,7 +29,7 @@ geschützte `dir_fd`-Operationen fail-closed ab.
 📖 **Konzept & Architekturentscheidungen:** [`wissenstresor/KONZEPT.md`](wissenstresor/KONZEPT.md)
 🌐 **Landingpage:** [`index.html`](index.html) (GitHub-Pages-fähig, Source = repo root)
 
-**Aktueller Release: v0.11.11** (Profil `oksv-lite/1.3`) mit Begriffswelten,
+**Aktueller Release: v0.12.0** (Profil `oksv-lite/1.3`) mit Begriffswelten,
 deterministischem Hybrid-Retrieval, geprüften Bild-/PDF-Regionen und einem
 reproduzierbaren `.skill`-Paket für Claude Code und Codex. Der
 Frontmatter-Parser lehnt Verschachtelung fail-closed ab statt sie still
@@ -54,9 +59,20 @@ liest der Tresor ausschließlich Ziele, die namentlich in
 `sources/EXTERN.md` stehen, und protokolliert jeden Abruf. Erreicht wird nie
 etwas, das dort nicht aufgeführt ist.
 
-Abnahme: 99 Tests bestanden · 37 manifestierte Dateien · 39 sichere
+Neu in v0.12.0 ist die **Bedeutungssuche ohne Bedeutungsindex**. Das Ranking
+(`hybrid-local/v2`) kennt Wortformen und sagt bei jeder Abfrage, welche
+Wörter der Frage es nicht erkannt hat. Hat es zu wenig erkannt, legt `sweep`
+dem Modell jeden Claim vor und prüft die Quittung; „Nicht im Bestand" gibt es
+nur noch mit vollständiger Quittung. Für bestehende Nutzung ändert sich
+zweierlei, und beides soll hier stehen statt im Kleingedruckten: Eine Frage,
+die nur über ein Hilfsverb oder einen Wortteil trifft, liefert weiterhin
+`candidates_found`, verlangt aber über `fallback.exhaustive_review_required`
+die Vollsichtung. Und Fingerabdrücke aus `hybrid-local/v1` gelten nicht mehr,
+weil das Ranking ein anderes ist.
+
+Abnahme: 130 Tests bestanden · 37 manifestierte Dateien · 39 sichere
 Paketeinträge · SHA-256
-`cb758138d50106ed1b9a6dca459a25d86e46a20d0c18db55e1f2c3a002f846f1`.
+`449669f9a19a080d9e19d9a87d3841db0f0738870cc5d75994d50ae64f9e057e`.
 Dazu 2 aufgeführte externe Bezugsquellen · 2 Satzanker.
 
 Alles läuft mit der Python-Standardbibliothek, gemessen mit CPython 3.9.6 und
@@ -67,6 +83,7 @@ aus der Repository-Wurzel:
 python3 -m unittest discover -s tests -t .
 cd wissenstresor && python3 scripts/vault.py doctor
 cd .. && python3 tools/build_skill_package.py && python3 tools/check_docs.py
+python3 tools/recall_check.py --kurz
 ```
 
 Wie man am Projekt arbeitet, freigibt und Störfälle behebt, steht in
@@ -82,10 +99,124 @@ manifestierten Release, löst Fachbegriffe und Synonyme über
 `schema/begriffswelten.json` auf, rankt mit festen Ganzzahlgewichten und
 erweitert höchstens einen Graph-Hop. Natürliche Retrieval-Einheiten sind
 Claims und Seiten statt willkürlicher Chunks. Das erhält Determinismus,
-Vertraulichkeit und Fundstellen. Ein `no_candidates` bedeutet bewusst nur:
-Das Ranking fand nichts; erst die semantische Prüfung der angegebenen
-Fallback-Seiten darf „Nicht im Bestand" begründen.
-Details: [`KONZEPT.md`, AD-01](wissenstresor/KONZEPT.md).
+Vertraulichkeit und Fundstellen. Das Ranking erkennt Wörter, Wortformen und
+kuratierte Begriffe, keine Bedeutung, und es sagt bei jeder Abfrage, wie viel
+der Frage es damit erkannt hat. „Nicht im Bestand" begründet erst die Quittung
+einer Vollsichtung.
+Details: [`KONZEPT.md`, AD-01 und AD-14](wissenstresor/KONZEPT.md).
+
+## Bedeutungssuche: finden, was anders heißt
+
+Wer fragt, benutzt selten die Wörter der Quelle. „Nasse Wände" steht in keinem
+Claim, „Schimmelbefall" schon. Üblich wäre dafür ein Bedeutungsindex aus
+Embeddings. SkillSafe geht anders vor, weil in einem Skill der Leser mit
+Sprachverständnis ohnehin anwesend ist: das Modell. Es liest die Claims
+selbst. Das Script sorgt dafür, dass es alle liest, und weist das nach.
+
+### Drei Bausteine
+
+1. **Das Ranking sagt, was es versteht.** Jede Abfrage trägt
+   `coverage.match_strength` (`strong`, `partial`, `weak`, `none`) und nennt
+   unter `coverage.query_terms.unmatched` die Wörter der Frage, die sie nicht
+   erkannt hat. Schneidet das Limit Treffer ab, steht das in
+   `coverage.candidates.omitted_direct` und `coverage.omitted_pages`.
+2. **Wortformen sind keine Bedeutungsfrage.** „Wände" findet „Wand",
+   „Prüfungen" findet „prüfen", „Miete" findet „Mietminderung" — nachrechenbar
+   und mit eigenem Grund am Treffer (`stem:`, `compound:`). „himmel" findet
+   weiterhin kein „schimmel".
+3. **Die Vollsichtung ist die Bedeutungssuche.** `sweep` legt jeden Claim in
+   festen Stapeln vor, das Modell urteilt je Stapel, und das Script prüft per
+   Siegel und Quittung, dass kein Stapel fehlt. Bei `weak` und `none` ist sie
+   Pflicht, und ohne vollständige Quittung gibt es kein „Nicht im Bestand".
+
+### Anleitung
+
+```bash
+cd wissenstresor
+
+# 1. Abfragen und die Trefferstärke lesen
+python3 scripts/vault.py query "Kann ich bei nassen Wänden die Miete kürzen?"
+# coverage.match_strength = weak
+# coverage.query_terms.unmatched = [kuerzen, nassen, waenden]
+# fallback.exhaustive_review_required = true
+
+# 2. Plan der Vollsichtung: wie viele Stapel
+python3 scripts/vault.py sweep "Kann ich bei nassen Wänden die Miete kürzen?"
+
+# 3. Jeden Stapel lesen und sein Siegel notieren
+python3 scripts/vault.py sweep "Kann ich bei nassen Wänden die Miete kürzen?" --batch 1
+
+# 4. Quittung: je Stapel das Siegel und die relevanten Claims, sonst "-"
+python3 scripts/vault.py sweep "Kann ich bei nassen Wänden die Miete kürzen?" \
+  --receipt "1:<siegel>=C-0401,C-0402"
+# state = sweep_complete · abstention.allowed = true
+```
+
+Die Schritte 2 bis 4 führt im Betrieb das Modell aus; der Antworten-Workflow
+schreibt sie vor. Große Bestände lassen sich mit `--domain` und `--page`
+eingrenzen. Dann quittiert die Sichtung nur ihren Umfang, und statt „Nicht im
+Bestand" ist nur „in diesem Umfang nicht gefunden" gedeckt.
+
+### Gemessen, nicht behauptet
+
+Zuerst der Ausgangsbefund. 28 umformulierte Fragen gegen den Demo-Bestand:
+15 gefunden, 13 verfehlt, und zehn dieser dreizehn Verfehlungen blieben still.
+Die Abfrage meldete Kandidaten, weil ein Hilfsverb wie „darf" zufällig
+irgendeinen Claim traf, und genau das schaltete die Vollprüfung ab, die die
+Frage gebraucht hätte.
+
+| Fragensatz | Fragen | direkt | Pflicht | Hinweis | still |
+|---|---|---|---|---|---|
+| Vorher (`hybrid-local/v1`), eigene Fragen | 28 | 15 | 3 | – | **10** |
+| Jetzt, eigene Fragen | 28 | 19 | 9 | 0 | **0** |
+| Jetzt, blinde Kontrolle | 56 | 18 | 37 | 1 | **0** |
+
+*direkt:* das Ranking liefert den Claim unter den ersten acht Kandidaten ·
+*Pflicht:* verfehlt, und die Vollsichtung ist vorgeschrieben · *Hinweis:*
+verfehlt, die unverstandenen Wörter sind benannt · *still:* verfehlt, ohne dass
+das Ergebnis es zugibt.
+
+Die mittlere Zeile ist geschönt, denn an diesen Fragen wurde eingestellt. Die
+untere ist die ehrliche: 56 Fragen von einem zweiten Agenten, der nur die
+Claims kannte und ihren Wortlaut mit Absicht mied. Das Ranking allein findet
+dort ein Drittel. Es ist eine Abkürzung für Fragen in der Sprache des
+Bestands; Bedeutung findet erst das Lesen. Entscheidend ist die rechte Spalte:
+Keine Verfehlung bleibt still, und die Vollsichtung legt in jedem Fall alle
+28 Claims vor.
+
+Die Kontrolle fand beim ersten Durchlauf außerdem einen Fehler in einer frisch
+gebauten Regel, den die eigenen Fragen nicht zeigten: Füllwörter verdrängten
+einen richtigen Treffer aus der Auswahl. Damals standen 17 statt 18 in der
+Zeile; seit der Korrektur ist sie nicht mehr blind gemessen. Die Zeile
+„Vorher" ist ein einmaliger Messwert vom 12. November 2026 und nicht mehr
+nachrechenbar, weil es das alte Ranking nicht mehr gibt.
+
+### Den eigenen Bestand messen
+
+Die Zahlen oben gelten für 28 Claims. Für einen eigenen Tresor misst dasselbe
+Werkzeug mit eigenen Fragen:
+
+```bash
+python3 tools/recall_check.py --vault <tresor> --gold <gold.json>
+```
+
+```json
+{
+  "schema": "skillsafe.recall-gold/v1",
+  "fragen": [
+    {"frage": "Wie jemand wirklich fragen würde", "erwartet": ["C-0401"], "gruppe": "kontrolle"}
+  ],
+  "negativ": ["Eine Frage, die der Bestand nicht beantwortet"]
+}
+```
+
+Hart ist nur ein Gate: null stille Verfehlungen. Die Trefferquote ist eine
+Gütezahl mit einstellbarer Untergrenze (`--min-recall`). Das Gold liegt nie im
+Skill-Ordner, das Werkzeug weigert sich sonst; und steht eine Goldfrage
+wörtlich im Bestand, bricht es ab. Ein Gold, das der Bestand kennt, misst nur
+noch, ob er sich selbst wiederfindet. Was eine Verfehlung behebt, ist ein
+Alias oder ein Tag in der Sprache der Fragenden, nie die Frage selbst — siehe
+[`references/begriffswelten.md`](wissenstresor/references/begriffswelten.md).
 
 ## Die sechs eisernen Regeln
 
@@ -95,7 +226,8 @@ Details: [`KONZEPT.md`, AD-01](wissenstresor/KONZEPT.md).
 2. **Vertrauen zur Abfragezeit** — Kurzfassungen gelten beim Antworten als
    wahr; niemand verifiziert pro Anfrage erneut gegen die Quelle.
 3. **Retrieve then read** — zuerst manifestgebundenes Hybrid-Retrieval,
-   dann nur die gelieferten Seiten und Claims lesen.
+   dann nur die gelieferten Seiten und Claims lesen. Hat das Ranking die
+   Frage nicht verstanden, folgt die Vollsichtung mit Quittung.
 4. **Fail closed** — unbekannter Typ, Validierungsfehler, unklare Rechte:
    anhalten und fragen, nie raten.
 5. **Skript vor Modell** — Hashen, Indizieren, Graph, Retrieval, Suchen und
@@ -116,8 +248,8 @@ SkillSafe/
 ├── BETRIEB.md             Betriebs- und Übergabewissen (Release, Störfälle, CI)
 ├── .github/workflows/     CI-Kette: validate, verify, doctor, Tests, Paketbau
 ├── beispiel-extern/       Demo eines externen Markdown-Baums (kein Teil des Skills)
-├── tools/                 deterministischer Paketbau und Zahlenwächter
-├── tests/                 Sicherheits-, Retrieval- und Portabilitätstests
+├── tools/                 deterministischer Paketbau, Zahlenwächter und Recall-Messung
+├── tests/                 Sicherheits-, Retrieval- und Portabilitätstests; Messfragen unter gold/
 └── wissenstresor/         der Skill selbst — das eigentliche Artefakt
     ├── SKILL.md           Motor: Vertrag für das Modell
     ├── KONZEPT.md          Architektur- und Entscheidungsdokument
@@ -153,6 +285,9 @@ python3 scripts/vault.py query "OKF v0.2"
 
 # Ein Alias aus der Begriffswelt führt zum selben belegten Konzept
 python3 scripts/vault.py query "offenes Wissensformat"
+
+# Vollsichtung: jeden Claim vorlegen lassen (Plan, dann --batch, dann --receipt)
+python3 scripts/vault.py sweep "Kann ich bei nassen Wänden die Miete kürzen?"
 
 # Erschöpfende Lexik-Suche (Plan B; kein semantischer Negativbeweis)
 python3 scripts/vault.py search faktensammlung
@@ -349,6 +484,16 @@ Protokoll und benannte Verluste: [`references/export-okf.md`](wissenstresor/refe
 Ausgelegt für kuratierte Bestände bis in den niedrigen Tausenderbereich an
 Seiten. Medien werden nicht durch die Engine dekodiert; sie verwaltet
 gehashte Originale und geprüfte Regionen.
+
+Die Bedeutungssuche ist so vollständig wie ihr Umfang und so gut wie ihr
+Leser. Die Quittung belegt, dass jeder Stapel für genau diesen Stand und diese
+Frage ausgegeben und beurteilt wurde, nicht wie sorgfältig; gegen einen Leser,
+der die Stapelausgabe umleitet und nur das Siegel herauszieht, schützt sie
+nicht. Die Vollsichtung kostet Lesearbeit im Verhältnis zum Bestand (`stats`
+nennt die Stapelzahl): ein Stapel im Demo-Bestand, 189 in einem synthetischen
+Bestand mit 7.528 Claims. Sie deckt nur, was als Claim im Bestand steht, nicht
+was beim Befüllen nie extrahiert wurde. Und das Ranking allein findet bewusst
+umformulierte Fragen nur zu etwa einem Drittel.
 
 Bei externen Quellen gilt: Satzanker altern. Eine Umformulierung in der
 fremden Quelle bricht den Beleg; `doctor` meldet das hash-first und

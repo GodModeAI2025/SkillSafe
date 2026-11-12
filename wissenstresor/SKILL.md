@@ -1,6 +1,6 @@
 ---
 name: wissenstresor
-description: 'Lokaler, evidenzgebundener Wissensspeicher als portabler purer Skill (Profil oksv-lite über Google OKF v0.1/v0.2). Beantwortet Fragen AUSSCHLIESSLICH aus kuratierten Claims und findet sie per deterministischem Hybrid-Retrieval aus Begriffswelten, Aliasen, Lexik und einem Graph-Hop — ohne Cloud, Vektorstore oder Embeddings. Bindet Bilder, Scans und PDFs über geprüfte Regionen an Claims; OCR bleibt untrusted. Belegt fremdes Material satzweise über Anker auf aufgeführte externe Quellen (Handbuch, Repo, zweiter Tresor) und schlägt dort im Fallback live nach, statt es einzufrieren. Meldet ungedecktes Wissen als "Nicht im Bestand", nie aus Modellwissen ergänzt. IMMER verwenden bei: Wissenstresor, SkillSafe, Knowledge Vault, "frag den Tresor", "steht das im Bestand", Begriffswelt, Synonym, Hybrid Retrieval, RAG-ähnliche Suche, Bild oder PDF in den Tresor, Quelle einlesen, Bestand prüfen, externe Quelle, Satzanker, fremdes Repo referenzieren, Live-Nachschlagen, OKF oder Quellenregister.'
+description: 'Lokaler, evidenzgebundener Wissensspeicher als portabler purer Skill (Profil oksv-lite über Google OKF v0.1/v0.2). Beantwortet Fragen AUSSCHLIESSLICH aus kuratierten Claims: deterministisches Hybrid-Retrieval aus Begriffswelten, Wortformen und einem Graph-Hop meldet, wie gut es die Frage verstanden hat; die Bedeutungssuche ist eine Vollsichtung aller Claims mit Quittung — ohne Cloud, Vektorstore oder Embeddings. Bindet Bilder, Scans und PDFs über geprüfte Regionen an Claims. Belegt fremdes Material satzweise über Anker auf aufgeführte externe Quellen, mit Live-Nachschlagen im Fallback. Meldet ungedecktes Wissen als "Nicht im Bestand", nie aus Modellwissen ergänzt. IMMER verwenden bei: Wissenstresor, SkillSafe, Knowledge Vault, "frag den Tresor", "steht das im Bestand", Bedeutungssuche, semantische Suche, Vollsichtung, Begriffswelt, Synonym, Hybrid Retrieval, RAG-ähnliche Suche, Bild oder PDF in den Tresor, Quelle einlesen, Bestand prüfen, externe Quelle, Satzanker, fremdes Repo, OKF, Quellenregister.'
 ---
 
 # Wissenstresor — Wissen als purer Skill
@@ -44,11 +44,18 @@ Diese sechs Regeln gelten in jedem Workflow und stechen jede Bequemlichkeit:
 3. **Retrieve then read.** Zuerst
    `python3 scripts/vault.py query "<frage>"` ausführen, dann nur die
    gelieferten Claim-/Seitenkandidaten lesen. Das lokale Hybrid-Retrieval
-   kombiniert kontrollierte Begriffe/Aliase, exakte Lexik und genau einen
-   Graph-Hop. `no_candidates` beweist keine semantische Abwesenheit: Dann
-   alle in `fallback.page_paths` genannten Seiten prüfen. Auch nach
-   unzureichenden Kandidaten darf „Nicht im Bestand" erst nach dieser
-   Vollprüfung stehen; ein Router-, Lexik- oder Top-k-Fehlschlag allein nie.
+   kombiniert kontrollierte Begriffe/Aliase, exakte Lexik, Wortformen und
+   genau einen Graph-Hop. Es erkennt Wörter, keine Bedeutung, und es sagt
+   das selbst: `coverage.match_strength` und
+   `coverage.query_terms.unmatched` nennen, was es an der Frage nicht
+   verstanden hat. Bei `weak` oder `none` ist die **Vollsichtung** Pflicht
+   (`vault.py sweep`): Sie legt jeden Claim in Stapeln vor, das Modell
+   urteilt nach Bedeutung, und das Script prüft die Quittung. „Nicht im
+   Bestand" darf ausschließlich nach einer Quittung mit
+   `state: sweep_complete` und `abstention.allowed: true` stehen — nie
+   nach einem Router-, Lexik- oder Top-k-Fehlschlag, und auch nicht nach
+   `strong`: Ein verstandener Begriff beweist nicht, dass der Bestand zu
+   ihm schweigt.
 4. **Fail closed.** Unbekannter Typ, Validierungsfehler, unklare Rechte,
    widersprüchliche Angaben: anhalten und den Menschen fragen. Nie raten,
    nie Regeln aufweichen, nie „erstmal so lassen".
@@ -106,6 +113,7 @@ Der OKF-Export steht bewusst **nicht** in dieser Tabelle: kein Workflow ruft ihn
 | `graph` | `graph/graph.json` aus Frontmatter-Relationen ableiten |
 | `query "<frage>" [--world BW-nnnn] [--limit n]` | Manifestgebundenes Hybrid-Retrieval; genau ein JSON-Dokument |
 | `query … --extern [--source X-nnnn]` | Zusätzlich aufgeführte externe Quellen live lesen (Fallback, nie Default) |
+| `sweep "<frage>" [--batch n \| --receipt …] [--size n] [--domain d] [--page p]` | Vollsichtung: jeden Claim in Stapeln vorlegen und die Quittung prüfen; einzige Grundlage für „Nicht im Bestand" |
 | `search <begriff…>` | Erschöpfende Lexik-Suche (Plan B; kein semantischer Negativbeweis) |
 | `media-template S-nnnn` | Nicht schreibendes JSON-Gerüst für registriertes Bild/PDF |
 | `extern list \| bind X-nnnn <pfad> \| unbind X-nnnn` | Aufgeführte Bezugsquellen zeigen und lokal binden |
@@ -173,7 +181,11 @@ Skill-Artefakt verboten; Installationen müssen echte Dateien kopieren.
 
 Ausgelegt für kuratierte Bestände bis in den niedrigen Tausenderbereich an
 Seiten. Die RAG-ähnliche Arbeitsweise ist lokal und deterministisch; sie
-dekodiert keine Medien und erzeugt keine Embeddings. Darüber (oder bei Bedarf
+dekodiert keine Medien und erzeugt keine Embeddings. Bedeutung beurteilt
+allein das Modell, das die Claims liest; die Vollsichtung kostet deshalb
+Lesearbeit im Verhältnis zum Bestand (`stats` nennt die Stapelzahl), und ihre
+Quittung belegt, dass jeder Stapel vorgelegt und beurteilt wurde, nicht wie
+sorgfältig. Darüber (oder bei Bedarf
 an externer Qualifikation, Signaturen, SBOM oder Millionen Dokumenten) ist
 der Ausbaupfad der OKSV-Vollausbau mit getrennten Vertrauenszonen —
 Gold-Holdouts gehören grundsätzlich NIE in diesen Skill (Leakage).

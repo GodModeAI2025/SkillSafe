@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SkillSafe — der Wissenstresor</title>
-<meta name="description" content="SkillSafe ist ein lokaler, evidenzgebundener Wissensspeicher als portabler LLM-Skill: RAG-ähnliches Hybrid-Retrieval, Begriffswelten und Bildbelege ohne Server oder Embeddings.">
+<meta name="description" content="SkillSafe ist ein lokaler, evidenzgebundener Wissensspeicher als portabler LLM-Skill: RAG-ähnliches Hybrid-Retrieval, Bedeutungssuche per Vollsichtung mit Quittung, Begriffswelten und Bildbelege ohne Server oder Embeddings.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2315130f'/%3E%3Ccircle cx='16' cy='16' r='10' fill='none' stroke='%23d99a52' stroke-width='2'/%3E%3Ccircle cx='16' cy='16' r='2.4' fill='%23d99a52'/%3E%3Cline x1='16' y1='9' x2='16' y2='6' stroke='%23d99a52' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E">
 <style>
   :root{
@@ -172,6 +172,8 @@
 
   /* terminal */
   .terminal{ background: var(--mono-bg); color: var(--mono-ink); border-radius:6px; padding: 22px 24px; font-family: var(--font-mono); font-size:.86rem; overflow-x:auto; box-shadow: var(--shadow); }
+  /* Code bleibt Zeichen für Zeichen lesbar: ohne das wird aus ">=" in einem Kommando ein "≥". */
+  .terminal, .tree, code, pre{ font-variant-ligatures: none; font-feature-settings: "liga" 0, "calt" 0; }
   .terminal .cmd{ color:#8fb4ff; }
   .terminal .cmd::before{ content:"$ "; color: var(--ink-muted); }
   .terminal pre{ margin: 6px 0 18px; white-space:pre-wrap; line-height:1.7; }
@@ -191,7 +193,14 @@
   table.sources tr:last-child td{ border-bottom:none; }
   .trust{ display:inline-block; font-family: var(--font-mono); font-size:.72rem; padding:2px 7px; border-radius:3px; border:1px solid var(--rule-strong); color: var(--ink-muted); }
   table.sources td.id{ font-family: var(--font-mono); color: var(--accent); white-space:nowrap; }
-  @media (max-width: 640px){ table.sources{ font-size:.86rem; } table.sources th:nth-child(3), table.sources td:nth-child(3){ display:none; } }
+  /* Messwerte: keine Spalte darf auf schmalen Geräten verschwinden, die Tabelle scrollt stattdessen. */
+  table.messung th:nth-child(n+2), table.messung td:nth-child(n+2){ text-align:right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+  table.messung td:last-child{ color: var(--ink); font-weight:700; }
+  table.messung tr.vorher td{ color: var(--ink-muted); }
+  table.messung tr.vorher td:last-child{ color: var(--status-bad); }
+  .legende{ color: var(--ink-muted); font-size:.84rem; margin-top:12px; max-width: 62ch; }
+  @media (max-width: 640px){ table.messung th, table.messung td{ padding-inline: 4px; } table.messung th{ letter-spacing:0; font-size:.66rem; } }
+  @media (max-width: 640px){ table.sources{ font-size:.86rem; } table.sources:not(.messung) th:nth-child(3), table.sources:not(.messung) td:nth-child(3){ display:none; } }
 
   footer{ border-top:1px solid var(--rule-strong); padding-block: 40px; }
   footer .wrap-wide{ display:flex; justify-content:space-between; align-items:center; gap:16px; flex-wrap:wrap; color: var(--ink-muted); font-size:.88rem; }
@@ -216,6 +225,7 @@
         <a href="#warum">Warum</a>
         <a href="#regeln">Regeln</a>
         <a href="#funktionen">Funktionen</a>
+        <a href="#bedeutung">Bedeutung</a>
         <a href="#architektur">Architektur</a>
         <a href="#tresore">Tresore</a>
         <a href="#extern">Extern</a>
@@ -234,18 +244,18 @@
   <section class="hero">
     <div class="wrap">
       <div>
-        <p class="eyebrow">Profil oksv-lite/1.2 · purer Skill</p>
+        <p class="eyebrow">Profil oksv-lite/1.3 · purer Skill</p>
         <h1>SkillSafe</h1>
         <p class="sub">Belegtes Wissen aus Text, Bildern und PDFs — als Skill, nicht als Server.</p>
-        <p class="tagline-en">Für Claude Code und Codex: kontrollierte Begriffswelten, reproduzierbares Hybrid-Retrieval, Wissensgraph-Kontext und geprüfte Bildfundstellen — lokal, nachvollziehbar und ohne Embedding-Pflicht.</p>
+        <p class="tagline-en">Für Claude Code und Codex: kontrollierte Begriffswelten, reproduzierbares Hybrid-Retrieval, eine Bedeutungssuche mit Quittung, Wissensgraph-Kontext und geprüfte Bildfundstellen — lokal, nachvollziehbar und ohne Embeddings.</p>
         <div class="cta-row">
-          <a class="btn btn-primary" href="#funktionen">Was v0.11.11 kann</a>
+          <a class="btn btn-primary" href="#funktionen">Was v0.12.0 kann</a>
           <a class="btn btn-ghost" href="#regeln">Die sechs Regeln</a>
           <a class="btn btn-ghost" href="wissenstresor/KONZEPT.md">Konzept lesen</a>
           <a class="btn btn-ghost" href="https://github.com/GodModeAI2025/SkillSafe">GitHub</a>
         </div>
       </div>
-      <div class="stamp"><span><b>VALIDATE</b>0 Fehler<br>6 Seiten · 28 Claims<br>v0.11.11</span></div>
+      <div class="stamp"><span><b>VALIDATE</b>0 Fehler<br>6 Seiten · 28 Claims<br>v0.12.0</span></div>
     </div>
   </section>
 
@@ -263,7 +273,7 @@
         </div>
         <div class="yes">
           <h3>Lokales Hybrid-Retrieval</h3>
-          <p>Vorzugsbegriffe und Aliase, exakte Lexik und ein Graph-Hop werden mit festen Ganzzahlgewichten kombiniert. <code>no_candidates</code> ist nur ein Retrieval-Befund; erst die semantische Prüfung aller angegebenen Fallback-Seiten darf „Nicht im Bestand" begründen.</p>
+          <p>Vorzugsbegriffe und Aliase, exakte Lexik, Wortformen und ein Graph-Hop werden mit festen Ganzzahlgewichten kombiniert. Das Ranking weist selbst aus, welche Wörter der Frage es erkannt hat. Hat es zu wenig erkannt, legt die Vollsichtung dem Modell jeden Claim vor, und erst ihre geprüfte Quittung darf „Nicht im Bestand" begründen.</p>
         </div>
       </div>
     </div>
@@ -279,7 +289,7 @@
       <div class="rules-grid reveal">
         <div class="rule-card"><span class="rule-num">1</span><div><h3>Geschlossene Welt</h3><p>Fakten kommen ausschließlich aus <code>knowledge/</code>. Deckt der Bestand eine Frage nicht ab, heißt die Antwort „Nicht im Bestand". Modellwissen füllt das nie auf. Auch ein Treffer aus einer externen Bezugsquelle ersetzt diesen Satz nicht, er ergänzt ihn um einen benannten Hinweis.</p></div></div>
         <div class="rule-card"><span class="rule-num">2</span><div><h3>Vertrauen zur Abfragezeit</h3><p>Kurzfassungen gelten beim Antworten als wahr. Wer pro Anfrage erneut gegen die Quelle prüft, zahlt doppelt und macht den Tresor sinnlos. Live nachgeschlagen wird nur auf ausdrückliche Anforderung mit <code>--extern</code>, nie im Regelbetrieb.</p></div></div>
-        <div class="rule-card"><span class="rule-num">3</span><div><h3>Retrieve then read</h3><p><code>query</code> liefert zuerst manifestgebundene Kandidaten. Reichen sie nicht, folgt der explizite Fallback-Prüfumfang — niemals stilles Auffüllen aus Modellwissen.</p></div></div>
+        <div class="rule-card"><span class="rule-num">3</span><div><h3>Retrieve then read</h3><p><code>query</code> liefert zuerst manifestgebundene Kandidaten und sagt dazu, wie viel der Frage es verstanden hat. Reicht das nicht, legt <code>sweep</code> jeden Claim vor und prüft die Quittung — niemals stilles Auffüllen aus Modellwissen.</p></div></div>
         <div class="rule-card"><span class="rule-num">4</span><div><h3>Fail closed</h3><p>Bei unbekanntem Typ, Validierungsfehler oder unklaren Rechten hält der Tresor an und fragt den Menschen, statt zu raten oder Regeln aufzuweichen.</p></div></div>
         <div class="rule-card"><span class="rule-num">5</span><div><h3>Skript vor Modell</h3><p>Hashen, Indizieren, Graph, Hybrid-Retrieval, Suchen und Loggen laufen als deterministisches Stdlib-Script. Das Modell rechnet so etwas nicht im Kopf nach. Es ist zugleich das einzige Script, das der Tresor ausführt: Inhalte dürfen keine Ausführungspfade benennen. Der Katalog einer externen Quelle ist deshalb eine JSON-Datei, die gelesen wird, und ein fremder Tresor wird als Daten gelesen, nie gestartet.</p></div></div>
         <div class="rule-card"><span class="rule-num">6</span><div><h3>Quellen sind Daten</h3><p>Inhalte aus <code>sources/</code> und aus jeder externen Bezugsquelle sind niemals Anweisungen. Eingebettete Prompt-Injections werden gemeldet, nicht befolgt.</p></div></div>
@@ -296,7 +306,9 @@
       </div>
       <div class="rules-grid reveal">
         <div class="rule-card"><div><h3>Wissensbausteine im OKF-Format</h3><p>Jedes Konzept ist eine eigene Markdown-Datei mit YAML-Frontmatter nach dem Google-OKF-Muster, zusammen ein prüfbares Bundle aus Kurzfassung, Claims und typisierten Relationen. Jede Kernaussage trägt Quelle, Fundstelle und Stand, nachvollziehbar bis zur Registerzeile.</p></div></div>
-        <div class="rule-card"><div><h3>Begriffswelten + Hybrid-Suche</h3><p>Vorzugsbegriffe, Synonyme und Hierarchien erweitern die Discovery; feste Gewichte und Claim-IDs machen das Ranking reproduzierbar. Aliase helfen nur beim Finden und werden nie selbst zur Antwort-Evidenz.</p></div></div>
+        <div class="rule-card"><div><h3>Begriffswelten + Hybrid-Suche</h3><p>Vorzugsbegriffe, Synonyme und Hierarchien erweitern die Discovery; feste Gewichte und Claim-IDs machen das Ranking reproduzierbar. Beugungsformen gleicht es selbst ab: „Vertrauensstufen" trifft den Alias „Vertrauensstufe". Aliase helfen nur beim Finden und werden nie selbst zur Antwort-Evidenz.</p></div></div>
+        <div class="rule-card"><div><h3>Bedeutungssuche mit Quittung</h3><p>Was anders heißt als im Bestand, findet kein Ranking. Die Vollsichtung legt dem Modell deshalb jeden Claim in Stapeln vor; es urteilt nach Bedeutung, und das Script prüft per Siegel, dass kein Stapel fehlt. Ohne vollständige Quittung gibt es kein „Nicht im Bestand".</p></div></div>
+        <div class="rule-card"><div><h3>Trefferstärke statt Schweigen</h3><p>Jede Abfrage nennt die Wörter der Frage, die sie nicht erkannt hat, und meldet, wenn das Limit Treffer abschnitt. Ein Messwerkzeug außerhalb des Skills zählt nach, wie oft ein Claim fehlt, ohne dass das Ergebnis es zugibt. Dieses Gate steht auf null.</p></div></div>
         <div class="rule-card"><div><h3>Bilder mit belegbarer Region</h3><p>PNG, JPEG, GIF, WebP, TIFF und PDF bleiben als gehashte Originale erhalten. Geprüfte Regionen binden sichtbare Befunde an Claims; OCR und Bildbeschreibung bleiben untrusted Quelldaten und gelangen nie direkt in Antworten.</p></div></div>
         <div class="rule-card"><div><h3>Externe Quellen satzweise</h3><p>Ein fremdes Handbuch, ein Repo oder ein zweiter Tresor muss nicht einwandern. Ein Claim belegt sich über einen Satzanker gegen genau einen Satz dort, nachrechenbar über dessen Prüfsumme. Eingefroren wird das Zitat, nicht die Quelle. Ein zweistufiges Ranking sucht darin auf Anforderung live: Der Katalogtext entscheidet nur, was geöffnet wird, der tatsächliche Satzbestand entscheidet, was gewinnt. Findet die zweite Stufe nichts, kommt nichts zurück statt eines plausibel aussehenden Fehltreffers.</p></div></div>
         <div class="rule-card"><div><h3>Gesundheit laufend geprüft</h3><p>Das Script <code>doctor</code> findet deterministisch Drift, verwaiste Seiten und Manifest-Abweichungen. Der Lint-Workflow beurteilt zusätzlich Aktualität und ungedeckte Kurzfassungen. Veraltetes bleibt über Supersession sichtbar, und Widersprüche bekommen eine eigene Kante im Wissensgraph, statt stillschweigend entschieden zu werden.</p></div></div>
@@ -306,6 +318,37 @@
         <div class="rule-card"><div><h3>Export nach OKF v0.2</h3><p><code>export --okf</code> gibt den freigegebenen Bestand als Bundle nach außen: Status übersetzt, Quellen aus dem Register aufgefaltet, Claims mit Fußnoten, Relationen als Links. Zwei Exporte desselben Stands sind byteidentisch. Das Ziel darf nie ein Skill-Ladeort sein, denn ein Bundle trägt keine Engine und keine Regeln. Einen Rückweg gibt es nicht.</p></div></div>
         <div class="rule-card"><div><h3>Ein Skill, zwei Laufzeiten</h3><p>Der reproduzierbare Builder erzeugt ein geprüftes <code>.skill</code>-Archiv mit genau einer Ordnerwurzel. Dasselbe Artefakt ist für die Skill-Verzeichnisse von Claude Code und Codex ausgelegt; Ordner-, Pfad- und Script-Portabilität sind geprüft, die angemeldete Host-Discovery bleibt ein separater Smoke-Test.</p></div></div>
       </div>
+    </div>
+  </section>
+
+  <section id="bedeutung">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <p class="eyebrow">AD-14</p>
+        <h2>Finden, was anders heißt</h2>
+        <p class="lede">Wer fragt, benutzt selten die Wörter der Quelle. „Nasse Wände" steht in keinem Claim, „Schimmelbefall" schon. Üblich wäre dafür ein Bedeutungsindex aus Embeddings. SkillSafe geht anders vor, weil in einem Skill der Leser mit Sprachverständnis ohnehin anwesend ist: das Modell. Es liest die Claims selbst. Das Script sorgt dafür, dass es alle liest, und weist das nach.</p>
+      </div>
+      <div class="zones reveal">
+        <div class="zone"><span class="zname">Trefferstärke</span><span class="zwhat">Das Ranking sagt, was es versteht</span><span class="zprotect">Jede Abfrage nennt die Wörter der Frage, die sie erkannt hat, und die, die sie nicht erkannt hat: <code>strong</code>, <code>partial</code>, <code>weak</code> oder <code>none</code>. Schneidet das Limit Treffer ab, steht auch das da.</span></div>
+        <div class="zone"><span class="zname">Wortformen</span><span class="zwhat">Keine Bedeutungsfrage</span><span class="zprotect">„Wände" findet „Wand", „Prüfungen" findet „prüfen", „Miete" findet „Mietminderung". Nachrechenbar und mit eigenem Grund am Treffer. „himmel" findet weiterhin kein „schimmel".</span></div>
+        <div class="zone"><span class="zname">Vollsichtung</span><span class="zwhat">Die Bedeutungssuche</span><span class="zprotect"><code>sweep</code> legt jeden Claim in festen Stapeln vor. Das Modell urteilt je Stapel, welche Claims die Frage der Bedeutung nach beantworten. Bei <code>weak</code> und <code>none</code> ist das Pflicht.</span></div>
+        <div class="zone"><span class="zname">Quittung</span><span class="zwhat">Nichts ausgelassen</span><span class="zprotect">Jeder Stapel trägt ein Siegel, gebunden an Stand und Frage. Nur eine Quittung mit allen Siegeln und einem Urteil je Stapel erlaubt „Nicht im Bestand".</span></div>
+      </div>
+      <p class="lede reveal" style="margin-top:20px;">Gemessen wurde zuerst, was vorher war. 28 umformulierte Fragen gegen den Demo-Bestand: 15 gefunden, 13 verfehlt, und zehn dieser dreizehn Verfehlungen blieben still. Die Abfrage meldete Kandidaten, weil ein Hilfsverb wie „darf" zufällig irgendeinen Claim traf, und genau das schaltete die Vollprüfung ab, die die Frage gebraucht hätte.</p>
+      <div class="reveal" style="overflow-x:auto; margin-top:20px;">
+        <table class="sources messung">
+          <thead><tr><th>Fragensatz</th><th>Fragen</th><th>direkt</th><th>Pflicht</th><th>Hinweis</th><th>still</th></tr></thead>
+          <tbody>
+            <tr class="vorher"><td>Vorher, eigene Fragen</td><td>28</td><td>15</td><td>3</td><td>–</td><td>10</td></tr>
+            <tr><td>Jetzt, eigene Fragen</td><td>28</td><td>19</td><td>9</td><td>0</td><td>0</td></tr>
+            <tr><td>Jetzt, blinde Kontrolle</td><td>56</td><td>18</td><td>37</td><td>1</td><td>0</td></tr>
+          </tbody>
+        </table>
+        <p class="legende"><b>direkt:</b> das Ranking liefert den Claim unter den ersten acht Kandidaten. <b>Pflicht:</b> verfehlt, und die Vollsichtung ist vorgeschrieben. <b>Hinweis:</b> verfehlt, die unverstandenen Wörter sind benannt. <b>still:</b> verfehlt, ohne dass das Ergebnis es zugibt.</p>
+      </div>
+      <p class="lede reveal" style="margin-top:20px;">Die mittlere Zeile ist geschönt, denn an diesen Fragen wurde eingestellt. Die untere ist die ehrliche: 56 Fragen von einem zweiten Agenten, der nur die Claims kannte und ihren Wortlaut mit Absicht mied. Das Ranking allein findet dort ein Drittel. Es ist eine Abkürzung für Fragen in der Sprache des Bestands, Bedeutung findet erst das Lesen. Entscheidend ist die rechte Spalte: Keine Verfehlung bleibt still, und die Vollsichtung legt in jedem Fall alle 28 Claims vor.</p>
+      <p class="lede reveal" style="margin-top:20px;">Die Kontrolle hat sich schon beim ersten Durchlauf bezahlt gemacht. Sie fand einen Fehler in einer frisch gebauten Regel, den die eigenen Fragen nicht zeigten: Füllwörter verdrängten einen richtigen Treffer aus der Auswahl. Damals standen 17 statt 18 direkt gefundene Fragen in der Zeile; seit der Korrektur ist sie nicht mehr blind gemessen.</p>
+      <p class="lede reveal" style="margin-top:20px;">Zwei Grenzen gehören dazu. Die Quittung belegt, dass jeder Stapel für genau diesen Stand und diese Frage ausgegeben und beurteilt wurde, nicht wie sorgfältig. Und die Vollsichtung kostet Lesearbeit im Verhältnis zum Bestand: im Demo-Bestand ein Stapel, bei 7.500 Claims 189. Die Zahlen stammen aus einer kleinen, selbst gebauten Stichprobe. Für einen eigenen Bestand misst <code>tools/recall_check.py</code> mit eigenen Fragen nach, und die liegen außerhalb des Skills, sonst misst man nur, ob der Bestand sich selbst wiederfindet. Begründung und Messung stehen in <a href="wissenstresor/KONZEPT.md">KONZEPT.md</a> unter AD-14.</p>
     </div>
   </section>
 
@@ -319,7 +362,7 @@
       <div class="zones reveal">
         <div class="zone"><span class="zname">Engine</span><span class="zwhat"><code>SKILL.md, scripts/, schema/, references/</code></span><span class="zprotect">Ändert sich nur durch bewusste Motor-Releases.</span></div>
         <div class="zone"><span class="zname">Content</span><span class="zwhat"><code>knowledge/, sources/, INDEX, ROUTER, graph/</code></span><span class="zprotect"><code>validate</code> erzwingt Claims, Begriffe und Medienregionen; <code>raw/</code> ist per Hash gebunden.</span></div>
-        <div class="zone"><span class="zname">Assurance</span><span class="zwhat"><code>doctor + Lint-Workflow</code></span><span class="zprotect">Nur diagnostisch. Gold-Holdouts gehören nie in den Skill (Leakage).</span></div>
+        <div class="zone"><span class="zname">Assurance</span><span class="zwhat"><code>doctor + Lint-Workflow</code></span><span class="zprotect">Nur diagnostisch. Gold-Holdouts gehören nie in den Skill (Leakage); die Messfragen der Suche liegen deshalb unter <code>tests/</code>.</span></div>
         <div class="zone"><span class="zname">Release</span><span class="zwhat"><code>VERSION, MANIFEST.sha256, log.md</code></span><span class="zprotect">Release-Gate fail-closed; ein neues Manifest invalidiert alte Prüfsummen.</span></div>
       </div>
     </div>
@@ -366,11 +409,11 @@
       <div class="section-head reveal">
         <p class="eyebrow">Live am Demo-Bestand</p>
         <h2>Ein Ordner antwortet für sich selbst</h2>
-        <p class="lede">Das sind gekürzte Auszüge aus echter Ausgabe von <code>scripts/vault.py</code> gegen den mitgelieferten Demo-Bestand <code>knowledge/demo-okf/</code>. Claims, IDs und Status stammen aus dem Release; beim Query sind zusätzliche JSON-Felder und weitere Evidenz-Einträge ausgelassen, die gezeigten sind unverändert.</p>
+        <p class="lede">Das sind gekürzte Auszüge aus echter Ausgabe von <code>scripts/vault.py</code> gegen den mitgelieferten Demo-Bestand. Claims, IDs und Status stammen aus dem Release; ausgelassene Felder und Einträge sind mit … markiert. Siegel und Fingerabdruck sind nicht abgedruckt, weil sie mit jedem Release wechseln.</p>
       </div>
       <div class="terminal reveal">
         <p class="cmd">python3 scripts/vault.py validate</p>
-        <pre><span class="dot-good">validate: 0 Fehler, 0 Warnungen — 5 Seiten, 26 Claims, 4 Quellen.</span></pre>
+        <pre><span class="dot-good">validate: 0 Fehler, 0 Warnungen — 6 Seiten, 28 Claims, 4 Quellen, 2 externe Quellen.</span></pre>
         <p class="cmd">python3 scripts/vault.py doctor</p>
         <pre>── doctor: Gesamtdiagnose ─────────────────────────────────────
 ── Prüfsummen ─────────────────────────────────────────────────
@@ -381,33 +424,55 @@
         <pre>{
   "schema": "skillsafe.query/v1",
   "state": "candidates_found",
-  "retrieval": "hybrid-local/v1",
-  "coverage": {"semantic_coverage": "not_assessed"},
-  "concepts": {"matched": [{"id": "B-0001", "preferred": "Open Knowledge Format"}]},
+  "retrieval": "hybrid-local/v2",
+  "coverage": {"match_strength": "strong", "query_terms": {"content": ["okf"], "matched": ["okf"], "partial": [], "unmatched": []}, "semantic_coverage": "not_assessed"},
+  "concepts": {"matched": [{"id": "B-0001", "match": "exact", "preferred": "Open Knowledge Format"}]},
   "evidence": [
     {"claim_id": "C-0001", "page_status": "veraltet", "signals": ["page_status:veraltet", "trust_tier:unverified"], "source": {"id": "S-0001", "trust": "T2"}},
+    …
     {"claim_id": "C-0301", "page_status": "aktiv", "signals": ["trust_tier:unverified"], "source": {"id": "S-0004", "trust": "T1"}}
   ]
+}</pre>
+        <p class="cmd">python3 scripts/vault.py query "Kann ich bei nassen Wänden die Miete kürzen?"</p>
+        <pre>{
+  "state": "candidates_found",
+  "coverage": {"match_strength": "weak", "term_coverage_percent": 0,
+    "query_terms": {"content": ["kuerzen", "miete", "nassen", "waenden"], "matched": [], "partial": ["miete"], "unmatched": ["kuerzen", "nassen", "waenden"]}},
+  "fallback": {"exhaustive_review_required": true, "reason": "weak_candidates_only", "sweep": {"batch_size": 40, "batches": 1, "claims": 28}},
+  "evidence": [{"claim_id": "C-0401", "score": 12, "reasons": ["compound:miete"]}, …]
+}</pre>
+        <p class="cmd">python3 scripts/vault.py sweep "Kann ich bei nassen Wänden die Miete kürzen?" --batch 1</p>
+        <pre>{
+  "schema": "skillsafe.sweep/v1",
+  "state": "batch", "batch": 1, "batches_total": 1,
+  "pages": [
+    {"path": "knowledge/demo-extern/mietminderung.md", "title": "Mietminderung bei Schimmelbefall", "claims": [
+      {"claim_id": "C-0401", "kind": "Wortlaut", "source_id": "X-0001", "text": "Erheblicher Schimmelbefall in Wohnräumen ist nach dem Beispielhandbuch ein Mangel, der zur Mietminderung berechtigt."},
+      {"claim_id": "C-0402", "kind": "Wortlaut", "source_id": "X-0001", "text": "Der Mangel ist dem Vermieter nach dem Beispielhandbuch unverzüglich anzuzeigen."}]},
+    …
+  ],
+  "seal": "…"
+}</pre>
+        <p class="cmd">python3 scripts/vault.py sweep "Kann ich bei nassen Wänden die Miete kürzen?" --receipt 1:&lt;siegel&gt;=C-0401,C-0402</p>
+        <pre>{
+  "schema": "skillsafe.sweep/v1",
+  "state": "sweep_complete",
+  "coverage": {"batches_confirmed": 1, "batches_total": 1, "claims_swept": 28, "claims_total": 28, "scope_complete": true, "semantic_coverage": "swept"},
+  "selected": ["C-0401", "C-0402"],
+  "abstention": {"allowed": true, "reason": "jeder Claim des Bestands wurde vorgelegt und je Stapel quittiert"},
+  "sweep_fingerprint": "…"
 }</pre>
         <p class="cmd">python3 scripts/vault.py query "Urlaubsanspruch"</p>
         <pre>{
   "schema": "skillsafe.query/v1",
   "state": "no_candidates",
-  "coverage": {"semantic_coverage": "not_assessed"},
-  "fallback": {
-    "exhaustive_review_required": true,
-    "page_paths": [
-      "knowledge/demo-okf/fakten.md",
-      "knowledge/demo-okf/llm-wiki-muster.md",
-      "knowledge/demo-okf/okf-v02.md",
-      "knowledge/demo-okf/okf.md",
-      "knowledge/demo-okf/ontologie-strategie.md"
-    ]
-  },
+  "coverage": {"match_strength": "none", "semantic_coverage": "not_assessed"},
+  "fallback": {"exhaustive_review_required": true, "reason": "no_retrieval_candidates", "sweep": {"batch_size": 40, "batches": 1, "claims": 28}},
   "evidence": []
 }</pre>
       </div>
       <p class="lede reveal" style="margin-top:20px;">Der erste Treffer stammt aus der überholten Fassung, und das ist Absicht. Das Ranking bewertet Geltung nicht, es markiert sie mit <code>page_status:veraltet</code>. Welche Fassung maßgeblich ist, entscheidet der Antworten-Workflow anhand der <code>ersetzt</code>-Kante im Graph, und er benennt beide. Verstecken wäre die einfachere, aber unehrliche Lösung.</p>
+      <p class="lede reveal" style="margin-top:20px;">Die zweite Frage zeigt den neuen Weg. Von ihren vier Wörtern erkennt das Ranking keines; nur „Miete" findet es als Teil von „Mietminderung", und das nennt es <code>weak</code>. Also legt <code>sweep</code> alle 28 Claims vor. Dass „nasse Wände" den Schimmelbefall meint, entscheidet das Modell beim Lesen, und die Quittung hält fest, dass dabei kein Claim gefehlt hat.</p>
     </div>
   </section>
 
@@ -463,7 +528,7 @@
 
 <footer>
   <div class="wrap-wide">
-    <span>SkillSafe v0.11.11 · Apache License 2.0 · Motor bleibt stabil, Treibstoff ist flüchtig.</span>
+    <span>SkillSafe v0.12.0 · Apache License 2.0 · Motor bleibt stabil, Treibstoff ist flüchtig.</span>
     <span><a href="README.md">README</a> · <a href="BETRIEB.md">Betrieb</a> · <a href="wissenstresor/KONZEPT.md">Konzept</a> · <a href="wissenstresor/SKILL.md">Skill-Vertrag</a> · <a href="https://godmodeai2025.github.io/MarkZimmermann/" target="_blank" rel="noopener">Impressum</a></span>
   </div>
 </footer>

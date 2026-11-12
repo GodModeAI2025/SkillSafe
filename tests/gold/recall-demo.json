@@ -1,0 +1,712 @@
+{
+  "schema": "skillsafe.recall-gold/v1",
+  "hinweis": "Messfragen gegen den Demo-Bestand. Diese Datei liegt bewusst unter tests/ und nie im Skill-Ordner. Gruppe 'entwicklung': an diesen Fragen wurden Funktionswortliste und Schwellen von hybrid-local/v2 eingestellt; ihre Zahlen zeigen, dass der Mechanismus greift, nicht wie er sich auf fremden Fragen schlägt. Gruppe 'kontrolle': von einem zweiten Agenten geschrieben, der nur die Claim-Texte kannte und weder Engine noch Entwicklungsfragen gesehen hat; gegen den fertigen Stand genau einmal gemessen und danach nicht mehr als Stellschraube benutzt.",
+  "fragen": [
+    {
+      "frage": "In welcher Form legt das Google-Format Inhalte ab?",
+      "erwartet": [
+        "C-0001",
+        "C-0301"
+      ],
+      "art": "paraphrase",
+      "gruppe": "entwicklung"
+    },
+    {
+      "frage": "Woran erkennt man einen Eintrag eindeutig und wie hängen Einträge zusammen?",
+      "erwartet": [
+        "C-0002"
+      ],
+      "art": "paraphrase",
+      "gruppe": "entwicklung"
+    },
+    {
+      "frage": "Welche Zusatzdateien für Navigation und Änderungsverlauf sind freiwillig?",
+      "erwartet": [
+        "C-0003"
+      ],
+      "art": "paraphrase",
+      "gruppe": "entwicklung"
+    },
+    {
+      "frage": "Ist das Format schon ausgereift oder noch vorläufig?",
+      "erwartet": [
+        "C-0004"
+      ],
+      "art": "paraphrase",
+      "gruppe": "entwicklung"
+    },
+    {
+      "frage": "Warum reicht die Spezifikation allein nicht für belegtes Wissen?",
+      "erwartet": [
+        "C-0005"
+      ],
+      "art": "paraphrase",
+      "gruppe": "entwicklung"
+    },
+    {
+      "frage": "Wie werden Originaldokumente und aufbereitete Zusammenfassungen auseinandergehalten?",
+      "erwartet": [
+        "C-0101"
+      ],
+      "art": "paraphrase",
+      "gruppe": "entwicklung"
+    },
+    {
+      "frage": "Welche Arbeitsschritte gibt es und wie wird protokolliert?",
+      "erwartet": [
+        "C-0102"
+      ],
+      "art": "paraphrase",
+      "gruppe": "entwicklung"
+    },
+    {
+      "frage": "Lohnt es sich, kleine Dokumente einfach abzuschreiben?",
+      "erwartet": [
+        "C-0103"
+      ],
+      "art": "paraphrase",
+      "gruppe": "entwicklung"
+    },
+    {
+      "frage": "Was geht bei Verweisen zwischen Seiten am häufigsten kaputt?",
+      "erwartet": [
+        "C-0104"
+      ],
+      "art": "paraphrase",
+      "gruppe": "entwicklung"
+    },
+    {
+      "frage": "Warum scheitern Vorhaben, die ihr Datenmodell vorab komplett festlegen?",
+      "erwartet": [
+        "C-0201"
+      ],
+      "art": "paraphrase",
+      "gruppe": "entwicklung"
+    },
+    {
+      "frage": "Wie viele Arten von Dingen braucht ein Fachgebiet typischerweise?",
+      "erwartet": [
+        "C-0202"
+      ],
+      "art": "paraphrase",
+      "gruppe": "entwicklung"
+    },
+    {
+      "frage": "Was mache ich, wenn etwas falsch zugeordnet wurde?",
+      "erwartet": [
+        "C-0203"
+      ],
+      "art": "paraphrase",
+      "gruppe": "entwicklung"
+    },
+    {
+      "frage": "Wohin mit Angaben, die in keine Kategorie passen?",
+      "erwartet": [
+        "C-0204",
+        "C-0205"
+      ],
+      "art": "paraphrase",
+      "gruppe": "entwicklung"
+    },
+    {
+      "frage": "Wo werden lose Einzelbefunde gesammelt?",
+      "erwartet": [
+        "C-0205",
+        "C-0204"
+      ],
+      "art": "paraphrase",
+      "gruppe": "entwicklung"
+    },
+    {
+      "frage": "Woher stammt POLE ursprünglich?",
+      "erwartet": [
+        "C-0290"
+      ],
+      "art": "woertlich",
+      "gruppe": "entwicklung"
+    },
+    {
+      "frage": "Welche Probleme entstehen beim Zerschneiden von Texten in Stücke?",
+      "erwartet": [
+        "C-0291"
+      ],
+      "art": "paraphrase",
+      "gruppe": "entwicklung"
+    },
+    {
+      "frage": "Wann gilt ein Paket als regelkonform?",
+      "erwartet": [
+        "C-0301"
+      ],
+      "art": "kompositum",
+      "gruppe": "entwicklung"
+    },
+    {
+      "frage": "Wo wird die Herkunft einer Information eingetragen?",
+      "erwartet": [
+        "C-0302"
+      ],
+      "art": "kompositum",
+      "gruppe": "entwicklung"
+    },
+    {
+      "frage": "Warum gibt es keine Note für die Verlässlichkeit einer Quelle?",
+      "erwartet": [
+        "C-0303"
+      ],
+      "art": "paraphrase",
+      "gruppe": "entwicklung"
+    },
+    {
+      "frage": "Wie wird festgehalten, wer einen Text verfasst und wer ihn bestätigt hat?",
+      "erwartet": [
+        "C-0304"
+      ],
+      "art": "flexion",
+      "gruppe": "entwicklung"
+    },
+    {
+      "frage": "Welche Vertrauensstufen gibt es?",
+      "erwartet": [
+        "C-0305"
+      ],
+      "art": "flexion",
+      "gruppe": "entwicklung"
+    },
+    {
+      "frage": "Ab wann ist ein Eintrag abgelaufen?",
+      "erwartet": [
+        "C-0306"
+      ],
+      "art": "paraphrase",
+      "gruppe": "entwicklung"
+    },
+    {
+      "frage": "Was sind attestierte Berechnungen?",
+      "erwartet": [
+        "C-0307"
+      ],
+      "art": "flexion",
+      "gruppe": "entwicklung"
+    },
+    {
+      "frage": "Darf eine KI die Rechenlogik selbst umschreiben?",
+      "erwartet": [
+        "C-0308"
+      ],
+      "art": "paraphrase",
+      "gruppe": "entwicklung"
+    },
+    {
+      "frage": "Welche inkompatiblen Änderungen bringt die neue Version?",
+      "erwartet": [
+        "C-0309"
+      ],
+      "art": "paraphrase",
+      "gruppe": "entwicklung"
+    },
+    {
+      "frage": "Welche Felder heißen gleich, bedeuten aber etwas anderes?",
+      "erwartet": [
+        "C-0310"
+      ],
+      "art": "paraphrase",
+      "gruppe": "entwicklung"
+    },
+    {
+      "frage": "Darf ich bei feuchten Wänden weniger Miete zahlen?",
+      "erwartet": [
+        "C-0401"
+      ],
+      "art": "paraphrase",
+      "gruppe": "entwicklung"
+    },
+    {
+      "frage": "Muss ich dem Eigentümer den Schaden sofort melden?",
+      "erwartet": [
+        "C-0402"
+      ],
+      "art": "paraphrase",
+      "gruppe": "entwicklung"
+    },
+    {
+      "frage": "Darf ich dem Hauseigentümer weniger überweisen, wenn sich an den Zimmerwänden großflächig schwarze Pilzflecken ausbreiten?",
+      "erwartet": [
+        "C-0401"
+      ],
+      "art": "blind",
+      "gruppe": "kontrolle"
+    },
+    {
+      "frage": "Stockflecken an den Wänden zu Hause – monatliche Zahlung kürzen erlaubt?",
+      "erwartet": [
+        "C-0401"
+      ],
+      "art": "blind",
+      "gruppe": "kontrolle"
+    },
+    {
+      "frage": "Wie schnell muss der Hausbesitzer davon erfahren, wenn in meiner Bleibe ein Schaden auftritt?",
+      "erwartet": [
+        "C-0402"
+      ],
+      "art": "blind",
+      "gruppe": "kontrolle"
+    },
+    {
+      "frage": "Wie gehe ich vor, sobald mir daheim ein Defekt auffällt: gleich den Eigentümer informieren oder erst einmal abwarten?",
+      "erwartet": [
+        "C-0402"
+      ],
+      "art": "blind",
+      "gruppe": "kontrolle"
+    },
+    {
+      "frage": "Woher kommt das POLE-Modell ursprünglich?",
+      "erwartet": [
+        "C-0290"
+      ],
+      "art": "blind",
+      "gruppe": "kontrolle"
+    },
+    {
+      "frage": "In welchem Berufsfeld entstand die Einteilung in Menschen, Dinge, Orte und Geschehnisse, und weshalb kam später noch ein Baustein für Firmen und Verbände hinzu?",
+      "erwartet": [
+        "C-0290"
+      ],
+      "art": "blind",
+      "gruppe": "kontrolle"
+    },
+    {
+      "frage": "Welche typischen Pannen beim Zerstückeln langer Texte in Abschnitte umgeht man, wenn man stattdessen jede Kernaussage für sich ablegt?",
+      "erwartet": [
+        "C-0291"
+      ],
+      "art": "blind",
+      "gruppe": "kontrolle"
+    },
+    {
+      "frage": "Zerlegung nach fester Zeichenzahl oder kleinste eigenständige Wissenshäppchen – was spricht für Letzteres?",
+      "erwartet": [
+        "C-0291"
+      ],
+      "art": "blind",
+      "gruppe": "kontrolle"
+    },
+    {
+      "frage": "Aus welchen Ebenen besteht ein LLM-Wiki nach Karpathy?",
+      "erwartet": [
+        "C-0101"
+      ],
+      "art": "blind",
+      "gruppe": "kontrolle"
+    },
+    {
+      "frage": "Soll ein Sprachassistent bei jeder Frage die Originalunterlagen durchgehen, oder greift er besser auf eine dauerhaft gepflegte Zwischenebene mit aufbereiteten Notizen zu?",
+      "erwartet": [
+        "C-0101"
+      ],
+      "art": "blind",
+      "gruppe": "kontrolle"
+    },
+    {
+      "frage": "Welche drei grundlegenden Arbeitsgänge kennt eine maschinell gepflegte Wissenssammlung?",
+      "erwartet": [
+        "C-0102"
+      ],
+      "art": "blind",
+      "gruppe": "kontrolle"
+    },
+    {
+      "frage": "Wie führe ich das Änderungsprotokoll so, dass ich es per Kommandozeile nach einem bestimmten Tag durchsuchen kann?",
+      "erwartet": [
+        "C-0102"
+      ],
+      "art": "blind",
+      "gruppe": "kontrolle"
+    },
+    {
+      "frage": "Ab wann zahlt sich eine vorab aufbereitete Notizebene für einen Sprachassistenten überhaupt aus?",
+      "erwartet": [
+        "C-0103"
+      ],
+      "art": "blind",
+      "gruppe": "kontrolle"
+    },
+    {
+      "frage": "Wird es teurer, wenn die Maschine sowohl die Zusammenfassung als auch das zugrunde liegende Original durchgeht?",
+      "erwartet": [
+        "C-0103"
+      ],
+      "art": "blind",
+      "gruppe": "kontrolle"
+    },
+    {
+      "frage": "Wie verhindere ich, dass die Verknüpfungen zwischen den Seiten meiner Wissenssammlung mit der Zeit unbemerkt auseinanderlaufen?",
+      "erwartet": [
+        "C-0104"
+      ],
+      "art": "blind",
+      "gruppe": "kontrolle"
+    },
+    {
+      "frage": "Soll die Maschine die Fundstellenangabe einer Aussage jedes Mal neu gegen das Original abgleichen, oder ist sie für Leute gedacht, die selbst nachschlagen wollen?",
+      "erwartet": [
+        "C-0104"
+      ],
+      "art": "blind",
+      "gruppe": "kontrolle"
+    },
+    {
+      "frage": "Welche Angabe muss im Kopfbereich jedes Schriftstücks mindestens stehen, damit eine Sammlung nach OKF 0.2 als gültig durchgeht?",
+      "erwartet": [
+        "C-0301"
+      ],
+      "art": "blind",
+      "gruppe": "kontrolle"
+    },
+    {
+      "frage": "Ist ein Paket noch regelgerecht, wenn bei einem gewöhnlichen Textdokument der Metadatenkopf fehlt oder sich nicht maschinell einlesen lässt?",
+      "erwartet": [
+        "C-0301"
+      ],
+      "art": "blind",
+      "gruppe": "kontrolle"
+    },
+    {
+      "frage": "Wie halte ich im Kopf eines Schriftstücks fest, woher sein Inhalt kommt, und welche Einzelheiten je Beleg sind freiwillig?",
+      "erwartet": [
+        "C-0302"
+      ],
+      "art": "blind",
+      "gruppe": "kontrolle"
+    },
+    {
+      "frage": "Lässt sich vermerken, wie häufig ein Beleg herangezogen wurde und auf welche Zeitspanne sich diese Zahl bezieht?",
+      "erwartet": [
+        "C-0302"
+      ],
+      "art": "blind",
+      "gruppe": "kontrolle"
+    },
+    {
+      "frage": "Warum enthält OKF 0.2 keine Kennzahl dafür, wie verlässlich ein Beleg ist?",
+      "erwartet": [
+        "C-0303"
+      ],
+      "art": "blind",
+      "gruppe": "kontrolle"
+    },
+    {
+      "frage": "Wird die Vertrauenswürdigkeit einer herangezogenen Unterlage als Zahl mitgeliefert, oder muss der Leser sie sich selbst erschließen?",
+      "erwartet": [
+        "C-0303"
+      ],
+      "art": "blind",
+      "gruppe": "kontrolle"
+    },
+    {
+      "frage": "Wo steht, von wem und zu welchem Zeitpunkt die gegenwärtige Fassung eines Textes geschrieben wurde, und wo, wer sie danach gegengeprüft hat?",
+      "erwartet": [
+        "C-0304"
+      ],
+      "art": "blind",
+      "gruppe": "kontrolle"
+    },
+    {
+      "frage": "Schreibweise für Urheber: Mensch, Sprachmodell oder Skript unterscheiden?",
+      "erwartet": [
+        "C-0304"
+      ],
+      "art": "blind",
+      "gruppe": "kontrolle"
+    },
+    {
+      "frage": "Wie stufe ich einen Text ein, den bislang nur Software, aber noch kein Mensch abgesegnet hat?",
+      "erwartet": [
+        "C-0305"
+      ],
+      "art": "blind",
+      "gruppe": "kontrolle"
+    },
+    {
+      "frage": "Lässt sich über die Einstufung, wie gründlich etwas geprüft wurde, regeln, wer einen Eintrag öffnen darf?",
+      "erwartet": [
+        "C-0305"
+      ],
+      "art": "blind",
+      "gruppe": "kontrolle"
+    },
+    {
+      "frage": "Was wird angenommen, wenn bei einem Eintrag nicht vermerkt ist, ob er ein Entwurf, eine gültige Fassung oder bereits abgekündigt ist?",
+      "erwartet": [
+        "C-0306"
+      ],
+      "art": "blind",
+      "gruppe": "kontrolle"
+    },
+    {
+      "frage": "Verfallstag für Wissenseinträge – wie angeben, und ab wann zählt etwas als überholt?",
+      "erwartet": [
+        "C-0306"
+      ],
+      "art": "blind",
+      "gruppe": "kontrolle"
+    },
+    {
+      "frage": "Was muss bei der Dokumentart „Attested Computation“ zusätzlich zwingend ausgefüllt sein?",
+      "erwartet": [
+        "C-0307"
+      ],
+      "art": "blind",
+      "gruppe": "kontrolle"
+    },
+    {
+      "frage": "Stößt das Format freigegebene Rechenvorschriften selbst an, oder beschreibt es bloß, wie ein fremdes Programm sie startet und das Resultat ohne Sprachmodell nachkontrolliert?",
+      "erwartet": [
+        "C-0307"
+      ],
+      "art": "blind",
+      "gruppe": "kontrolle"
+    },
+    {
+      "frage": "Darf ein Sprachassistent die Formel einer freigegebenen Rechenvorschrift selbst umschreiben, oder nur die Eingabegrößen einsetzen?",
+      "erwartet": [
+        "C-0308"
+      ],
+      "art": "blind",
+      "gruppe": "kontrolle"
+    },
+    {
+      "frage": "Worin unterscheidet sich die Freigabe einer Rechenvorschrift als Ganzes von der Kontrolle eines konkreten Durchgangs, und welches der beiden Ergebnisse wird in der Sammlung aufbewahrt?",
+      "erwartet": [
+        "C-0308"
+      ],
+      "art": "blind",
+      "gruppe": "kontrolle"
+    },
+    {
+      "frage": "Was ist beim Umstieg auf die neuere Formatausgabe nicht mehr abwärtskompatibel?",
+      "erwartet": [
+        "C-0309"
+      ],
+      "art": "blind",
+      "gruppe": "kontrolle"
+    },
+    {
+      "frage": "Können Programme ältere Schriftstücke mit der früheren Zeitmarke und dem Belegverzeichnis im Fließtext noch verarbeiten?",
+      "erwartet": [
+        "C-0309"
+      ],
+      "art": "blind",
+      "gruppe": "kontrolle"
+    },
+    {
+      "frage": "Warum genügt es nicht zu sagen, die eigene Sammlung vertrage sich mit dem offenen Wissensformat, ohne dazuzuschreiben, welche Ausgabe gemeint ist?",
+      "erwartet": [
+        "C-0310"
+      ],
+      "art": "blind",
+      "gruppe": "kontrolle"
+    },
+    {
+      "frage": "Bei welchen Attributen weicht das hauseigene Regelwerk von OKF 0.2 ab, obwohl sie gleich heißen?",
+      "erwartet": [
+        "C-0310"
+      ],
+      "art": "blind",
+      "gruppe": "kontrolle"
+    },
+    {
+      "frage": "Kann ich eine Kennzahl, eine Betriebsanleitung und eine Programmierschnittstelle gemeinsam in einem einzigen Textdokument abhandeln, oder braucht jedes Thema sein eigenes?",
+      "erwartet": [
+        "C-0001"
+      ],
+      "art": "blind",
+      "gruppe": "kontrolle"
+    },
+    {
+      "frage": "Ablageform der Inhalte: Datenbank oder schlichte Textdokumente in Ordnern mit Metadatenkopf?",
+      "erwartet": [
+        "C-0001",
+        "C-0301"
+      ],
+      "art": "blind",
+      "gruppe": "kontrolle"
+    },
+    {
+      "frage": "Woran wird ein einzelner Eintrag eindeutig erkannt – bekommt jeder eine eigene Kennnummer?",
+      "erwartet": [
+        "C-0002"
+      ],
+      "art": "blind",
+      "gruppe": "kontrolle"
+    },
+    {
+      "frage": "Wie stelle ich Verbindungen zwischen zwei Einträgen her, sodass aus der Ordnerstruktur ein Netz wird?",
+      "erwartet": [
+        "C-0002"
+      ],
+      "art": "blind",
+      "gruppe": "kontrolle"
+    },
+    {
+      "frage": "Muss jedes Paket eine Übersichtsseite und ein Verlaufsprotokoll mitbringen, oder kann man beides weglassen?",
+      "erwartet": [
+        "C-0003"
+      ],
+      "art": "blind",
+      "gruppe": "kontrolle"
+    },
+    {
+      "frage": "Welche Hilfsseiten erlauben es, sich schrittweise vom Groben ins Feine vorzuarbeiten und nachzuvollziehen, was sich im Lauf der Zeit getan hat?",
+      "erwartet": [
+        "C-0003"
+      ],
+      "art": "blind",
+      "gruppe": "kontrolle"
+    },
+    {
+      "frage": "Hält Google die erste Ausgabe seiner Vorgabe für Wissenssammlungen schon für ausgereift und endgültig?",
+      "erwartet": [
+        "C-0004"
+      ],
+      "art": "blind",
+      "gruppe": "kontrolle"
+    },
+    {
+      "frage": "Welches Vorgehen stand Pate für das offene Regelwerk für Wissenssammlungen, und was soll es zwischen verschiedenen Werkzeugen leisten?",
+      "erwartet": [
+        "C-0004"
+      ],
+      "art": "blind",
+      "gruppe": "kontrolle"
+    },
+    {
+      "frage": "Genügt das schlanke Grundformat allein, wenn jede Behauptung durch Belege abgesichert sein muss?",
+      "erwartet": [
+        "C-0005"
+      ],
+      "art": "blind",
+      "gruppe": "kontrolle"
+    },
+    {
+      "frage": "oksv-lite: Zweck und Fundort der Beschreibung?",
+      "erwartet": [
+        "C-0005"
+      ],
+      "art": "blind",
+      "gruppe": "kontrolle"
+    },
+    {
+      "frage": "Größte Hürde beim Aufbau eines vernetzten Langzeitgedächtnisses für Sprachassistenten?",
+      "erwartet": [
+        "C-0201"
+      ],
+      "art": "blind",
+      "gruppe": "kontrolle"
+    },
+    {
+      "frage": "Was droht einem Vorhaben, wenn man das Begriffs- und Beziehungsmodell gleich zu Beginn lückenlos festlegen will?",
+      "erwartet": [
+        "C-0201"
+      ],
+      "art": "blind",
+      "gruppe": "kontrolle"
+    },
+    {
+      "frage": "Wofür stehen die Buchstaben in POLE+O?",
+      "erwartet": [
+        "C-0202"
+      ],
+      "art": "blind",
+      "gruppe": "kontrolle"
+    },
+    {
+      "frage": "Mit wie vielen Sorten von Dingen kommen ausgearbeitete Fachmodelle aus verschiedenen Branchen in der Praxis typischerweise aus?",
+      "erwartet": [
+        "C-0202"
+      ],
+      "art": "blind",
+      "gruppe": "kontrolle"
+    },
+    {
+      "frage": "Wie finde ich heraus, welche feineren Unterkategorien mein Begriffsraster tatsächlich braucht?",
+      "erwartet": [
+        "C-0203"
+      ],
+      "art": "blind",
+      "gruppe": "kontrolle"
+    },
+    {
+      "frage": "Muss ich das ganze Kategoriensystem umbauen, wenn die automatische Erkennung etwas in die falsche Schublade steckt?",
+      "erwartet": [
+        "C-0203"
+      ],
+      "art": "blind",
+      "gruppe": "kontrolle"
+    },
+    {
+      "frage": "Wohin mit Informationen, die sich keiner vorhandenen Kategorie zuordnen lassen?",
+      "erwartet": [
+        "C-0204",
+        "C-0205"
+      ],
+      "art": "blind",
+      "gruppe": "kontrolle"
+    },
+    {
+      "frage": "Sind lose abgelegte Einzelangaben mit anderen Einträgen verbunden, oder stößt man nur per Volltextrecherche auf sie?",
+      "erwartet": [
+        "C-0204"
+      ],
+      "art": "blind",
+      "gruppe": "kontrolle"
+    },
+    {
+      "frage": "Wann darf die Liste der zugelassenen Dokumentarten wachsen, und wird Unbekanntes bis dahin durchgelassen oder abgewiesen?",
+      "erwartet": [
+        "C-0205"
+      ],
+      "art": "blind",
+      "gruppe": "kontrolle"
+    },
+    {
+      "frage": "In welcher Datei sammelt der Wissenstresor Einzelaussagen, für die es noch keinen eigenen Artikel gibt?",
+      "erwartet": [
+        "C-0205"
+      ],
+      "art": "blind",
+      "gruppe": "kontrolle"
+    }
+  ],
+  "negativ": [
+    "Wie hoch ist der Urlaubsanspruch in Teilzeit?",
+    "Welches Einbettungsmodell empfiehlt der Bestand?",
+    "Was kostet eine Lizenz für den Tresor?",
+    "Wer hat den Wissenstresor programmiert?",
+    "Wie groß ist das Open Knowledge Format?",
+    "Welche Kündigungsfrist gilt bei Schimmel?",
+    "Wie viele Nutzer hat OKF weltweit?",
+    "Welche Programmiersprache schreibt OKF vor?",
+    "Wann erscheint OKF v1.0?",
+    "Wie wird die Minderungsquote berechnet?",
+    "Was sagt der Bestand zum Datenschutz?",
+    "Welche Bußgelder drohen bei Verstößen?",
+    "Um wie viel Prozent darf die Miete bei Schimmelbefall gemindert werden?",
+    "Welche Frist hat der Vermieter, um einen angezeigten Mangel zu beseitigen?",
+    "In welchem Jahr hat Google OKF v0.1 veröffentlicht?",
+    "Was schreibt die Map-first-Regel inhaltlich vor?",
+    "Wie heißen die 22 Ontologien im Neo4j-Domänenkatalog im Einzelnen?",
+    "Welches Zeitformat ist für generated.at vorgeschrieben?",
+    "In welchem Abstand muss der Lint-Lauf im Wissenstresor stattfinden – täglich, wöchentlich oder monatlich?",
+    "Welche Kantentypen sieht POLE+O zwischen Person und Organization vor?",
+    "Kann ich vom Hauseigentümer Ersatz für Möbel verlangen, die durch die Feuchtigkeit ruiniert wurden?",
+    "Wie werden Bilder, PDFs und andere Binärdateien in der Wissenssammlung abgelegt?",
+    "Wie werden zwei widersprüchliche Aussagen aus verschiedenen Unterlagen aufgelöst?",
+    "Welche Vektordatenbank wird für die semantische Suche über die Wissensseiten empfohlen?",
+    "Wie schützt man die Sammlung davor, dass in den Originalunterlagen versteckte Anweisungen das Sprachmodell manipulieren?",
+    "Wird ein Entwurf automatisch gelöscht, wenn er zu lange unbearbeitet liegen bleibt?",
+    "Wer haftet, wenn eine freigegebene Rechenvorschrift ein falsches Ergebnis liefert?"
+  ]
+}

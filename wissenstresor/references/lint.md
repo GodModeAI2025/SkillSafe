@@ -33,7 +33,10 @@ Ampel und Befundliste sind die Arbeitsgrundlage. Rote Befunde zuerst.
 * **Kurzfassungs-Deckung:** Ist jede Kernaussage der Kurzfassung durch
   einen Claim der Seite gedeckt? Ungedeckte Sätze markieren — der
   Kurzfassung wird zur Abfragezeit vertraut, sie darf nichts behaupten,
-  was kein Claim trägt.
+  was kein Claim trägt. An dieser Regel hängt auch die Vollsichtung: Sie
+  legt Claims vor, keine Kurzfassungen. Was nur in einer Kurzfassung steht,
+  findet sie nicht, und die Antwort lautet dann zu Recht „Nicht im
+  Bestand".
 * **Widerspruchssuche:** Sagen zwei Claims (auch domänenübergreifend)
   Unvereinbares, ohne dass eine `widerspricht`-Relation existiert?
   Relation setzen, beide Stände stehen lassen, melden.
@@ -59,6 +62,15 @@ Ampel und Befundliste sind die Arbeitsgrundlage. Rote Befunde zuerst.
 * **Begriffswelt-Check:** Sind Aliase echte Synonyme oder nur lose
   verwandte Begriffe? Fehlt einer relevanten Seite ihre B-ID? Änderungen
   folgen `references/begriffswelten.md`; Aliastext wird nie zur Evidenz.
+* **Auffindbarkeits-Probe:** Pro Seite zwei Fragen so stellen, wie jemand
+  ohne Kenntnis der Quelle fragen würde, und `query` ausführen. Steht der
+  gemeinte Claim nicht unter den Kandidaten, ist das noch kein Befund: Die
+  Probe besteht, wenn `match_strength` dann `weak` oder `none` meldet. Ein
+  Befund ist `strong` ohne den Claim, denn dann behauptet das Ranking ein
+  Verständnis, das es nicht hat; fast immer steckt ein zu weit gefasster
+  Alias oder Tag dahinter. Fehlt für die Wortwahl der Frage schlicht ein
+  Synonym, ist das ein Alias-Kandidat. Die Probefragen werden nirgends im
+  Tresor abgelegt.
 * **Medien-Check:** Ist jede freigegebene Repräsentation durch mindestens
   einen Claim genutzt, jede Claim-Region weiterhin korrekt lokalisiert und
   jede verdächtige Instruktion markiert? Inhaltliche Änderungen laufen über

@@ -30,8 +30,31 @@ Schicht pflegen. Begriffe helfen beim Finden; Fakten bleiben Claims.
 
 ## Retrieval-Wirkung
 
-Ein exakter Vorzugsbegriff oder Alias aktiviert den gebundenen Begriff.
-Danach werden direkte Ober-, Unter- und verwandte Begriffe höchstens einen
-Hop erweitert und niedriger gewichtet. Ranking und Tie-Breaker bleiben
-ganzzahlig und deterministisch. Definition, Alias und Hierarchie erscheinen
-nie als Antwortbehauptung; `evidence` enthält weiterhin nur Claims.
+Ein Vorzugsbegriff oder Alias aktiviert den gebundenen Begriff, exakt oder
+über seine Wortform: „Vertrauensstufen" trifft den Alias „Vertrauensstufe",
+„attestierte Berechnungen" die „Attestierte Berechnung". Beugungsformen
+gehören deshalb nicht in die Alias-Liste. Danach werden direkte Ober-, Unter-
+und verwandte Begriffe höchstens einen Hop erweitert und niedriger gewichtet,
+und der `definition_claim` eines getroffenen Begriffs rückt nach vorn.
+Ranking und Tie-Breaker bleiben ganzzahlig und deterministisch. Definition,
+Alias und Hierarchie erscheinen nie als Antwortbehauptung; `evidence` enthält
+weiterhin nur Claims.
+
+## Was ein Alias leisten soll
+
+Wortformen findet das Ranking selbst, Bedeutung nicht. Ein Alias ist der
+Ort, an dem Bedeutung einmal von Hand in den Bestand kommt: das Wort, das
+Fragende tatsächlich benutzen, wenn es ein anderes ist als das der Quelle.
+„Verfallsdatum" für `stale_after`, „Herkunftsnachweis" für Provenienz.
+
+Der Anlass ist messbar. Liefert `query` für eine naheliegende Frage `weak`
+oder `none` und findet erst die Vollsichtung den Claim, dann nennt
+`coverage.query_terms.unmatched` die Wörter, die dem Bestand fehlen. Ist
+eines davon ein echtes Synonym eines belegten Begriffs, wird es Alias. Ist es
+nur lose verwandt, bleibt es draußen: Ein Alias, der zu viel trifft, macht
+aus einer ehrlichen Lücke einen falschen Anker.
+
+Nie wird eine ganze Frage als Alias eingetragen. Das hebt jede Messung auf
+100 Prozent und sagt danach nichts mehr; der Wächter in
+`tools/recall_check.py` bricht bei einer wörtlichen Goldfrage im Skill-Ordner
+ab.

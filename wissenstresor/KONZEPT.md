@@ -23,7 +23,7 @@ als Ordner- und Regelgrenzen ab:
 |---|---|---|
 | Engine | SKILL.md, scripts/, schema/, references/ | ändert sich nur durch bewusste Motor-Releases; genau ein ausführbares Script (AD-09) |
 | Content | knowledge/, sources/, INDEX, ROUTER, graph/ | validate erzwingt Profil; raw/ nur reguläre registrierte Dateien; Medienregionen und Begriffs-IDs streng referenziert; Links/Aliasse verboten |
-| Assurance | doctor + Lint-Workflow (Smoke-Evals im Entwicklungs-Workspace, nicht im Paket) | nur diagnostisch; **Gold-Holdouts gehören NIE in den Skill** (Leakage) |
+| Assurance | doctor + Lint-Workflow (Smoke-Evals und Recall-Gold im Entwicklungs-Workspace, nicht im Paket) | nur diagnostisch; **Gold-Holdouts gehören NIE in den Skill** (Leakage) |
 | Release | VERSION, MANIFEST.sha256, log.md | exklusiver Lock; vorbereiteter Endstand; Rollback bei behandelten Fehlern; Manifest zuletzt |
 
 Eine Randnotiz zur Zonenzuordnung: `schema/begriffswelten.json` liegt
@@ -42,7 +42,8 @@ manifestierten Release-Snapshot und rankt danach natürliche Einheiten —
 Seiten und Claims — mit festen Ganzzahlgewichten aus:
 
 1. exaktem Vorzugsbegriff oder Alias einer kontrollierten Begriffswelt,
-2. lexikalischen Token-/Phrasentreffern,
+2. lexikalischen Token-/Phrasentreffern samt ihren Wortformen (Flexion,
+   `-ung`, Kompositumteile; `wortform/v1`),
 3. genau einem begrenzten Begriffs- oder Seitengraph-Hop.
 
 Erst danach liest das Modell die gelieferten Seiten und formuliert aus den
@@ -59,9 +60,10 @@ Tausenderbereich liefern Claims, Begriffe und Graphkanten bereits starke
 retrievalfähige Einheiten. Sie behalten Fundstelle, Status, Stand und
 Quellenbezug. Feste Gewichte und stabile Tie-Breaker machen zwei Läufe
 byteidentisch. Das Ranking scannt zwar alle Claims, bewertet aber keine
-semantischen Paraphrasen: `no_candidates` löst deshalb eine vollständige
-Modellprüfung der angegebenen Fallback-Seiten aus. Erst deren Ergebnis darf
-„Nicht im Bestand" begründen. Embeddings würden hier zusätzliche Modell-
+semantischen Paraphrasen. Es weist deshalb selbst aus, wie viel der Frage es
+erkannt hat, und bei schwacher Deckung ist die Vollsichtung Pflicht: Das
+Modell liest jeden Claim, das Script prüft die Quittung (AD-14). Erst sie
+darf „Nicht im Bestand" begründen. Embeddings würden hier zusätzliche Modell-
 und Datenschutzgrenzen einführen, ohne die Evidenzgrenze zu ersetzen.
 
 **Grenze:** Bei Millionen Dokumenten oder bewusst unscharfer externer Suche
@@ -86,6 +88,13 @@ maschinenlesbar (Antworten warnen vor veralteten Fassungen),
 `widerspricht` macht Konflikte sichtbar statt sie still zu entscheiden,
 und Kanten sind der einzige erlaubte Weg über Domänengrenzen — die
 Quellentrennung bleibt baulich.
+
+Jede Seite, die `query` oder eine Quittung von `sweep` ausgibt, nennt ihre
+Kanten in beiden Richtungen (`pages[].relations`). Die ausgehenden stehen im
+Frontmatter der Seite, die eingehenden nur auf der jeweils anderen: Wer eine
+überholte Seite liest, sähe dort sonst nicht, welche sie ersetzt. Nach einer
+Vollsichtung gibt es zudem keinen Graph-Hop, der die Nachfolgerin als
+Kandidaten hereinholte. Die Angabe ist ein Verweis und nie Evidenz.
 
 ### AD-03 · Type-Onboarding: unbekannter Typ stoppt den Ingest
 
@@ -448,6 +457,233 @@ Schalter. Wer ein Paket weitergibt, gibt seine aufgeführten Netzquellen mit.
 Das ist die gewollte Folge der Gleichbehandlung und steht so in `README.md`
 und `BETRIEB.md`.
 
+### AD-14 · Bedeutung liest das Modell, Vollständigkeit belegt das Script
+
+**Entscheidung:** Der Tresor bekommt eine Bedeutungssuche, aber keinen
+Bedeutungsindex. Drei Bausteine tragen sie gemeinsam:
+
+1. **Das Ranking wird ehrlich.** `hybrid-local/v4` weist aus, welche
+   Fragebegriffe es erkannt hat (`coverage.match_strength`,
+   `coverage.query_terms`), meldet jede Kürzung durch das Limit und macht bei
+   `weak` und `none` die Vollsichtung zur Pflicht.
+2. **Wortformen sind keine Bedeutungsfrage.** `wortform/v1` gleicht Flexion,
+   Umlaut-Plural, `-ung` und Kompositumteile ab, nachrechenbar und mit eigenem
+   Grund am Treffer. Mehr nicht.
+3. **Die Vollsichtung ist die Bedeutungssuche.** `sweep` legt jeden Claim in
+   Stapeln vor, das Modell urteilt nach Bedeutung, und das Script prüft per
+   Siegel und Quittung, dass kein Stapel fehlt. „Nicht im Bestand" setzt eine
+   vollständige Quittung voraus.
+
+**Begründung:** Gemessen wurde zuerst, was ist. 28 umformulierte Fragen gegen
+den Demo-Bestand unter `hybrid-local/v1`: 15 gefunden, 5 nur jenseits des
+Limits, 5 verfehlt bei `candidates_found`, 3 verfehlt und gemeldet. Zehn von
+dreizehn Verfehlungen waren also still. Die Rückfallebene gab es, aber sie
+sprang nur bei null Kandidaten an, und eine natürliche Frage teilt fast immer
+ein Wort mit irgendeinem Claim: „darf", „wird", „muss". Ein Zufallstreffer
+auf einem Hilfsverb schaltete genau die Prüfung ab, die die Frage gebraucht
+hätte. Dazu war die Rückfallebene eine Anweisung („alle Seiten lesen") und
+kein geprüfter Schritt.
+
+Daraus folgt die Arbeitsteilung, die AD-05 schon vorgibt. Was ein Script
+entscheiden kann, entscheidet es: ob ein Wort der Frage im Ergebnis vorkommt,
+ob das Limit etwas abschnitt, ob jeder Stapel ausgegeben und beurteilt wurde.
+Was Urteil braucht, bleibt beim Modell: ob „nasse Wände" den Claim zum
+Schimmelbefall meint. In einem Skill ist der Leser mit Sprachverständnis
+ohnehin anwesend. Bei höchstens 10.000 kurzen Claims ist sein vollständiges
+Lesen ein stärkeres Relevanzurteil als jede Nachbarschaft in einem
+Einbettungsraum, und es lässt sich durch Bauart vollständig machen. Ein
+Ähnlichkeitsranking, lexikalisch wie vektoriell, liefert immer etwas zurück
+und kann Abwesenheit nie belegen. Die Frage „übersieht er nichts" beantwortet
+deshalb kein besseres Ranking, sondern nur ein Verfahren, das alles vorlegt
+und das nachweist.
+
+Gemessen nach dem Umbau, Limit 8: Von den 28 Fragen findet das Ranking 19
+direkt, 9 gehen in die Pflicht-Vollsichtung, keine bleibt still. Diese Zahl
+ist geschönt, weil Funktionswortliste und Schwellen an genau diesen Fragen
+eingestellt wurden. Die ehrlichere stammt aus einer Kontrolle: 56 Fragen von
+einem zweiten Agenten, der nur die Claim-Texte kannte und ihren Wortlaut mit
+Absicht mied, einmal gegen den fertigen Stand gemessen. Dort findet das
+Ranking 17 direkt, 37 gehen in die Pflicht-Vollsichtung, 2 tragen einen
+Hinweis, keine bleibt still. Etwa ein Drittel also: Das Ranking ist eine
+Abkürzung für Fragen in der Sprache des Bestands. Bedeutung findet das Lesen.
+
+Die Kontrolle fand außerdem einen Fehler, den die eigenen Fragen nicht
+zeigten. Eine frühere Fassung der Nachrück-Regel ließ den rangniedrigsten
+Kandidaten weichen, sobald ein ungedeckter Fragebegriff einen Träger hatte;
+Füllwörter wie „stehen" holten so ihren zufälligen Träger herein und
+verdrängten einen Definitions-Claim von Rang 6. Seither weicht nur reiner
+Kontext. Mit dieser Korrektur stehen 18 von 56 direkt, 37 in der Pflicht, 1
+mit Hinweis; diese zweite Zahl ist nicht mehr blind gemessen und steht
+deshalb neben der ersten, nicht an ihrer Stelle.
+
+**Was das Gold nicht zeigte, zeigte der Review.** Am selben Tag prüften
+unabhängige Durchgänge den Stand v0.12.0, getrennt nach Ranking, Vollsichtung
+sowie Vertrag und Dokumentation, je mit dem Auftrag, Fehler zu finden und
+nachzustellen. Zwei Befunde waren schwer; beide wurden vor der Korrektur ein
+zweites Mal nachgestellt, und beide lagen außerhalb
+dessen, was 84 Fragen an einem Bestand mit 28 Claims berühren: Nur zwei davon
+erreichen überhaupt `strong`, das harte Gate wird vom Demo-Gold also kaum
+geprüft. Erstens galt eine getroffene Benennung pauschal als verstanden. Bei
+zwei kuratierten Begriffen in einer Frage füllte die Seite des einen das
+Limit, die des anderen fehlte samt Definitions-Claim, und das Ergebnis hieß
+`strong`; in 8 von 72 Paarfragen. Zweitens traf die Wortform-Stufe der
+Begriffe auch Funktionswörter: „sich" benannte „Sicherung", „seit" die
+„Seite". Das gab einen Anker und schaltete die Pflicht-Vollsichtung ab —
+derselbe Fehler wie beim Hilfsverb im Ausgangsbefund, nur über die
+Begriffswelt, und im Demo-Bestand unsichtbar, weil dort keine solche Benennung
+steht. Dazu kamen eine Abkürzung („die IT" als englisches „it"), vertippte
+IDs, die spurlos aus der Frage verschwanden, und ein Fingerzeig, der mit 30
+Punkten Claims mit dem Fragewort selbst verdrängte.
+
+`hybrid-local/v3` behebt das: Ein Begriff zählt nur, wenn er in der Ausgabe
+vertreten ist, und rückt sonst nach; die Wortform-Stufe trifft Benennungen
+nur über Inhaltswörter; Abkürzungen in Großbuchstaben sind nie Funktionswort;
+unbekannte IDs bleiben als unverstandenes Wort stehen; eine Frage ohne
+Inhaltswort ist nie `strong`; der Fingerzeig liegt bei 10. An den Messzahlen
+ändert das nichts (19 und 18 direkt, 0 still), und genau das ist die Lehre:
+Die Zahlen maßen diese Fehler nie. Jeder ist jetzt ein eigener Test.
+
+**Ein zweiter Review, derselbe Ort.** Die Änderungen von v0.14.0 wurden
+wieder unabhängig geprüft, diesmal mit zufällig erzeugten Beständen und einem
+Orakel, das die zugesagten Eigenschaften je Abfrage nachrechnet. Es fand drei
+Reste desselben Fehlers: `strong`, obwohl etwas an der Frage unverstanden
+blieb. Ein per ID genannter Begriff (oder einer, dessen Benennung nur aus
+Funktionswörtern besteht) steuert kein Inhaltswort bei; fehlte er in der
+Ausgabe, blieb die Abdeckung bei 100 %. Die Ziffern einer Kennung, die es
+nicht gibt, standen zufällig im Bestand („S-2026" und eine Jahreszahl). Und
+die Abkürzung „IT" traf als ganze Frage das englische „it" einer Fundstelle
+und galt als Anker. `hybrid-local/v4` schließt alle drei: `strong` verlangt
+zusätzlich, dass jeder direkt getroffene Begriff vertreten ist
+(`concepts.matched[].represented`) und dass die Frage keine unbekannte
+Kennung nennt; die ganze Frage als Wortfolge ist nur mit getroffenem
+Inhaltswort ein Anker. Rangfolge und Punktzahlen sind dieselben wie in v3,
+die Messzahlen ebenfalls. Derselbe Review fand, dass das Siegel der
+Vollsichtung „a != b" und „a = b" gleich las, weil Satzzeichen am Wortrand
+wegfielen; seit v0.15.0 bleibt jedes Zeichen stehen. Egal sind nur Groß- und
+Kleinschreibung, die Menge des Leerraums, Fragezeichen am Ende und die
+typografische Form der Anführungszeichen und Striche; einfache und doppelte
+bleiben verschieden.
+
+**Und was die Tests nicht zeigten.** Ein vierter Durchgang prüfte nicht den
+Code, sondern seine Absicherung: 86 Einzelfehler in der Engine und 17 im
+Messwerkzeug, je einer zur Zeit, am Stand v0.12.0. Die Hälfte blieb grün,
+darunter die Schwellen der Trefferstärke, vertauschte Kürzungszähler, jedes
+Gewicht der veröffentlichten Tabelle und das entfernte Gate für stille
+Verfehlungen, das am Demo-Gold noch nie angeschlagen hatte. Der Leck-Wächter
+fand eine Goldfrage nur in wörtlicher Schreibung, nicht ohne Fragezeichen
+und nicht in Umschrift, also gerade nicht so, wie ein Alias sie trüge. Seit
+v0.15.0 hält ein Schnappschuss fest, was `query` für jede Goldfrage bei Limit
+1, 3 und 8 und für eine Reihe fester Abfragen ausgibt
+(`tools/rangfolge_check.py`, `tests/gold/rangfolge-demo.json`): Zustand,
+Stärke, Abdeckung, Evidenz mit Punktzahl und je ein Prüfwert über die übrigen
+Blöcke. Jedes Gate des Messwerkzeugs hat einen Test, der es auslöst, die
+Messzahlen selbst stehen als Soll in der Suite, und der Leck-Wächter liest
+mit der Normalisierung der Engine, seit v0.16.0 auch in ihrer Wortform: Eine
+Goldfrage, die als Alias in anderer Beugung dastand, fiel vorher nicht auf,
+obwohl die Engine sie traf. Ein Schnappschuss beweist keine
+Richtigkeit, er macht Bewegung sichtbar: Wer am Ranking dreht, sieht jede
+Folge und entscheidet sie, statt sie zu übersehen. Gegengeprüft mit einer
+eigenen Probe am Stand v0.15.0: Von 117 gezielt gewählten Einzelfehlern in
+Engine und Werkzeugen fallen 116 auf, der verbleibende ist gleichwertig (das
+Siegel ohne Stapelnummer; die Claim-IDs unterscheiden die Stapel ohnehin).
+Die Probe ist selbst gebaut. Sie zeigt, dass die bekannten Lücken geschlossen
+sind, nicht dass es keine weiteren gibt.
+
+**Ende zu Ende gemessen.** Ob ein Modell dem Vertrag tatsächlich folgt, zeigt
+weder das Gold noch ein Review, sondern nur ein Lauf. Zwanzig frische Agenten
+bekamen je einen entpackten Skill-Ordner und Nutzerfragen, sonst nichts: keine
+Erklärung des Verfahrens, kein Hinweis auf die Messung. Ausgewertet hat
+`tools/antwort_check.py`, das dem Agenten nichts glaubt: Aus dem Protokoll
+liest es nur Frage, Antworttext und Quittungseinträge, und fährt jede Quittung
+erneut gegen die Engine.
+
+| Runde | Stand | Fragen | mit erwartetem Claim | gefunden | davon vom Ranking verfehlt | trotzdem gefunden | Negativfragen | korrekt abgelehnt | Verstöße |
+|---|---|---|---|---|---|---|---|---|---|
+| 1, acht Agenten | v0.12.1 | 32 | 24 | 24 | 19 | 19 | 8 | 8 | 0 |
+| 2, vier Agenten | v0.13.0 | 12 | 8 | 8 | 8 | 8 | 4 | 4 | 0 |
+| 3, vier Agenten | v0.14.0 | 12 | 7 | 7 | 5 | 5 | 5 | 5 | 0 |
+| 4, vier Agenten | v0.15.0 | 12 | 7 | 7 | 4 | 4 | 5 | 5 | 0 |
+
+In den ersten drei Runden reichte jeder Agent zu jeder Frage eine gültige,
+vollständige Quittung ein, in Runde 4 zu zehn von zwölf Fragen; die beiden
+übrigen brauchten keine (eine Kennung, die es nicht gibt, und eine Frage,
+die die gelesenen Seiten ganz beantworteten). Jede eingereichte Quittung war
+gültig; in Runde 2 bis 4 liefen je sechs davon über drei Stapel. Kein „Nicht im
+Bestand" stand ohne Quittung da, keine Negativfrage wurde beantwortet, kein
+Agent veränderte seine Kopie. Die Protokolle liegen unter `tests/e2e/`; ihre
+Siegel gelten nur für den Stand, an den sie gebunden sind.
+
+Der zweite Ertrag waren die Anmerkungen der Agenten. Sie fanden, was am
+Vertrag unklar war (wann `partial`, ob der externe Rückfall Pflicht ist, was
+in die Quittung gehört), was die Ausgabe verschwieg (die Nachfolgerin einer
+überholten Seite nach einer Vollsichtung) und was sie falsch behauptete: Der
+externe Rückfall meldete „kein Dokument enthält die Anfragebegriffe", obwohl
+kein Dokument gelesen worden war. Sieben von acht Agenten der ersten Runde
+haben das beanstandet. Der Antworten-Vertrag sagte bis v0.16.0, wie diese
+Ausgabe zu lesen ist; seit v0.17.0 meldet die Engine selbst `not_bound` oder
+`unreachable` (aus der parallelen Linie v0.11.12 bis v0.12.0, AD-12). Und sie fanden in v0.13.0 einen Satz,
+der falsch war, weil er
+ungeprüft in den Vertrag geschrieben wurde (ein Netzabruf schreibe nichts in
+den Skill-Ordner; er schreibt eine Zeile nach `log.md`). Runde 3 lief am
+Stand v0.14.0 und brachte kleinere Unklarheiten: ob die Frage nach einer
+Kennung, die es nicht gibt, eine Vollsichtung braucht (seit v0.15.0 nicht
+mehr, das weiß das Script selbst), wie eine reine Abstention aussieht, ob die
+Belegzeile einer Auslegung den Stand trägt, und einen Satz unter „Kontext
+und Grenzen" einer Demo-Seite, der mehr behauptete, als ein Claim trug.
+Runde 4 lief am Stand v0.15.0 und prüfte gezielt die neuen Regeln: Die Frage
+nach einer unbekannten Kennung beantwortete der Agent ohne Vollsichtung mit
+einem Satz, eine unbekannte Kennung neben einer Sache führte zur
+Vollsichtung, und bei einem per Kennung genannten, unvertretenen Begriff
+stand seine Seite unter den gekürzten; gefunden hat der Agent den Claim in
+der Vollsichtung. Die Anmerkungen betrafen nur noch Feinheiten:
+dass die Engine den Kennungsfall selbst melden sollte, statt ihn ableiten zu
+lassen (seit v0.16.0 `fallback.unknown_ids_only: true`), die Grenze
+zwischen Lesart und ungedecktem Zusatz und wie viel eine Antwort über die
+Dateien des Werkzeugs selbst sagen darf.
+
+Grenzen dieser Messung, ausdrücklich: 68 Fragen, ein Demo-Bestand, in dem die
+Vollsichtung ein einziger Stapel ist, Agenten aus derselben Modellfamilie,
+und die Fragen stammen bis auf sieben aus dem Gold: Die mit erwartetem Claim
+sind also Fragen, die zu einem Claim gehören.
+Das zeigt, dass das Verfahren befolgbar ist und befolgt wurde. Es zeigt
+nicht, wie sorgfältig ein Modell 189 Stapel liest.
+
+**Grenze:** Die Quittung belegt Vorlage und Urteil, nicht Sorgfalt. Sie
+schützt gegen Abkürzen und Vergessen; wer die Stapelausgabe umleitet und nur
+das Siegel herauszieht, hält eine gültige Quittung über nichts. Das steht so
+im Antworten-Workflow, weil kein Script es verhindern kann.
+
+Die Vollsichtung kostet Lesearbeit im Verhältnis zum Bestand. Im Demo-Bestand
+ist es ein Stapel mit rund 14.000 Zeichen; ein synthetischer Bestand mit
+1.506 Seiten und 7.528 Claims braucht 189 Stapel. `--domain` und `--page`
+senken den Aufwand, erlauben dann aber nur „in diesem Umfang nicht gefunden".
+Wo auch das zu teuer wird, greift die Grenze aus AD-01.
+
+`strong` kann irren. Gemessen sind 0 stille Verfehlungen auf 84 Fragen, und
+das ist eine kleine, selbst gebaute Stichprobe an einem Bestand mit 28
+Claims, von der nur zwei Fragen `strong` überhaupt erreichen. Der Review hat
+zwei Wege gefunden, auf denen `strong` log, und beide lagen außerhalb dieser
+Stichprobe. Deshalb erlaubt `strong` nie eine Abstention, und deshalb liegt das
+Gold außerhalb des Skills: Ein eigener Bestand braucht eigene Fragen, gemessen
+mit `tools/recall_check.py` im Entwicklungs-Workspace. Steht eine Goldfrage
+wörtlich im Bestand, misst sie nur noch, ob er sich selbst wiederfindet; ein
+Wächter im selben Werkzeug bricht dann ab.
+
+Wortformen kollidieren. „Zeit" und „Zeitung", „Bild" und „Bildung" teilen
+eine Familie, „Nutzer" und „Nutzen" ebenso, und weil die Umlaut-Faltung jede
+Folge `oe` trifft, auch „Förderung" und „Forderung". Das erzeugt zusätzliche
+Kandidaten, nie Evidenz, und jeder trägt seinen Grund (`stem:`, `compound:`).
+Ein solcher Treffer zählt allerdings als verstandenes Wort und kann eine
+Frage `strong` machen.
+
+Die Vollsichtung sichtet Claims, keine Kurzfassungen. Das genügt nur, solange
+die Kurzfassungs-Deckung gilt (`references/lint.md`): Eine Kurzfassung darf
+nichts behaupten, was kein Claim trägt. Der Demo-Bestand selbst verstieß
+dagegen; die Kurzfassung von `okf.md` nannte „anbieterneutral" und „Juni
+2026" ohne Claim. Eine Frage danach endete in einem „Nicht im Bestand" mit
+gültiger Quittung, während die Seite die Angabe führte. Die Kurzfassung ist
+bereinigt; die Regel bleibt eine Prüfung, die nur ein Leser leisten kann.
+
 ## Verhältnis zu OKF v0.2
 
 OKF v0.2 (2026-07-24) macht Provenienz, Vertrauen, Lebenszyklus und
@@ -481,11 +717,14 @@ denselben Weg wie jede andere Quelle.
 ## Antwort- und Befüll-Pfad (Kurzfassung)
 
 **Antworten:** `query` → Snapshot-/Manifest-Gate → Begriff/Alias +
-Lexik + ein Graph-Hop → genau die Kandidatenseiten lesen → Answer Envelope
-mit Claim-Belegen, ältestem Stand, niedrigster Konfidenz, Konflikt- und
-Supersession-Hinweisen → bei fehlenden oder unzureichenden Kandidaten die
-`fallback.page_paths` semantisch vollständig prüfen → erst danach Lücken als
-„Nicht im Bestand" ausweisen.
+Lexik + Wortform + ein Graph-Hop → Trefferstärke lesen → genau die
+Kandidatenseiten lesen → bei `weak`, `none` und vor jeder Abstention die
+Vollsichtung: `sweep` legt jeden Claim vor, das Modell urteilt, die Quittung
+wird geprüft → bleibt danach ein Teil ungedeckt und sind Quellen aufgeführt,
+`query --extern` (Schritt 4c; nicht gelesen ist kein Negativbefund) → Answer
+Envelope mit Claim-Belegen, ältestem Stand, niedrigster Konfidenz, Konflikt-
+und Supersession-Hinweisen → Lücken nur mit vollständiger Quittung als „Nicht
+im Bestand" ausweisen, externe Treffer als benannte Hinweise daneben.
 Kurzfassungen und Claims gelten zur Abfragezeit als wahr — wer pro Anfrage
 gegen Rohquelle oder Medienrepräsentation re-verifiziert, zahlt doppelt und
 macht den Tresor sinnlos (Kompressionsregel).
@@ -509,9 +748,14 @@ Modell) — der Linter repariert nur Metadaten und Router, nie Inhalte.
 * Kuratierte Bestände bis in den niedrigen Tausenderbereich an Seiten;
   darüber Vektorindex/Volltext-Engine erwägen (→ OKSV-Vollausbau).
 * Kontrollierte Begriffswelten decken nur kuratierte Synonyme. Nicht
-  gepflegte Sprache kann weiterhin verfehlt werden; lexikalische
-  Claim-Suche liefert deshalb nur Kandidaten. `no_candidates` ist ein
-  Rückfallsignal zur vollständigen Seitenprüfung, kein Negativbefund.
+  gepflegte Sprache wird vom Ranking weiterhin verfehlt, gemessen bei rund
+  zwei von drei bewusst umformulierten Fragen; es liefert deshalb nur
+  Kandidaten und weist aus, was es nicht erkannt hat. `weak` und `none` sind
+  Rückfallsignale zur Vollsichtung, kein Negativbefund.
+* Die Vollsichtung ist so vollständig wie ihr Umfang und so gut wie ihr
+  Leser. Ihre Quittung belegt, dass jeder Stapel vorgelegt und beurteilt
+  wurde, nicht mit welcher Sorgfalt; und sie deckt nur, was als Claim im
+  Bestand steht, nicht was beim Befüllen nie extrahiert wurde (AD-14).
 * Externe Bezugsquellen altern außerhalb der eigenen Kontrolle. Anker-Drift
   ist deshalb gelb und kein Release-Blocker; die Trefferqualität des
   Nachschlagens hängt an fremder Dokumentqualität. Ein fremder Baum kann
@@ -565,10 +809,12 @@ gemeldete Fehlermodus, C-0104), **Map-first**, die
 **Dead-End-Log** und der grep-bare Log-Präfix `## [JJJJ-MM-TT] aktion | Text`.
 Aus dem Ontologie-Artikel (S-0003) stammt die Typ-Strategie: kleine fixe
 Basis in `schema/types.yaml`, additive Erweiterung nur bei echtem Clash
-(genau das leistet das Type-Onboarding, C-0202/C-0204) und ein bewusst
-generischer Fallback-Typ `faktensammlung` für atomare Aussagen mit
-Beförderungsregel ab etwa drei verwandten Claims (C-0203/C-0205) — dieser
-Typ wurde im Bau tatsächlich per Onboarding registriert, nicht von Hand.
+(genau das leistet das Type-Onboarding, C-0202/C-0203) und ein bewusst
+generischer Fallback-Typ `faktensammlung` für atomare Aussagen, die bei
+Verdichtung zu Konzeptseiten befördert werden (C-0205; die Schwelle von etwa
+drei verwandten Claims ist eine Pflegeregel in `schema/types.yaml`, kein
+Claim) — dieser Typ wurde im Bau tatsächlich per Onboarding registriert,
+nicht von Hand.
 Die Namen `index.md` und `log.md` sind aus der Spezifikation übernommen, ihre
 dortigen Strukturen (§8, §9) aber bewusst nicht: `INDEX.md` ist eine Tabelle,
 weil sie eine menschliche Audit-Map ist, und `log.md` trägt den grep-baren
@@ -587,7 +833,14 @@ alle vier Quellen mit 26 Claims — der Tresor belegt seine eigenen
 Konstruktionsentscheidungen mit seinen eigenen Mitteln und hält seine eigene
 Supersession im Graphen fest, statt die überholte Fassung zu löschen.
 
-## Abnahmekriterien (zuletzt durchgeführt am 2026-08-06, Stand v0.11.1)
+## Abnahmekriterien (zuletzt vollständig durchgeführt am 2026-11-13, Stand v0.16.0)
+
+Die Suite in `tests/` prüft jedes dieser Kriterien bei jedem Lauf; Blöcke mit
+eigenem Messdatum nennen den Stand, an dem ihre Zahlen erhoben wurden. Die
+Ende-zu-Ende-Zahlen stehen in einem eigenen Block: Sie lassen sich nur gegen
+den Stand nachrechnen, an den ihre Quittungen gebunden sind, und das tut die
+Suite nicht. `tools/check_docs.py` hält sie an den Block `ergebnis` der
+Protokolle unter `tests/e2e/` gebunden.
 
 **Positiv:** `validate` und `doctor` grün auf 6 Seiten, 28 Claims,
 4 Quellen und 2 aufgeführten externen Bezugsquellen · `query OKF`, `query "offenes Wissensformat"` und `query C-0001`
@@ -613,8 +866,8 @@ oder Fundstelle → Abbruch · verschachteltes Frontmatter in jeder Form
 nie ins Frontmatter-Dictionary · fremde Dateiart, zweites Script oder
 gesetztes Ausführungsbit im Tresorbaum → Abbruch in `validate` und im
 Paketbau · kein Retrieval-Treffer sowie Treffer nur im
-Router → `no_candidates`, semantische Deckung `not_assessed` und explizite
-Fallback-Seiten · Manifestdrift oder Quarantäne-Payload → `invalid_vault`
+Router → `no_candidates`, semantische Deckung `not_assessed` und
+Pflicht-Vollsichtung (außer bei `fallback.unknown_ids_only: true`) · Manifestdrift oder Quarantäne-Payload → `invalid_vault`
 ohne Claims · absolute/traversierende Pfade, Symlinks, Hardlinks,
 getarntes SVG und beschädigte Registries/Manifeste → Abbruch.
 
@@ -626,6 +879,45 @@ Konzeptdokument · ein Symlink im Zielordner trägt den Export nicht heraus,
 ein Abbruch lässt das Ziel unverändert, ein früherer Export wird ersetzt
 statt übermischt · Ziel im Tresor, in `.claude`/`.codex` oder mit fremdem
 Inhalt bricht ab · `stats` läuft auch auf einem roten Bestand ohne Traceback.
+
+**Auffindbarkeit und Vollsichtung (seit v0.12.0, gemessen am 2026-11-12 mit
+`hybrid-local/v4`):**
+`tools/recall_check.py` gegen `tests/gold/recall-demo.json`, Limit 8 ·
+Gruppe „entwicklung" (28 Fragen): 19 direkt gefunden, 9 in der
+Pflicht-Vollsichtung, 0 still · Gruppe „kontrolle" (56 blind geschriebene
+Fragen): 18 direkt gefunden, bei 38 steht die Seite des Claims unter `pages`,
+37 in der Pflicht-Vollsichtung, 1 mit Hinweis, 0 still · 27 Negativfragen:
+bei 16 verlangt das Signal die Vollsichtung, 10 sind `partial`, 1 ist
+`strong`; kein Feld der Abfrage erlaubt eine Abstention, und dass auch die
+übrigen 11 in der Vollsichtung enden, ist Vertragsregel und nur am Agenten
+messbar · 72 Paarfragen aus je zwei Vorzugsbenennungen:
+`strong` nur, wenn beide Begriffe in der Ausgabe vertreten sind · ein per ID
+genannter Begriff, den die Ausgabe nicht zeigt, verhindert `strong` und
+steht mit `represented: false` da · ein
+Funktionswort benennt keinen Begriff („sich" nicht „Sicherung") · eine
+unbekannte ID steht unter `coverage.unknown_ids` und verhindert `strong`,
+auch wenn ihre Ziffern zufällig im Bestand stehen · die Vollsichtung legt bei
+Stapelgrößen 5, 7, 40 und 200 jeden der 28 Claims genau einmal vor ·
+falsches Siegel, fehlender, doppelter oder fremder Stapel, andere Frage,
+andere Stapelgröße und neuer Release machen die Quittung ungültig und liefern
+keine Evidenz · ein eingeschränkter Umfang quittiert vollständig und erlaubt
+trotzdem keine Abstention · das Siegel unterscheidet Fragen, die sich nur
+in einem Operator, einem Vorzeichen, einem Satzzeichen oder in ß gegen ss
+unterscheiden („a != b" gegen „a = b", „.5" gegen „5") ·
+mehrfaches `--receipt` wird gesammelt, widersprüchliche Einträge zum selben
+Stapel machen die Quittung ungültig · eine Seite außerhalb des Manifests
+(`knowledge/__pycache__/`) stoppt den Release · Regions-Text und Alttext
+erscheinen in keinem
+Stapel · keine Goldfrage steht im Skill-Ordner. Zeitmessung am synthetischen
+Bestand mit 1.506 Seiten und 7.528 Claims: `query` rund 3,5 Sekunden, davon
+knapp 3 für das unveränderte Validierungs-Gate; eine Frage mit 105 Begriffen
+(990 Zeichen) 4,7 Sekunden; die Ausgabe einer Abfrage rund 15.000 Zeichen.
+
+**Ende zu Ende (Messläufe vom 2026-11-12 und 2026-11-13, Stände v0.12.1 bis v0.15.0, nachgerechnet mit `tools/antwort_check.py` gegen den jeweils gebundenen Stand):**
+Zwanzig frische Agenten, 68 Fragen, 0 Verstöße · bei 46 von 46 Fragen mit
+erwartetem Claim wurde er gefunden, 36 davon nach verfehltem Ranking · 22 von
+22 Negativfragen korrekt abgelehnt, 21 mit gültiger Quittung und eine Frage
+nach einer Kennung, die es nicht gibt, mit dem Befund des Scripts.
 
 **Funktional:** Der Antworten-Workflow nutzt den stabilen JSON-Vertrag und
 formuliert weiterhin ein Answer Envelope mit Claim-Belegen, Stand und

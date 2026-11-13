@@ -5,7 +5,9 @@ keine Wahrscheinlichkeit: ein nachvollziehbarer Hinweis, den das Modell bei
 der finalen Einordnung überstimmen darf (und das Überstimmen benennt).
 Treffen Schlagworte mehrerer Domänen zu, ist die Frage eine **Mischfrage**
 und wird als solche gemeldet und pro Domäne getrennt beantwortet.
-Findet der Router nichts, greift Plan B: `python3 scripts/vault.py search <begriff>`.
+Findet der Router nichts, heißt das nichts: maßgeblich ist
+`python3 scripts/vault.py query "<frage>"`, und einen Negativbefund trägt
+nur die Vollsichtung (`sweep`). `search <begriff>` hilft mit Synonymen.
 
 ## demo-extern
 schlagworte: mietminderung, mietmangel, schimmel, schimmelbefall, anzeigepflicht, externe quelle, externe bezugsquelle, satzanker, beispielhandbuch

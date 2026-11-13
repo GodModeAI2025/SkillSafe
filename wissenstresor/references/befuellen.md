@@ -106,8 +106,10 @@ anlegen, Claims umziehen (IDs bleiben), `log update` schreiben. Außerdem:
 `schema/begriffswelten.json` im optionalen `concepts`-Feld der Seite
 eintragen. Neue Vorzugsbegriffe, Synonyme oder Hierarchien ausschließlich
 über `references/begriffswelten.md` aufnehmen; Aliase sind Discovery-
-Metadaten, keine Fakten. Den Domänen-Abschnitt von `ROUTER.md` weiterhin
-für manuelle Navigation aktuell halten.
+Metadaten, keine Fakten. Tags und Aliase in der Sprache der Fragenden
+wählen, nicht nur in der der Quelle: Wortformen gleicht das Ranking selbst
+ab, ein anderes Wort für dieselbe Sache nicht. Den Domänen-Abschnitt von
+`ROUTER.md` weiterhin für manuelle Navigation aktuell halten.
 
 **7. Script-Kette (fest, in dieser Reihenfolge):**
 

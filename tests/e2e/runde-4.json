@@ -1,0 +1,199 @@
+{
+ "schema": "skillsafe.antwort-protokoll/v1",
+ "hinweis": "Ende-zu-Ende-Messung vom 2026-11-13, Runde 4. Vier frische Agenten, je drei Fragen; die Agenten 3 und 4 mit vorgegebener Stapelgröße 10 (drei Stapel). Jeder Agent bekam nur den entpackten Skill-Ordner und die Fragen im Wortlaut. Sieben Fragen stammen aus tests/gold/recall-demo.json, fünf sind eigens für diese Runde gestellt: eine Kennung, die es nicht gibt, allein und zusammen mit einer Sache; ein per Kennung genannter Begriff, den die Ausgabe nicht zeigt; ein Vergleichsoperator in der Frage; eine Frage nach dem Werkzeug selbst. Die Siegel gelten ausschließlich für den Stand unter 'stand': nachprüfen lässt sich das Protokoll mit tools/antwort_check.py gegen den Tresor dieses Commits (siehe tests/e2e/LIESMICH.md). 'ergebnis' ist die Ausgabe des Werkzeugs; die Fassungen aus v0.15.0 und v0.16.0 kommen zu denselben Zahlen.",
+ "runde": 4,
+ "agenten": 4,
+ "stand": {
+  "version": "0.15.0",
+  "manifest_sha256": "dc82bfd0d2e0a211e3711e8f5ab112f1cd8f88136af36f44d161e9a7d4906d2d",
+  "commit": "ddb9924"
+ },
+ "ergebnis": {
+  "antworten": 12,
+  "davon_gefunden": 4,
+  "negativ": 5,
+  "negativ_korrekt": 5,
+  "ohne_verstoss": 12,
+  "pflicht_vollsichtung": 6,
+  "positiv": 7,
+  "positiv_gefunden": 7,
+  "quittungen": 10,
+  "quittungen_gueltig": 10,
+  "verstoesse": 0,
+  "vom_ranking_verfehlt": 4
+ },
+ "antworten": [
+  {
+   "id": "D1F1",
+   "art": "negativ",
+   "frage": "Was steht in C-9999?",
+   "erwartet": [],
+   "sweep_args": [],
+   "quittung": [],
+   "antwort": "Die Kennung C-9999 gibt es im Bestand nicht. Falls eine andere gemeint war, bitte nennen."
+  },
+  {
+   "id": "D1F2",
+   "art": "positiv",
+   "frage": "Soll die Maschine die Fundstellenangabe einer Aussage jedes Mal neu gegen das Original abgleichen, oder ist sie für Leute gedacht, die selbst nachschlagen wollen?",
+   "erwartet": [
+    "C-0104"
+   ],
+   "sweep_args": [],
+   "quittung": [
+    "1:abd966b16c53b2f8=C-0101,C-0103,C-0104"
+   ],
+   "antwort": "Nach dem Bestand ist die Fundstellenangabe für Menschen gedacht, die selbst nachprüfen wollen, nicht für einen erneuten Abgleich bei jeder Anfrage (C-0104). Für den Wissenstresor gilt als verbindliche Vorgabe die Kompressionsregel: „verdichten statt spiegeln; Locator dient der menschlichen Nachprüfung, nicht der Re-Verifikation pro Anfrage“ (C-0104, eigene Einordnung des Tresors). Den Grund liefert laut S-0002, einer unbestätigten Webquelle (Trust T3), ein kontrolliertes Experiment aus deren Kommentarbereich: Wiki-Seiten, die einzelne kleine Quellen nur spiegeln, sparen nichts und erzeugen doppelte Kosten, wenn das Modell Wiki und Quelle liest; Nutzen entsteht erst, wenn eine Seite Fakten aus vielen Quellen verdichtet und ihr zur Abfragezeit vertraut wird (C-0103). Das LLM-Wiki-Muster selbst hält unveränderliche Rohquellen getrennt von einer kuratierten Wiki-Schicht, die das Modell statt der Rohdokumente liest (C-0101).\n\nBelege:\n- C-0104 (S-0002, Kommentarbereich, Auslegung) — Stand 2026-07-04, eigene Einordnung\n- C-0103 (S-0002, Kommentarbereich, Wortlaut) — Stand 2026-07-04\n- C-0101 (S-0002, Gist-Text, Wortlaut) — Stand 2026-07-04\n\nStand: 2026-07-04; Konfidenz: mittel\nHinweise: Lesart der Frage: „Fundstellenangabe“ verstanden als „Locator“, „jedes Mal neu gegen das Original abgleichen“ als „Re-Verifikation pro Anfrage“, „für Leute gedacht, die selbst nachschlagen wollen“ als „menschliche Nachprüfung“, „die Maschine“ als das Modell, das eine Anfrage beantwortet. Für die Bedienung dieses Tresors ist dazu dessen SKILL.md zuständig (Regel 2, „Vertrauen zur Abfragezeit“); was dort steht, ist Auskunft über das Werkzeug und kein Beleg. Pflege: Das Ranking fand diese Claims nicht, erst die Vollsichtung; dem Bestand fehlt für diese Wortwahl ein Alias oder Tag.\nSichtung: 28 von 28 Claims, Quittung 1a13484e1323"
+  },
+  {
+   "id": "D1F3",
+   "art": "negativ",
+   "frage": "Was schreibt die Map-first-Regel inhaltlich vor?",
+   "erwartet": [],
+   "sweep_args": [],
+   "quittung": [
+    "1:041206d56c753969=C-0104"
+   ],
+   "antwort": "Der Bestand nennt die Map-first-Regel, beschreibt aber nicht, was sie inhaltlich vorschreibt. Belegt ist nur ihr Status: Für den Wissenstresor folgt sie neben der Kompressionsregel als verbindliche Vorgabe (C-0104, eigene Einordnung des Tresors auf Grundlage von S-0002, einer unbestätigten Webquelle mit Trust T3).\n\nBelege:\n- C-0104 (S-0002, Kommentarbereich, Auslegung) — Stand 2026-07-04, eigene Einordnung\n\nStand: 2026-07-04; Konfidenz: mittel\nHinweise: Die Regel ist eine Vorgabe für den Tresor selbst. Für dessen Aufbau und Begründungen ist die Datei KONZEPT.md des Skills zuständig; was dort steht, ist Auskunft über das Werkzeug und kein Beleg, und ich habe die Datei für diese Antwort nicht ausgewertet.\nNicht im Bestand: Was die Map-first-Regel inhaltlich vorschreibt; kein Claim des Bestands beschreibt ihren Inhalt.\nSichtung: 28 von 28 Claims, Quittung 2a2794f9188b\n\nSoll ich eine Quelle dazu aufnehmen?"
+  },
+  {
+   "id": "D2F1",
+   "art": "positiv",
+   "frage": "Was sagt S-0004 zu OKF, und wie hängt B-0004 damit zusammen?",
+   "erwartet": [
+    "C-0201"
+   ],
+   "sweep_args": [],
+   "quittung": [
+    "1:fa663f46a5ea9130=C-0201,C-0205,C-0301,C-0302,C-0303,C-0304,C-0305,C-0306,C-0307,C-0308,C-0309,C-0310"
+   ],
+   "antwort": "S-0004 (im Quellenregister: „Open Knowledge Format (OKF), Specification v0.2“) ist die Quelle der Seite „Open Knowledge Format v0.2“ mit den Claims C-0301 bis C-0310. Einen Zusammenhang mit B-0004 belegt der Bestand dagegen nicht. Im Einzelnen:\n\nWas S-0004 zu OKF sagt (Fassung v0.2):\n- Grundform (C-0301): OKF v0.2 stellt Wissen als Verzeichnisbaum von UTF-8-Markdown-Dateien mit YAML-Frontmatter dar. Konform ist ein Bundle, wenn jede nicht reservierte .md-Datei einen parsebaren Frontmatter-Block mit nicht leerem `type` enthält; `type` bleibt das einzige stets erforderliche Feld.\n- Provenienz (C-0302): Sie liegt im Frontmatter-Feld `sources`, einer Liste von Einträgen mit dem Pflichtfeld `resource` und den optionalen Angaben `id`, `title`, `author`, `usage_count` und `last_modified`; ein `usage_window` als Geschwisterfeld rahmt jeden `usage_count` mit einem Zeitraum aus `from` und `to`.\n- Glaubwürdigkeit (C-0303): v0.2 speichert bewusst keinen Glaubwürdigkeitswert, sondern nur objektive Signale pro Quelle. Die Glaubwürdigkeit leitet der Konsument ab, weil ein gespeicherter Wert subjektiv, zwischen Konsumenten nicht portabel und schnell veraltet wäre.\n- Erzeugung und Bestätigung (C-0304): `generated` mit `by` und `at` hält fest, wer den aktuellen Inhalt erzeugt hat; `verified` hält als Liste von `by`- und `at`-Einträgen unabhängige Bestätigungen fest. Beide nutzen dieselbe Aktorkonvention: `<producer>/<version>` für Agenten, `human:<id>` für Personen, `process:<id>` für automatisierte Prozesse.\n- Trust-Tiers (C-0305): Konsumenten leiten aus `verified` drei Stufen ab: unverified, wenn das Feld fehlt; machine-confirmed, wenn nur Akteure ohne `human:`-Präfix bestätigen; human-reviewed, wenn mindestens ein `human:`-Akteur bestätigt. Die Tiers sind beratende Signale und keine Zugriffskontrolle.\n- Lebenszyklus (C-0306): `status` kennt die Werte draft, stable und deprecated, ein fehlendes Feld bedeutet stable. `stale_after` ist ein absolutes Datum im Format JJJJ-MM-TT; ein Konzept gilt als veraltet, sobald das heutige Datum größer oder gleich `stale_after` ist.\n- Attested Computation (C-0307, C-0308): Der Typ macht eine sanktionierte Berechnung zu einem eigenen Konzept, mit `runtime` als Pflichtangabe dieses Typs, `parameters` als typisierter Liste, optionalem `computation`-Pfad statt Inline-Block, `executor` mit Laufanweisung und deklarierten `receipt`-Feldern sowie `attester` als deterministischem Prüfcode ohne LLM; OKF legt die Schnittstelle fest und führt selbst nichts aus. Ein Agent darf ausschließlich Werte für die deklarierten `parameters` liefern und die Berechnung weder verfassen noch ändern. `verified` bestätigt dokumentweise, dass die Definition weiterhin zur Richtlinie passt, und steht im Bundle; die Attestierung prüft einen einzelnen Lauf zur Laufzeit und wird nicht im Bundle gespeichert.\n- Versionssprung (C-0309): v0.2 löst v0.1 ab und ist nach der Regel major.minor ein Minor-Sprung mit zwei ausdrücklich benannten Bruchstellen: `timestamp` wird durch `generated.at` ersetzt, die Rumpfliste `# Citations` durch das Frontmatter-Feld `sources`. Konsumenten dürfen beide Altformen für v0.1-Dokumente weiterhin als Rückfall lesen.\n- Eigene Einordnung des Bestands, kein Wortlaut der Quelle (C-0310): Für dieses Bundle regelt OKF v0.2 Provenienz, Vertrauen und Lebenszyklus jetzt selbst, aber in anderer Gestalt als das hiesige Profil. `sources` ist in v0.2 eine Liste von Einträgen mit Pflichtangabe `resource`, im Profil eine flache Liste registrierter S-IDs; `status` nutzt in v0.2 draft, stable und deprecated, im Profil aktiv, veraltet und in-pruefung. Weil beide Felder namensgleich und unterschiedlich belegt sind, muss jede Aussage über OKF-Kompatibilität die Zielversion nennen.\n\nZu B-0004: Die Kennung bezeichnet den Begriff „Ontologie“ (Benennung aus der Begriffswelt, kein Beleg; siehe Hinweise). Belegt ist dazu nur etwas aus einer anderen Quelle, S-0003 (Einzelquelle der Trust-Stufe T3, daher vorsichtig zu lesen): Danach sei die Ontologie – welche Knoten, welche Kanten – der härteste Teil einer Graph-/Memory-Schicht; der Versuch, sie vorab perfekt zu entwerfen, friere Projekte ein, und auch dateibasierte „virtuelle Wissensgraphen“ stünden vor derselben Frage, welche Primitive und Entitäten überhaupt extrahiert werden (C-0201). Als eigene Einordnung bezieht der Bestand das auf den Wissenstresor selbst: Es bestätige dessen Type-Onboarding-Design mit kleiner Registry als fixer Basis, fail-closed und Erweiterung nur bei nachgewiesenem Clash (C-0205).\n\nKein Claim aus S-0004 nennt die Ontologie, und kein Claim zur Ontologie nennt OKF oder S-0004. Wie B-0004 mit dem zusammenhängt, was S-0004 zu OKF sagt, lässt der Bestand deshalb offen.\n\nBelege:\n- C-0301 (S-0004, §3, §4, §4.1 und §11, Wortlaut) — Stand 2026-07-28\n- C-0302 (S-0004, §5.1, Wortlaut) — Stand 2026-07-28\n- C-0303 (S-0004, §5.1, Abschnitt Source credibility signals, Wortlaut) — Stand 2026-07-28\n- C-0304 (S-0004, §5.2 und §7, Wortlaut) — Stand 2026-07-28\n- C-0305 (S-0004, §5.3, Wortlaut) — Stand 2026-07-28\n- C-0306 (S-0004, §5.4 und §5.5, Wortlaut) — Stand 2026-07-28\n- C-0307 (S-0004, §10.1 und §10.2, Wortlaut) — Stand 2026-07-28\n- C-0308 (S-0004, §10.3 und §10.6, Wortlaut) — Stand 2026-07-28\n- C-0309 (S-0004, §12, §13 und §13.1, Wortlaut) — Stand 2026-07-28\n- C-0310 (S-0004, §5 und §13.2, Auslegung) — Stand 2026-07-28, eigene Einordnung\n- C-0201 (S-0003, Einleitung und „The Overkill Trap“, Wortlaut) — Stand 2026-07-04\n- C-0205 (S-0003, Gesamtdokument, Auslegung) — Stand 2026-07-04, eigene Einordnung\n\nStand: 2026-07-04; Konfidenz: mittel\nHinweise: B-0004 verstanden als der Begriff „Ontologie“; so löst die Abfrage die Kennung auf. Diese Benennung und die Begriffsauszeichnung der Seiten sind Angaben ohne Belegkraft: Mit B-0004 ausgezeichnet ist die Seite ontologie-strategie.md, die Seite zu S-0004 (okf-v02.md) ist es nicht. Auch die Kanten im Graph verbinden die beiden Seiten nicht direkt: okf-v02.md trägt nur `ersetzt` zur überholten v0.1-Seite okf.md, ontologie-strategie.md nur `praezisiert` zu llm-wiki-muster.md. Am nächsten kommt C-0201 mit den dateibasierten „virtuellen Wissensgraphen“; OKF nennt der Claim nicht. C-0310 und C-0205 sind Auslegungen des Bestands, kein Wortlaut der Quellen. Die Seite okf-v02.md trägt Konfidenz hoch, ist aber von niemandem gegengeprüft (Trust-Tier unverified); die hohe Konfidenz ist dort eine Kuratierungsentscheidung ohne Gegenprüfung. Stand und Konfidenz sind die konservativen Werte über beide genutzten Seiten: okf-v02.md hat Stand 2026-07-28 und Konfidenz hoch, ontologie-strategie.md Stand 2026-07-04 und Konfidenz mittel.\nNicht im Bestand: Wie B-0004 (Ontologie) mit OKF oder mit den Aussagen aus S-0004 zusammenhängt; kein Claim verbindet beide.\nSichtung: 28 von 28 Claims, Quittung 8f4bfca6843b"
+  },
+  {
+   "id": "D2F2",
+   "art": "negativ",
+   "frage": "Wie groß ist das Open Knowledge Format?",
+   "erwartet": [],
+   "sweep_args": [],
+   "quittung": [
+    "1:9dc68e08f0c55f4b=C-0005,C-0301"
+   ],
+   "antwort": "Eine Größe nennt der Bestand für das Open Knowledge Format nicht. Er beschreibt, was das Format ist: In der maßgeblichen Fassung v0.2 stellt OKF Wissen als Verzeichnisbaum von UTF-8-Markdown-Dateien mit YAML-Frontmatter dar, und `type` ist das einzige stets erforderliche Feld (C-0301). Am nächsten an eine Aussage über den Umfang kommt eine eigene Einordnung des Bestands zur überholten Fassung v0.1: Die Spezifikation sei „bewusst minimal“, weshalb ein evidenzgebundener Wissenstresor ein strengeres Profil oberhalb von OKF benötige (C-0005). Das ist eine Wertung, keine Größenangabe.\n\nBelege:\n- C-0301 (S-0004, §3, §4, §4.1 und §11, Wortlaut) — Stand 2026-07-28\n- C-0005 (S-0001, Gesamtdokument, Auslegung) — Stand 2026-07-28, eigene Einordnung, überholte Fassung\n\nStand: 2026-07-28; Konfidenz: hoch\nHinweise: „Wie groß“ verstanden als Frage nach Umfang oder Ausmaß des Formats; eine Angabe dazu trägt kein Claim. C-0005 stammt aus der überholten Seite zu v0.1 (okf.md, Status veraltet); maßgeblich ist die Seite zu v0.2 (okf-v02.md), die v0.1 ablöst. Zu „bewusst minimal“ sagt die aktuelle Fassung nichts Eigenes; ob die Aussage unter v0.2 fortgilt, ist nicht belegt. Beide Seiten tragen Konfidenz hoch, sind aber von niemandem gegengeprüft (Trust-Tier unverified); die hohe Konfidenz ist eine Kuratierungsentscheidung ohne Gegenprüfung.\nNicht im Bestand: Eine Größenangabe zum Open Knowledge Format. Der Bestand definiert OKF, nennt aber in keiner Lesart (etwa Datenmenge oder Umfang der Spezifikation) eine Größe.\nSichtung: 28 von 28 Claims, Quittung d67a6b52041b\n\nSoll ich eine Quelle dazu aufnehmen? Dann bitte dazusagen, welche Größe gemeint ist."
+  },
+  {
+   "id": "D2F3",
+   "art": "positiv",
+   "frage": "Wofür stehen die Buchstaben in POLE+O?",
+   "erwartet": [
+    "C-0202"
+   ],
+   "sweep_args": [],
+   "quittung": [],
+   "antwort": "Laut S-0003, einer Quelle der Trust-Stufe T3, steht POLE+O für Person, Object, Location, Event und Organization (C-0202). In dieser Reihenfolge gelesen: P = Person, O = Object, L = Location, E = Event, und das angehängte O = Organization. Dieses O für Organization wurde nach derselben Quelle für die allgemeine Entitäten-Extraktion ergänzt; POLE selbst stammt danach aus der Ermittlungs- und Nachrichtendienstanalyse (C-0290).\n\nBelege:\n- C-0202 (S-0003, „The POLE+O Data Model“, Wortlaut) — Stand 2026-07-04\n- C-0290 (S-0003, „The POLE+O Data Model“, Wortlaut) — Stand 2026-07-04\n\nStand: 2026-07-04; Konfidenz: mittel\nHinweise: Beide Claims stammen aus derselben Quelle S-0003 (Trust T3), und beide Seiten sind von niemandem gegengeprüft (Trust-Tier unverified); die Auflösung ist als Angabe dieser einen Quelle zu lesen. Die Zuordnung Buchstabe für Buchstabe folgt der Reihenfolge der Aufzählung in C-0202; ausdrücklich einem Buchstaben zugeordnet ist in den beiden Claims nur das ergänzte O (C-0290)."
+  },
+  {
+   "id": "D3F1",
+   "art": "positiv",
+   "frage": "Zählt etwas als überholt, wenn der Verfallstag <= dem heutigen Datum ist?",
+   "erwartet": [
+    "C-0306"
+   ],
+   "sweep_args": [
+    "--size",
+    "10"
+   ],
+   "quittung": [
+    "1:3cc3ac55f7723cd4=-",
+    "2:364f8a3069b00280=C-0306,C-0310",
+    "3:f32c6c33fd3e91b7=-"
+   ],
+   "antwort": "Ja, nach OKF v0.2: Ein Konzept gilt als veraltet, sobald das heutige Datum größer oder gleich `stale_after` ist (C-0306). „Verfallstag <= heutiges Datum“ ist genau diese Bedingung; das Konzept gilt also schon am Verfallstag selbst als veraltet, nicht erst danach. `stale_after` ist dabei ein absolutes Datum im Format JJJJ-MM-TT; daneben läuft der Lebenszyklus über `status` mit den Werten draft, stable und deprecated, wobei ein fehlendes Feld stable bedeutet (C-0306).\n\nDiese Regel gehört zu OKF v0.2. Das Profil dieses Tresors regelt den Lebenszyklus in anderer Gestalt: Sein `status` nutzt aktiv, veraltet und in-pruefung statt draft, stable und deprecated; die Felder sind namensgleich, aber unterschiedlich belegt (C-0310, eigene Einordnung).\n\nBelege:\n- C-0306 (S-0004, §5.4 und §5.5, Wortlaut) — Stand 2026-07-28\n- C-0310 (S-0004, §5 und §13.2, Auslegung) — Stand 2026-07-28, eigene Einordnung\n\nStand: 2026-07-28; Konfidenz: hoch\nHinweise: Lesart der Frage: „Verfallstag“ verstanden als das OKF-v0.2-Feld `stale_after`, „überholt“ als „gilt als veraltet“ und „etwas“ als ein Konzept nach OKF v0.2. Diese Wörter der Frage hat das Ranking nicht erkannt; die Zuordnung stammt aus der Vollsichtung (für die Pflege: dem Bestand fehlt dafür ein Alias). Die genutzte Seite trägt Konfidenz hoch, ist aber von niemandem gegengeprüft (trust_tier unverified); die hohe Konfidenz ist eine Kuratierungsentscheidung ohne Gegenprüfung.\nNicht im Bestand: Ob eine solche Datumsregel auch außerhalb von OKF v0.2 gilt, etwa für den Status veraltet im Profil dieses Tresors.\nSichtung: 28 von 28 Claims, Quittung dd7e3ba1c256"
+  },
+  {
+   "id": "D3F2",
+   "art": "negativ",
+   "frage": "Welche Kündigungsfrist gilt bei Schimmel?",
+   "erwartet": [],
+   "sweep_args": [
+    "--size",
+    "10"
+   ],
+   "quittung": [
+    "1:1062fc7a9e06b3e9=C-0401,C-0402",
+    "2:1c93f1e2964dd0d4=-",
+    "3:ac35e9767a5ca5f2=-"
+   ],
+   "antwort": "Eine Kündigungsfrist bei Schimmel nennt der Bestand nicht. Er enthält zu Schimmel nur zwei Aussagen, beide laut X-0001, einem Beispielhandbuch mit Trust T3: Erheblicher Schimmelbefall in Wohnräumen ist ein Mangel, der zur Mietminderung berechtigt (C-0401), und dieser Mangel ist dem Vermieter unverzüglich anzuzeigen (C-0402). Die einzige zeitliche Vorgabe betrifft also die Anzeige an den Vermieter; von einer Kündigung spricht kein Claim.\n\nBelege:\n- C-0401 (X-0001, A-0004, Wortlaut) — Stand 2026-08-06, externe Bezugsquelle\n- C-0402 (X-0001, A-0007, Wortlaut) — Stand 2026-08-06, externe Bezugsquelle\n\nStand: 2026-08-06; Konfidenz: mittel\nHinweise: „Unverzüglich anzuzeigen“ (C-0402) betrifft die Anzeige des Mangels, nicht eine Kündigung, und ist deshalb nicht als Kündigungsfrist gelesen. Laut Abschnitt „Kontext und Grenzen“ der Seite ist X-0001 ein erfundenes Beispielhandbuch; seine Aussagen sind keine Rechtsauskunft und werden nur als Beleg-Mechanik geführt.\nNicht im Bestand: Eine Kündigungsfrist bei Schimmel; kein Claim des Bestands nennt eine Kündigung oder eine Kündigungsfrist.\nSichtung: 28 von 28 Claims, Quittung 2185c6410f3f\n\nSoll ich die aufgeführte externe Bezugsquelle X-0001 dazu nachschlagen (ein Treffer dort wäre nur ein Hinweis, kein Beleg aus dem Bestand) oder eine Quelle zur Kündigung aufnehmen?"
+  },
+  {
+   "id": "D3F3",
+   "art": "positiv",
+   "frage": "Worin unterscheidet sich die Freigabe einer Rechenvorschrift als Ganzes von der Kontrolle eines konkreten Durchgangs, und welches der beiden Ergebnisse wird in der Sammlung aufbewahrt?",
+   "erwartet": [
+    "C-0308"
+   ],
+   "sweep_args": [
+    "--size",
+    "10"
+   ],
+   "quittung": [
+    "1:984a2f85b8adb953=-",
+    "2:cef566acd66e55d3=C-0304,C-0307,C-0308",
+    "3:60f65eb1a2657b9f=-"
+   ],
+   "antwort": "Nach OKF v0.2 (Konzepttyp Attested Computation) sind das zwei getrennte Prüfungen mit verschiedenem Gegenstand:\n\n- Die Bestätigung über `verified` gilt dem Dokument als Ganzem: Sie bestätigt dokumentweise, dass die Definition der Berechnung weiterhin zur Richtlinie passt (C-0308). `verified` ist eine Liste von `by`- und `at`-Einträgen, die unabhängige Bestätigungen festhält (C-0304).\n- Die Attestierung prüft dagegen einen einzelnen Lauf zur Laufzeit (C-0308). Der Typ sieht dafür `attester` als deterministischen Prüfcode ohne LLM vor, neben `executor` mit Laufanweisung und deklarierten `receipt`-Feldern; OKF legt nur die Schnittstelle fest und führt selbst nichts aus (C-0307).\n\nAufbewahrt wird nur die Bestätigung: `verified` steht im Bundle, die Attestierung wird nicht im Bundle gespeichert (C-0308). Die Berechnung selbst darf ein Agent weder verfassen noch ändern; er liefert ausschließlich Werte für die deklarierten `parameters` (C-0308).\n\nBelege:\n- C-0308 (S-0004, §10.3 und §10.6, Wortlaut) — Stand 2026-07-28\n- C-0307 (S-0004, §10.1 und §10.2, Wortlaut) — Stand 2026-07-28\n- C-0304 (S-0004, §5.2 und §7, Wortlaut) — Stand 2026-07-28\n\nStand: 2026-07-28; Konfidenz: hoch\nHinweise: Lesart der Frage: „Rechenvorschrift“ verstanden als die sanktionierte Berechnung bzw. ihre Definition, „Freigabe … als Ganzes“ als die dokumentweise Bestätigung über `verified`, „Kontrolle eines konkreten Durchgangs“ als die Attestierung eines einzelnen Laufs und „Sammlung“ als das Bundle. Die Claims sagen „bestätigt“ und „prüft“, nicht „Freigabe“ und „Kontrolle“; gefunden hat C-0307 und C-0308 die Vollsichtung, nicht das Ranking (für die Pflege: dem Bestand fehlen dafür Aliase). Die genutzte Seite trägt Konfidenz hoch, ist aber von niemandem gegengeprüft (trust_tier unverified); die hohe Konfidenz ist eine Kuratierungsentscheidung ohne Gegenprüfung.\nSichtung: 28 von 28 Claims, Quittung 57403ed94967"
+  },
+  {
+   "id": "D4F1",
+   "art": "negativ",
+   "frage": "Unter welcher Lizenz steht der Wissenstresor?",
+   "erwartet": [],
+   "sweep_args": [
+    "--size",
+    "10"
+   ],
+   "quittung": [
+    "1:943c3c8be51e7c5f=-",
+    "2:9374418781647d4f=-",
+    "3:b724807827700557=-"
+   ],
+   "antwort": "Nicht im Bestand. Kein Claim des Tresors macht eine Aussage zur Lizenz des Wissenstresors.\n\nHinweise: Die Frage betrifft das Werkzeug selbst, nicht den Bestand. Zuständig ist die Datei LICENSE im Skill-Ordner, die SKILL.md als Apache-2.0-Lizenz für eigenständige Weitergabe beschreibt. Das ist Auskunft über das Werkzeug, kein Beleg aus dem Bestand.\nSichtung: 28 von 28 Claims, Quittung a56f1a01746b"
+  },
+  {
+   "id": "D4F2",
+   "art": "positiv",
+   "frage": "Was sagt S-0099 zur Mietminderung bei Schimmel?",
+   "erwartet": [
+    "C-0401"
+   ],
+   "sweep_args": [
+    "--size",
+    "10"
+   ],
+   "quittung": [
+    "1:020ce3035a366358=C-0401,C-0402",
+    "2:9d8e8e459a353075=-",
+    "3:b58669b09b1fb89d=-"
+   ],
+   "antwort": "Die Kennung S-0099 gibt es im Bestand nicht. Zur Mietminderung bei Schimmel enthält der Bestand zwei Aussagen, beide aus einer anderen Quelle, der aufgeführten externen Bezugsquelle X-0001 (Beispielhandbuch des Repositoriums, unbestätigte Quelle mit Trust T3):\n\n- Laut X-0001 ist erheblicher Schimmelbefall in Wohnräumen ein Mangel, der zur Mietminderung berechtigt (C-0401).\n- Laut X-0001 ist dieser Mangel dem Vermieter unverzüglich anzuzeigen (C-0402).\n\nFalls mit S-0099 eine andere Quelle gemeint war, bitte die Kennung nennen.\n\nBelege:\n- C-0401 (X-0001, A-0004, Wortlaut) — Stand 2026-08-06, externe Bezugsquelle\n- C-0402 (X-0001, A-0007, Wortlaut) — Stand 2026-08-06, externe Bezugsquelle\n\nStand: 2026-08-06; Konfidenz: mittel\nHinweise: Weil es S-0099 nicht gibt, beantwortet die Antwort die Lesart „Was sagt der Bestand zur Mietminderung bei Schimmel?“; die Aussagen stammen aus X-0001, nicht aus S-0099. Laut „Kontext und Grenzen“ der Seite ist X-0001 ein erfundenes Beispielhandbuch, dessen Aussagen keine Rechtsauskunft sind und nur die Beleg-Mechanik zeigen. Die Seite ist von niemandem gegengeprüft (trust_tier unverified).\nNicht im Bestand: ob auch Schimmel, der nicht erheblich ist oder nicht in Wohnräumen auftritt, zur Mietminderung berechtigt.\nSichtung: 28 von 28 Claims, Quittung 67936b2df087"
+  },
+  {
+   "id": "D4F3",
+   "art": "positiv",
+   "frage": "Wann darf die Liste der zugelassenen Dokumentarten wachsen, und wird Unbekanntes bis dahin durchgelassen oder abgewiesen?",
+   "erwartet": [
+    "C-0205"
+   ],
+   "sweep_args": [
+    "--size",
+    "10"
+   ],
+   "quittung": [
+    "1:feca34403060fdff=-",
+    "2:0d621fe18d0ad4d8=-",
+    "3:637167d8cb171c37=C-0202,C-0203,C-0204,C-0205"
+   ],
+   "antwort": "Nach der eigenen Einordnung des Bestands darf die Typ-Liste des Wissenstresors nur bei einem nachgewiesenen Clash wachsen, und das Design ist „fail-closed“ – in der Lesart der Frage heißt das: Unbekanntes wird bis dahin abgewiesen, nicht durchgelassen. Belegt ist das als Auslegung, gestützt auf eine einzige Quelle mit Trust T3 (S-0003):\n\n- Wissenstresor (C-0205, eigene Einordnung): Das Type-Onboarding-Design sieht eine kleine Registry als fixe Basis vor, „fail-closed“, mit „Erweiterung nur bei nachgewiesenem Clash“. Als Fallback dient der Typ faktensammlung: Atomare Claims ohne eigene Seite landen in fakten.md der Domäne und werden bei Verdichtung zu Konzeptseiten befördert.\n- Was ein Clash ist, beschreibt laut S-0003 das allgemeine Vorgehen: generisch starten, Extraktion über echte Daten laufen lassen, Fehlklassifikationen (Clashes) inspizieren, pro Clash genau einen Subtyp ergänzen oder umbenennen, wiederholen; ein Clash ist ein Signal für eine gezielte Ergänzung, nicht für ein Schema-Redesign (C-0203). Die Basis selbst ist klein, fix und generisch und wird per Subtypen additiv erweitert (C-0202).\n- Für alles, was in keinen Typ passt, nennt S-0003 „Facts“ als generisches Fallback-Primitiv: atomare, einzeln gespeicherte Aussagen ohne Kanten, nur über Suche auffindbar; mit reifendem Graph migrieren sie zu typisierten Entitäten und Kanten (C-0204).\n\nBelege:\n- C-0205 (S-0003, Gesamtdokument, Auslegung) — Stand 2026-07-04, eigene Einordnung\n- C-0203 (S-0003, Explorations-Loop und Beispiele, Wortlaut) — Stand 2026-07-04\n- C-0202 (S-0003, „The POLE+O Data Model“, Wortlaut) — Stand 2026-07-04\n- C-0204 (S-0003, „Facts: The Trick You Haven't Thought Of“, Wortlaut) — Stand 2026-07-04\n\nStand: 2026-07-04; Konfidenz: mittel\nHinweise: Lesart der Frage: „Liste der zugelassenen Dokumentarten“ ist verstanden als die Typ-Registry des Tresors, „wachsen“ als deren Erweiterung, „abgewiesen“ als „fail-closed“. Diese Wortwahl steht in keinem Claim; gefunden hat die Claims die Vollsichtung, nicht das Ranking. S-0003 argumentiert laut Seite im Kontext von Neo4j/GraphRAG, übernommen ist nur das Ontologie-Vorgehen; die Seite ist von niemandem gegengeprüft (trust_tier unverified). Welche Typen das Werkzeug zulässt, führt die Datei schema/types.yaml im Skill-Ordner; das ist Auskunft über das Werkzeug, kein Beleg.\nSichtung: 28 von 28 Claims, Quittung 322e37287bbe"
+  }
+ ]
+}

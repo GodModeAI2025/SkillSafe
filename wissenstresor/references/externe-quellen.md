@@ -114,12 +114,11 @@ gefunden").
 Ohne `--extern` verlässt **kein Byte** den Skill-Ordner, weder zur Platte noch
 ins Netz. Das Flag macht am Aufruf sichtbar, dass hier bewusst eine Ausnahme
 von Regel 2 (Vertrauen zur Abfragezeit) gemacht wird. Es gehört an das Ende
-des Antworten-Workflows, nicht an den Anfang: erst der lokale Bestand, dann
-— bei `no_candidates` oder bei Kandidaten, die die Frage nicht decken — die
-vollständige Prüfung von `fallback.page_paths`, dann erst extern. Wann der
-Schritt fällig ist, regelt allein `references/antworten.md`, Schritt 4c: Dort
-ist er Pflicht, sobald die Vollprüfung die Frage nicht deckt und Quellen
-aufgeführt sind.
+des Antworten-Workflows, nicht an den Anfang: erst die lokale Abfrage, dann
+die Vollsichtung mit Quittung (`sweep`), dann erst extern. Wann der Schritt
+fällig ist, regelt allein `references/antworten.md`, Schritt 4c: Dort ist er
+Pflicht, sobald die Vollsichtung die Frage nicht deckt und Quellen aufgeführt
+sind.
 
 Das Ranking `extern-zweistufig/v2` arbeitet in zwei Stufen:
 

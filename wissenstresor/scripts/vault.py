@@ -33,8 +33,10 @@ Kommandos:
 """
 
 import argparse
+import contextlib
 import hashlib
 import heapq
+import io
 import json
 import os
 import re
@@ -164,8 +166,12 @@ QUERY_SCHEMA = "skillsafe.query/v1"
 ANCHORS_SCHEMA = "skillsafe.anchors/v1"
 ORCHESTRATOR_SCHEMA = "skillsafe.orchestrator/v1"
 BINDING_SCHEMA = "skillsafe.bindung/v1"
-RETRIEVAL_PROFILE = "hybrid-local/v1"
-EXTERN_RETRIEVAL_PROFILE = "extern-zweistufig/v1"
+# v2 (beide): Stoppwörter werden wie die Anfrage normalisiert — in v1 wirkte
+# „für" nie als Stoppwort, weil das rohe Wort mit dem Token „fuer" verglichen
+# wurde. extern-zweistufig/v2 liest lokale Quellen zudem vollständig, filtert
+# über den Katalog nur noch bei Netzquellen und zählt Abrufe je Abfrage.
+RETRIEVAL_PROFILE = "hybrid-local/v2"
+EXTERN_RETRIEVAL_PROFILE = "extern-zweistufig/v2"
 SEGMENTATION_PROFILE = "satzsegmentierung/v1"
 MAX_JSON_BYTES = 2 * 1024 * 1024
 MAX_QUERY_LENGTH = 1000
@@ -190,19 +196,29 @@ MAX_EXTERN_EINTRAEGE = 20000
 MAX_EXTERN_DOKUMENTE = 5000
 MAX_EXTERN_BYTES_JE_DATEI = 1 * 1024 * 1024
 MAX_EXTERN_BYTES_GESAMT = 64 * 1024 * 1024
+# Stufe 1 filtert nur bei Netzquellen: dort ist jedes Öffnen ein Abruf. Eine
+# lokale Quelle wird vollständig gelesen; der Katalog ordnet sie nur.
 MAX_EXTERN_STUFE1 = 24
 MAX_EXTERN_TREFFER = 8
 MAX_EXTERN_TOP_TOKENS = 12
-# Abdeckung 0 fliegt raus, egal wie gut der Katalogtext aussah. Der Katalogtext
-# ist ein schwaches Signal, der tatsächliche Bestand das starke.
-EXTERN_ABDECKUNG_MIN = 1
+# Ein Dokument ohne einen einzigen Anfragebegriff als ganzes Token fliegt raus,
+# egal wie gut der Katalogtext aussah. Gezählt werden getroffene Begriffe, nicht
+# die gerundete Abdeckung: bei mehr als 100 Begriffen rundete die einen echten
+# Treffer auf 0 % ab.
+EXTERN_MIN_BEGRIFFE = 1
 # Netzgrenzen. Nur https, nur unter dem registrierten Präfix, nie eine
 # Suchmaschine, nie ein Link aus dem Inhalt.
 EXTERN_NETZ_TIMEOUT = 10
 EXTERN_NETZ_MAX_REDIRECTS = 3
+# Netzabrufe je Abfrage, gezählt über alle Netzquellen. Ein Cache-Treffer ist
+# kein Abruf; ein gescheiterter Versuch ist einer.
 EXTERN_NETZ_MAX_ABRUFE = 20
 EXTERN_CACHE_TTL = 6 * 3600
 EXTERN_OFFLINE_ENV = "SKILLSAFE_OFFLINE"
+# Ein Satz, eine Schreibweise. Jeder externe Zustand, bei dem kein Dokument
+# gelesen wurde, trägt ihn im Grund: „nicht gelesen" darf nie wie „gelesen und
+# nichts gefunden" aussehen. Antwort-Workflow und Tests halten sich daran fest.
+EXTERN_KEIN_BEFUND = "dies ist kein Negativbefund"
 MEDIA_TYPES = {
     ".png": "image/png",
     ".jpg": "image/jpeg",
@@ -283,6 +299,25 @@ RETRIEVAL_STOPWORDS = {
 
 class RollbackIncompleteError(RuntimeError):
     """Mindestens ein Release-Ziel konnte nicht wiederhergestellt werden."""
+
+
+class BudgetUeberschritten(OSError):
+    """Ein gezähltes Budget eines Baumlaufs ist überschritten.
+
+    Unterklasse von OSError, damit jeder bestehende Aufrufer unverändert
+    fail-closed abbricht. Der eigene Typ trennt „zu groß" von „nicht lesbar":
+    nur so kann der externe Query-Pfad ``budget_exceeded`` melden, statt beide
+    Ursachen in einem Zustand zu vermengen.
+    """
+
+
+class AbrufbudgetErschoepft(Exception):
+    """Die gezählten Netzabrufe dieser Abfrage sind aufgebraucht.
+
+    Bewusst KEINE OSError: kein allgemeiner Fehlerzweig darf das Budget als
+    gewöhnlichen Lesefehler verschlucken. Der Aufrufer zählt die übrigen
+    Dokumente als Lücke aus einem eigenen Grund.
+    """
 
 
 # ---------------------------------------------------------------- Hilfen
@@ -489,7 +524,12 @@ def sha256_file(p: Path) -> str:
     """Reguläre Datei hashen, ohne einem Symlink zu folgen."""
     if _is_path_alias(p):
         raise OSError(f"{p}: Symlinks/Reparse-Points werden nicht gehasht")
-    flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    # O_NONBLOCK: ein FIFO unter einem Dateinamen öffnete sonst blockierend
+    # und hielt den Prozess an, bis jemand hineinschreibt. So kehrt open
+    # sofort zurück, und die S_ISREG-Prüfung lehnt es ab. Auf regulären
+    # Dateien hat das Flag keine Wirkung.
+    flags = (os.O_RDONLY | getattr(os, "O_BINARY", 0)
+             | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0))
     fd = os.open(str(p), flags)
     h = hashlib.sha256()
     try:
@@ -664,6 +704,20 @@ def _rel_zu(p: Path, basis: Path) -> str:
     return Path(os.path.abspath(p)).relative_to(basis).as_posix()
 
 
+def _utf8_pfad(pfad: str) -> bool:
+    """Ob ein Pfad als UTF-8 darstellbar ist.
+
+    Dateinamen aus Bytes ohne gültiges UTF-8 liefert das Betriebssystem als
+    Surrogate (``os.fsdecode``). Sie lassen sich weder in JSON-Ausgabe noch in
+    einen Hash zuverlässig schreiben und werden deshalb vorher abgelehnt.
+    """
+    try:
+        pfad.encode("utf-8")
+    except UnicodeEncodeError:
+        return False
+    return True
+
+
 def _walk_tree_no_links_within(start: Path, basis: Path, *, max_tiefe=None,
                                max_eintraege=None):
     """Deterministischer Baumlauf unterhalb von ``basis``, ohne Alias zu folgen.
@@ -679,7 +733,7 @@ def _walk_tree_no_links_within(start: Path, basis: Path, *, max_tiefe=None,
     while stapel:
         ordner, tiefe = stapel.pop()
         if max_tiefe is not None and tiefe > max_tiefe:
-            raise OSError(
+            raise BudgetUeberschritten(
                 f"{_rel_zu(ordner, basis)}: Verzeichnistiefe über {max_tiefe}"
             )
         try:
@@ -694,8 +748,10 @@ def _walk_tree_no_links_within(start: Path, basis: Path, *, max_tiefe=None,
             p = Path(eintrag.path)
             besucht += 1
             if max_eintraege is not None and besucht > max_eintraege:
-                raise OSError(
-                    f"{_rel_zu(basis, basis) or '.'}: mehr als {max_eintraege} "
+                # Der Startpfad, nicht die Basis: beim fremden Tresor ist das
+                # knowledge/, und „." sagte niemandem, wo es zu viel ist.
+                raise BudgetUeberschritten(
+                    f"{_rel_zu(start, basis) or '.'}: mehr als {max_eintraege} "
                     f"Verzeichniseinträge"
                 )
             ergebnis.append(p)
@@ -975,10 +1031,19 @@ def _retrieval_norm(value):
     return re.sub(r"\s+", " ", text).strip()
 
 
+# Stoppwörter durchlaufen dieselbe Normalisierung wie jede Anfrage. In v1
+# stand „für" roh in der Liste und wurde mit dem schon normalisierten Token
+# „fuer" verglichen — das Wort wirkte nie als Stoppwort.
+RETRIEVAL_STOPWORDS_NORM = frozenset(
+    _retrieval_norm(wort) for wort in RETRIEVAL_STOPWORDS
+)
+
+
 def _retrieval_tokens(value):
     return tuple(
         token for token in _retrieval_norm(value).split()
-        if token not in RETRIEVAL_STOPWORDS and (len(token) >= 2 or token.isdigit())
+        if token not in RETRIEVAL_STOPWORDS_NORM
+        and (len(token) >= 2 or token.isdigit())
     )
 
 
@@ -1026,15 +1091,39 @@ def _satz_digest(text):
     return _sha256_bytes(_satz_norm(text).encode("utf-8"))
 
 
-def _ist_satzende(kopf):
-    """Ob der Punkt am Ende von ``kopf`` wirklich einen Satz beendet."""
-    letztes = re.split(r"[\s(]", kopf)[-1].strip("„»‚'\"")
+SATZ_TRENNER_RE = re.compile(r"[\s(]")
+
+
+def _letztes_wort(text, ende, anfang=0):
+    """Das Wort direkt vor ``ende`` — genau ``re.split(r"[\\s(]", …)[-1]``.
+
+    Rückwärts gesucht, statt den Kopf seit dem letzten Satzende jedes Mal neu
+    zu zerlegen: In einem Absatz voller Abkürzungen wuchs dieser Kopf mit
+    jedem Punkt, und jede Prüfung zerlegte ihn von vorn — quadratische
+    Laufzeit, für ein pathologisches Dokument von 1 MiB über eine Stunde.
+    Rückwärts endet jede Suche spätestens am Leerzeichen hinter dem vorigen
+    Satzzeichen, und das Ganze bleibt linear.
+    """
+    i = ende
+    while i > anfang and not SATZ_TRENNER_RE.match(text, i - 1):
+        i -= 1
+    return text[i:ende]
+
+
+def _wort_beendet_satz(letztes):
+    """Ob ein Punkt nach diesem Wort einen Satz beendet."""
+    letztes = letztes.strip("„»‚'\"")
     if letztes.lower() in SATZ_ABKUERZUNGEN or len(letztes) == 1:
         return False
     if letztes.isdigit() or re.fullmatch(r"[§]?\d+", letztes):
         return False
     # Dezimalzahlen und Versionsbezeichner: 'v0.2', '3.14', '1.2.0'
     return not re.search(r"\d$", letztes)
+
+
+def _ist_satzende(kopf):
+    """Ob der Punkt am Ende von ``kopf`` wirklich einen Satz beendet."""
+    return _wort_beendet_satz(_letztes_wort(kopf, len(kopf)))
 
 
 def _bloecke(text):
@@ -1104,12 +1193,14 @@ def _saetze(text):
     """
     ergebnis, index = [], 0
     for art, inhalt in _bloecke(text):
-        rest, pos = inhalt, 0
+        pos = 0
         for treffer in SATZENDE_RE.finditer(inhalt):
-            kopf = inhalt[pos:treffer.start()]
-            if not _ist_satzende(inhalt[pos:treffer.start()]):
+            # Geschnitten wird erst, wenn der Satz wirklich endet — ein
+            # Schnitt je Kandidat wäre wieder quadratisch.
+            if not _wort_beendet_satz(
+                    _letztes_wort(inhalt, treffer.start(), pos)):
                 continue
-            satz = _satz_norm(kopf + treffer.group(1))
+            satz = _satz_norm(inhalt[pos:treffer.start()] + treffer.group(1))
             if satz:
                 index += 1
                 ergebnis.append((index, art, satz))
@@ -3286,12 +3377,26 @@ def cmd_query(question_words, world=None, limit=8, extern=False,
     # Ohne --extern verlässt kein Byte den Skill-Ordner. Das Flag macht am
     # Aufruf sichtbar, dass hier bewusst eine Ausnahme von Regel 2
     # (Vertrauen zur Abfragezeit) gemacht wird.
-    if extern:
+    if extern and result["state"] not in {"candidates_found", "no_candidates"}:
+        # Eine lokale Abfrage, die so nicht auswertbar ist (unbekannte
+        # Begriffswelt, mehrdeutiger Alias), ist kein Anlass für Schritt 4c.
+        # Vorher wurde trotzdem extern gelesen, und das Ergebnis stand neben
+        # einem Envelope, der gar keine Auswertung enthielt.
+        result["external"]["state"] = "invalid_query"
+        result["external"]["reason"] = (
+            f"Die lokale Abfrage endete mit {result['state']!r}. Extern wurde "
+            f"nichts durchsucht — {EXTERN_KEIN_BEFUND}."
+        )
+        result["fallback"]["external_reason"] = result["external"]["reason"]
+    elif extern:
         block = build_external_result(snapshot, query,
                                       quellen_filter=quellen_filter)
         gelesen = block.pop("documents_read", [])
         result["external"] = block
-        result["fallback"]["external_live_lookup_used"] = True
+        # Das ERGEBNIS, nicht der Aufruf: wahr nur, wenn tatsächlich gelesen
+        # wurde. Das Flag --extern allein hat noch nichts nachgeschlagen —
+        # eine ungebundene oder nicht erreichbare Quelle liest kein Byte.
+        result["fallback"]["external_live_lookup_used"] = bool(block["live"])
         result["fallback"]["external_reason"] = block.get("reason")
         result["fallback"]["external_document_paths"] = gelesen
     _emit_query_json(result)
@@ -3418,8 +3523,17 @@ def cmd_anchor_template(xid, dokument):
             "errors": [status["grund"]],
         }, ensure_ascii=False, indent=2, sort_keys=True))
         return 1
+    # Auch dieser Abruf gehört ins Herkunftsprotokoll; vorher ging die Liste
+    # verloren, und ein Netzabruf von anchor-template stand nirgends.
+    protokoll = []
     text, digest, grund = _extern_dokument_text(
-        status, dokument, bindung["cache_ttl_seconds"], xid, [])
+        status, dokument, bindung["cache_ttl_seconds"], xid, protokoll)
+    for meldung in _log_abrufe(protokoll):
+        # stdout trägt das Gerüst, das in eine strikte Ankerdatei wandert;
+        # ein zusätzliches Feld bräche deren Schema. Die Meldung geht nach
+        # stderr.
+        print(f"🟡 Herkunftsprotokoll unvollständig: {meldung}",
+              file=sys.stderr)
     if grund:
         print(json.dumps({
             "schema": ANCHORS_SCHEMA, "state": "unreachable",
@@ -3482,10 +3596,13 @@ def cmd_orchestrator_template(xid):
                        "ein Katalog entsteht aus einem lokal gebundenen Baum"],
         }, ensure_ascii=False, indent=2, sort_keys=True))
         return 1
-    dokumente, grund = _extern_dokumente(status["wurzel"], status["anker"])
+    dokumente, zustand, grund = _extern_dokumente(
+        status["wurzel"], status["anker"])
     if grund:
+        # Früher hieß hier jeder Fehler budget_exceeded, auch eine Sonderdatei
+        # oder ein unlesbares Dokument. Der Zustand nennt jetzt die Ursache.
         print(json.dumps({
-            "schema": ORCHESTRATOR_SCHEMA, "state": "budget_exceeded",
+            "schema": ORCHESTRATOR_SCHEMA, "state": zustand,
             "errors": [grund],
         }, ensure_ascii=False, indent=2, sort_keys=True))
         return 1
@@ -3619,6 +3736,10 @@ def _resolve_external_root(roh):
         return None, None, "führende oder abschließende Leerzeichen sind verboten"
     if any(ord(z) < 32 or ord(z) == 127 for z in wert):
         return None, None, "Steuerzeichen sind in Pfaden verboten"
+    if not _utf8_pfad(wert):
+        # Ein einzelnes Surrogat aus der Bindungsdatei endete sonst in einem
+        # UnicodeEncodeError — auch bei 'extern list', das nur anzeigen will.
+        return None, None, "Bindungswurzel ist kein gültiger UTF-8-Pfad"
     kandidat = Path(wert)
     if not kandidat.is_absolute():
         return None, None, "Bindungswurzel muss ein absoluter Pfad sein"
@@ -3626,7 +3747,7 @@ def _resolve_external_root(roh):
         return None, None, "'..' ist in der Bindungswurzel verboten"
     try:
         aufgeloest = kandidat.resolve(strict=True)
-    except OSError as exc:
+    except (OSError, ValueError) as exc:
         return None, None, f"Bindungswurzel nicht lesbar — {exc}"
     # Bewusst AUFLÖSEN statt kanonische Eingabe zu verlangen. Eine frühere
     # Fassung lehnte jede nicht schon kanonische Wurzel ab; das machte den
@@ -3706,16 +3827,22 @@ def _lies_externes_dokument(wurzel, anker, relpfad):
 def _extern_dokumente(wurzel, anker):
     """Alle Markdown-Dokumente einer externen Wurzel deterministisch sammeln.
 
-    Rückgabe: ``(liste, None)`` oder ``(None, grund)``. Budgets werden gezählt,
-    nie über eine Uhr gestoppt — sonst wäre das Ergebnis nicht reproduzierbar.
+    Rückgabe: ``(liste, None, None)`` oder ``(None, zustand, grund)``.
+    ``zustand`` ist ``budget_exceeded``, wenn ein gezähltes Budget greift, und
+    ``invalid_source``, wenn der Baum etwas enthält, das sich nicht
+    katalogisieren lässt — zwei Ursachen, zwei Zustände. Budgets werden
+    gezählt, nie über eine Uhr gestoppt; sonst wäre das Ergebnis nicht
+    reproduzierbar.
     """
     try:
         baum = _walk_tree_no_links_within(
             wurzel, wurzel, max_tiefe=MAX_EXTERN_TIEFE,
             max_eintraege=MAX_EXTERN_EINTRAEGE,
         )
+    except BudgetUeberschritten as exc:
+        return None, "budget_exceeded", str(exc)
     except OSError as exc:
-        return None, str(exc)
+        return None, "invalid_source", str(exc)
     ergebnis, gesamt = [], 0
     for p in baum:
         relpfad = _rel_zu(p, wurzel)
@@ -3724,29 +3851,89 @@ def _extern_dokumente(wurzel, anker):
             continue
         if p.suffix.lower() != ".md":
             continue
+        if not _utf8_pfad(relpfad):
+            return None, "invalid_source", (
+                f"{relpfad!a}: Dateiname ist kein gültiges UTF-8")
         if not _safe_regular_file_within(p, wurzel):
             # Fail closed statt still überspringen: eine Datei, die wie ein
             # Dokument heißt, aber keines ist (FIFO, Symlink, Gerätedatei),
             # ist eine Auffälligkeit und kein Rauschen.
-            return None, f"{relpfad}: keine reguläre Datei"
+            return None, "invalid_source", f"{relpfad}: keine reguläre Datei"
         if len(ergebnis) >= MAX_EXTERN_DOKUMENTE:
-            return None, f"mehr als {MAX_EXTERN_DOKUMENTE} Markdown-Dokumente"
+            return None, "budget_exceeded", (
+                f"mehr als {MAX_EXTERN_DOKUMENTE} Markdown-Dokumente")
         text, digest, grund = _lies_externes_dokument(wurzel, anker, relpfad)
         if grund:
-            return None, f"{relpfad}: {grund}"
+            return None, "invalid_source", f"{relpfad}: {grund}"
         gesamt += len(text.encode("utf-8"))
         if gesamt > MAX_EXTERN_BYTES_GESAMT:
-            return None, f"mehr als {MAX_EXTERN_BYTES_GESAMT} Byte insgesamt"
+            return None, "budget_exceeded", (
+                f"mehr als {MAX_EXTERN_BYTES_GESAMT} Byte insgesamt")
         ergebnis.append({"path": relpfad, "sha256": digest, "text": text})
-    return ergebnis, None
+    return ergebnis, None, None
 
 
 def _https_ziel(praefix, relpfad):
-    """Vollständige URL unter dem registrierten Präfix bilden."""
+    """Vollständige URL unter dem registrierten Präfix bilden.
+
+    Der Katalogpfad ist ein Dateipfad, kein URL-Pfad: er wird kodiert. Ein
+    Leerzeichen oder Umlaut ließ die Anfrage sonst schon in http.client
+    scheitern; ein ``%`` im Dateinamen meint ein Prozentzeichen.
+    """
+    from urllib.parse import quote
+
     _, pfadfehler = _safe_relative_path(ROOT, relpfad)
     if pfadfehler:
         return None, pfadfehler
-    return praefix.rstrip("/") + "/" + relpfad, None
+    url = praefix.rstrip("/") + "/" + quote(relpfad, safe="/")
+    if not _unter_praefix(url, praefix):
+        return None, "Ziel liegt nicht unter dem registrierten Präfix"
+    return url, None
+
+
+def _unter_praefix(url, praefix):
+    """Ob ``url`` unter dem registrierten Präfix liegt — an Pfadgrenzen.
+
+    Ein reiner Zeichenkettenvergleich ließ ``https://beispiel.de.fremd.net/``
+    unter ``https://beispiel.de`` durchgehen und ``…/pfad-fremd/`` unter
+    ``…/pfad``. Dazu kommen Punktsegmente: ``…/pfad/../anderswo`` beginnt mit
+    dem Präfix und zeigt doch hinaus — percent-kodiert genauso, und ein
+    kodierter Schrägstrich verschiebt die Segmentgrenze.
+    """
+    from urllib.parse import unquote, urlsplit
+
+    if not isinstance(url, str) or not url.startswith("https://"):
+        return False
+    if "\\" in url or any(ord(z) < 33 or ord(z) == 127 for z in url):
+        return False
+    basis = praefix if praefix.endswith("/") else praefix + "/"
+    if not url.startswith(basis):
+        return False
+    for segment in urlsplit(url).path.split("/"):
+        klar = unquote(segment)
+        if klar in {".", ".."} or "/" in klar or "\\" in klar:
+            return False
+        if any(ord(z) < 32 or ord(z) == 127 for z in klar):
+            return False
+    return True
+
+
+def _netz_oeffner(kontext):
+    """Opener, der einer Weiterleitung NIE selbst folgt.
+
+    ``urllib`` folgt 301/302/303/307/308 von sich aus. Die Präfixprüfung kam
+    dann erst nach dem Lesen, wenn das fremde Ziel die Anfrage längst gesehen
+    hatte. Hier endet jede Weiterleitung als HTTPError beim Aufrufer, und der
+    prüft das Ziel, bevor er die nächste Anfrage stellt.
+    """
+    import urllib.request
+
+    class KeineWeiterleitung(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, req, fp, code, msg, headers, newurl):
+            return None
+
+    return urllib.request.build_opener(
+        KeineWeiterleitung(), urllib.request.HTTPSHandler(context=kontext))
 
 
 def _netz_erlaubt():
@@ -3760,17 +3947,22 @@ def _hole_https(url, praefix, *, opener=None):
     Rückgabe: ``(bytes, None)`` oder ``(None, grund)``. Bewusst eng: nur https,
     Zertifikatsprüfung zwingend, Redirects nur unterhalb desselben Präfix,
     keine Auth-Header, keine Cookies. Ein Redirect, das das Präfix verlässt,
-    ist ein Abbruch und kein Umweg.
+    ist ein Abbruch und kein Umweg — und zwar BEVOR ihm gefolgt wird: Der
+    Opener folgt keiner Weiterleitung selbst (``_netz_oeffner``).
     """
+    import http.client
     import ssl
     import urllib.error
     import urllib.request
+    from urllib.parse import urljoin
 
     if not _netz_erlaubt():
         return None, f"{EXTERN_OFFLINE_ENV} ist gesetzt — kein Netzzugriff"
-    if not url.startswith("https://") or not url.startswith(praefix):
+    if not _unter_praefix(url, praefix):
         return None, "Ziel liegt nicht unter dem registrierten Präfix"
-    kontext = ssl.create_default_context()
+    if opener is None:
+        oeffner = _netz_oeffner(ssl.create_default_context())
+        opener = oeffner.open
     aktuell, gesehen = url, 0
     while True:
         anfrage = urllib.request.Request(
@@ -3779,31 +3971,44 @@ def _hole_https(url, praefix, *, opener=None):
                      "Accept": "text/markdown, text/plain"},
         )
         try:
-            if opener is not None:
-                antwort = opener(anfrage, timeout=EXTERN_NETZ_TIMEOUT)
-            else:
-                antwort = urllib.request.urlopen(
-                    anfrage, timeout=EXTERN_NETZ_TIMEOUT, context=kontext)
+            antwort = opener(anfrage, timeout=EXTERN_NETZ_TIMEOUT)
         except urllib.error.HTTPError as exc:
+            ort = exc.headers.get("Location", "") if exc.headers else ""
+            try:
+                exc.close()
+            except Exception:
+                pass
             if exc.code in (301, 302, 303, 307, 308):
-                ziel = exc.headers.get("Location", "")
                 gesehen += 1
                 if gesehen > EXTERN_NETZ_MAX_REDIRECTS:
                     return None, "zu viele Weiterleitungen"
-                if not ziel.startswith(praefix):
+                # Relativ angegebene Ziele gegen die aktuelle URL auflösen,
+                # dann prüfen — die nächste Anfrage geht erst danach hinaus.
+                ziel = urljoin(aktuell, ort)
+                if not _unter_praefix(ziel, praefix):
                     return None, (
                         "Weiterleitung verlässt das registrierte Präfix"
                     )
                 aktuell = ziel
                 continue
             return None, f"HTTP {exc.code}"
-        except (urllib.error.URLError, OSError, ValueError) as exc:
+        except (urllib.error.URLError, OSError, ValueError,
+                http.client.HTTPException) as exc:
             return None, f"nicht erreichbar — {exc}"
-        with antwort:
-            endgueltig = getattr(antwort, "url", aktuell) or aktuell
-            if not endgueltig.startswith(praefix):
-                return None, "Weiterleitung verlässt das registrierte Präfix"
-            rohdaten = antwort.read(MAX_EXTERN_BYTES_JE_DATEI + 1)
+        # Ein Abruf kann auch NACH den Headern scheitern: die Verbindung
+        # reißt ab, das Zeitlimit greift beim Lesen, der Rumpf bleibt
+        # unvollständig. Das ist ein Abruffehler wie jeder andere — ein Grund
+        # für die Notizen, keine Ausnahme, die die Abfrage ohne JSON beendet.
+        try:
+            with antwort:
+                # Zweite Linie: folgt ein ersetzter Opener doch einer
+                # Weiterleitung, fällt das hier auf.
+                endgueltig = getattr(antwort, "url", aktuell) or aktuell
+                if not _unter_praefix(endgueltig, praefix):
+                    return None, "Weiterleitung verlässt das registrierte Präfix"
+                rohdaten = antwort.read(MAX_EXTERN_BYTES_JE_DATEI + 1)
+        except (OSError, http.client.HTTPException) as exc:
+            return None, f"Abruf abgebrochen — {exc}"
         if len(rohdaten) > MAX_EXTERN_BYTES_JE_DATEI:
             return None, f"größer als {MAX_EXTERN_BYTES_JE_DATEI} Byte"
         return rohdaten, None
@@ -3812,8 +4017,10 @@ def _hole_https(url, praefix, *, opener=None):
 def _katalog_score(dokument, query_norm, tokens):
     """Stufe 1: Katalogtext. Bewusst dieselben Gewichte wie die Seitenebene.
 
-    Der Katalogtext ist ein SCHWACHES Signal — er entscheidet nur, welche
-    Dokumente überhaupt geöffnet werden, nie welches gewinnt.
+    Der Katalogtext ist ein SCHWACHES Signal. Bei einer Netzquelle entscheidet
+    er, welche Dokumente überhaupt abgerufen werden; bei einer lokalen Quelle
+    nur die Reihenfolge des Lesens. Welches Dokument gewinnt, entscheidet er
+    nie.
     """
     score = 0
     titel = _retrieval_norm(dokument.get("title", ""))
@@ -3893,11 +4100,49 @@ def _extern_quelle_status(xid, zeile, bindung):
             "praefix": None, "grund": None}
 
 
-def _extern_dokument_text(status, relpfad, ttl, xid, protokoll):
+def _als_text(rohdaten):
+    """Bytes eines externen Dokuments strikt als UTF-8 lesen.
+
+    Rückgabe: ``(text, sha256, None)`` oder ``(None, None, grund)``. Für den
+    frischen Abruf wie für den Cache dieselbe Regel: Vorher las der Cache mit
+    ``errors="replace"``, und dieselben Bytes waren beim ersten Lauf
+    unlesbar, beim zweiten ein Treffer.
+    """
+    try:
+        return rohdaten.decode("utf-8"), _sha256_bytes(rohdaten), None
+    except UnicodeError as exc:
+        return None, None, f"kein gültiges UTF-8 — {exc}"
+
+
+def _protokoll_sperre():
+    """Ob ein Netzabruf jetzt protokolliert werden könnte — sonst der Grund.
+
+    Geprüft VOR dem Socket: Ein Abruf, der nicht in ``log.md`` landen kann,
+    findet nicht statt. Hinterher ließe sich die Zusage „jeder Abruf steht im
+    Log" nicht mehr einlösen, nur noch melden.
+    """
+    sicher, grund = _safe_output_target(LOG)
+    if not sicher:
+        return grund
+    if os.path.lexists(str(RELEASE_LOCK)):
+        return "Release-/Recovery-Lock vorhanden"
+    if not os.access(str(ROOT), os.W_OK):
+        return "der Skill-Ordner ist nicht beschreibbar"
+    if os.path.lexists(str(LOG)) and not os.access(str(LOG), os.W_OK):
+        return "log.md ist nicht beschreibbar"
+    return None
+
+
+def _extern_dokument_text(status, relpfad, ttl, xid, protokoll, abrufe=None):
     """Ein externes Dokument JETZT lesen — Platte oder Netz.
 
-    „Live" heißt hier wörtlich: der Katalog ist nur Prefilter, gerechnet wird
-    gegen den Text, der in diesem Moment dort steht.
+    „Live" heißt hier wörtlich: gerechnet wird gegen den Text, der in diesem
+    Moment dort steht, nie gegen den Katalog.
+
+    ``abrufe`` ist das Abrufbudget der Abfrage (``{"rest": n}``) oder ``None``
+    für einen einzelnen Abruf ohne Budget. Ein Cache-Treffer verbraucht
+    nichts; ist das Budget vor einem echten Abruf aufgebraucht, kommt
+    ``AbrufbudgetErschoepft`` — kein Lesefehler, sondern eine eigene Lücke.
     """
     if status["modus"] == "lokal":
         return _lies_externes_dokument(status["wurzel"], status["anker"], relpfad)
@@ -3905,34 +4150,50 @@ def _extern_dokument_text(status, relpfad, ttl, xid, protokoll):
     if grund:
         return None, None, grund
     cache = _extern_cache_dir(xid) / (_sha256_bytes(url.encode("utf-8")) + ".md")
-    alter = None
     try:
         if cache.is_file() and not cache.is_symlink():
             alter = int(max(0.0, _jetzt() - cache.stat().st_mtime))
             if ttl and alter <= ttl:
                 rohdaten = cache.read_bytes()
+                # Ausdrücklich markiert: ein Treffer jünger als eine Sekunde
+                # hat das Alter 0 und wurde früher als Abruf protokolliert.
                 protokoll.append({"url": url, "cache_age_seconds": alter,
-                                  "bytes": len(rohdaten),
+                                  "bytes": len(rohdaten), "aus_cache": True,
                                   "sha256": _sha256_bytes(rohdaten)})
-                return (rohdaten.decode("utf-8", errors="replace"),
-                        _sha256_bytes(rohdaten), None)
+                return _als_text(rohdaten)
     except OSError:
-        alter = None
+        pass
+    # Ab hier ginge eine Anfrage hinaus. Drei Bedingungen, alle vor dem
+    # ersten Socket: Netz erlaubt, Protokoll schreibbar, Budget übrig.
+    if not _netz_erlaubt():
+        return None, None, f"{EXTERN_OFFLINE_ENV} ist gesetzt — kein Netzzugriff"
+    sperre = _protokoll_sperre()
+    if sperre:
+        return None, None, (
+            f"nicht abgerufen — das Herkunftsprotokoll ist nicht schreibbar "
+            f"({sperre}), und ein Abruf ohne Protokolleintrag findet nicht statt"
+        )
+    if abrufe is not None:
+        if abrufe["rest"] <= 0:
+            raise AbrufbudgetErschoepft(
+                f"höchstens {EXTERN_NETZ_MAX_ABRUFE} Netzabrufe je Abfrage")
+        abrufe["rest"] -= 1
     rohdaten, grund = _hole_https(url, status["praefix"])
     if grund:
+        return None, None, grund
+    protokoll.append({"url": url, "cache_age_seconds": 0, "aus_cache": False,
+                      "bytes": len(rohdaten), "sha256": _sha256_bytes(rohdaten)})
+    text, digest, grund = _als_text(rohdaten)
+    if grund:
+        # Abgerufen ist abgerufen: der Eintrag steht im Protokoll. In den
+        # Cache kommt nur, was sich auch lesen lässt.
         return None, None, grund
     try:
         cache.parent.mkdir(parents=True, exist_ok=True)
         cache.write_bytes(rohdaten)
     except OSError:
         pass
-    protokoll.append({"url": url, "cache_age_seconds": 0,
-                      "bytes": len(rohdaten), "sha256": _sha256_bytes(rohdaten)})
-    try:
-        text = rohdaten.decode("utf-8")
-    except UnicodeError as exc:
-        return None, None, f"kein gültiges UTF-8 — {exc}"
-    return text, _sha256_bytes(rohdaten), None
+    return text, digest, None
 
 
 def _jetzt():
@@ -3947,13 +4208,24 @@ def _lese_fremden_tresor(wurzel, anker):
     Wir rechnen sein MANIFEST.sha256 mit unserem eigenen ``sha256_file`` nach,
     bevor wir irgendetwas glauben. Sein ``scripts/vault.py`` ist an dieser
     Stelle eine Datei mit einer Prüfsumme — kein import, kein exec, kein
-    subprocess (AD-09, eiserne Regel 5).
+    subprocess (AD-09, eiserne Regel 5). Gelesen wird danach ausschließlich,
+    was das Manifest pinnt, und nur in dem Stand, den es pinnt: Ein Dokument
+    unter ``knowledge/`` ohne Manifestzeile oder mit anderem Hash beim Lesen
+    bricht ab, statt als ungeprüfter Treffer durchzurutschen.
+
+    Rückgabe: ``(daten, None)`` oder ``(None, grund)``. Ein überschrittenes
+    gezähltes Budget ist kein Grund unter vielen, sondern eine eigene
+    Ausnahme (``BudgetUeberschritten``): der Aufrufer meldet es als
+    ``budget_exceeded`` statt als ungültige Quelle.
     """
     manifest, digest, grund = _lies_externes_dokument(
         wurzel, anker, "MANIFEST.sha256")
     if grund:
         return None, f"MANIFEST.sha256 — {grund}"
     geprueft = 0
+    # Was das Manifest pinnt, und mit welchem Hash. Gelesen wird nur, was
+    # hier steht — und nur in genau dem Stand, der hier steht.
+    soll_je_pfad = {}
     for zeile in manifest.split("\n"):
         if not zeile.strip():
             continue
@@ -3973,20 +4245,60 @@ def _lese_fremden_tresor(wurzel, anker):
                 f"{relpfad}: Prüfsumme weicht vom fremden Manifest ab — "
                 f"der fremde Bestand ist nicht vertrauenswürdig"
             )
+        soll_je_pfad[relpfad] = soll
         geprueft += 1
     if not geprueft:
         return None, "MANIFEST.sha256 ist leer"
 
-    dokumente = []
-    for p in _walk_tree_no_links_within(
+    # Der Baumlauf darf scheitern, die Abfrage nicht: früher lief sein Fehler
+    # ungefangen durch und beendete sie mit einem Traceback statt mit genau
+    # einem JSON-Dokument.
+    try:
+        baum = _walk_tree_no_links_within(
             wurzel / "knowledge", wurzel, max_tiefe=MAX_EXTERN_TIEFE,
-            max_eintraege=MAX_EXTERN_EINTRAEGE):
-        if p.suffix.lower() != ".md" or not _safe_regular_file_within(p, wurzel):
+            max_eintraege=MAX_EXTERN_EINTRAEGE)
+    except BudgetUeberschritten:
+        raise
+    except OSError as exc:
+        return None, f"knowledge/ ist nicht lesbar — {exc}"
+    dokumente = []
+    for p in baum:
+        if p.suffix.lower() != ".md":
             continue
         relpfad = _rel_zu(p, wurzel)
-        text, _, grund = _lies_externes_dokument(wurzel, anker, relpfad)
+        if not _utf8_pfad(relpfad):
+            # Ein Dateiname aus Bytes ohne gültiges UTF-8 kommt als Surrogat
+            # an und brach später beim Hashen des Ergebnisses ab.
+            return None, f"{relpfad!a}: Dateiname ist kein gültiges UTF-8"
+        if not _safe_regular_file_within(p, wurzel):
+            # Fail closed statt still überspringen, wie beim Katalog-Gerüst:
+            # ein Symlink, ein Hardlink oder eine Sonderdatei, die wie ein
+            # Dokument heißt, ist im Skill-Artefakt verboten. Übersprungen
+            # sähe das Ergebnis vollständig aus, obwohl ein Dokument fehlt —
+            # ein Negativbefund über etwas, das nie gelesen wurde.
+            return None, (
+                f"{relpfad}: kein einfach verlinktes reguläres Dokument "
+                f"(Symlink, Hardlink oder Sonderdatei)"
+            )
+        soll = soll_je_pfad.get(relpfad)
+        if soll is None:
+            # Ein Dokument, das das fremde Manifest nicht pinnt, ist nie
+            # geprüft worden. Es zu lesen hieße, die Nachrechnung oben für
+            # genau das Material auszusetzen, das am Ende geliefert wird.
+            return None, (
+                f"{relpfad}: steht nicht im fremden Manifest — ungeprüftes "
+                f"Material wird nicht gelesen"
+            )
+        text, ist, grund = _lies_externes_dokument(wurzel, anker, relpfad)
         if grund:
             return None, f"{relpfad}: {grund}"
+        if ist != soll:
+            # Nachgerechnet wurde eben eine Datei; geliefert würden die Bytes
+            # dieses zweiten Lesens. Beides muss derselbe Stand sein.
+            return None, (
+                f"{relpfad}: hat sich seit der Manifestprüfung geändert — "
+                f"der fremde Bestand ist nicht vertrauenswürdig"
+            )
         dokumente.append({"path": relpfad, "text": text})
     return {"documents": dokumente, "manifest_sha256": digest,
             "files": geprueft}, None
@@ -3998,6 +4310,19 @@ def build_external_result(snapshot, query, quellen_filter=None):
     Ergebnisse landen NIE in ``evidence`` und nie im lokalen
     ``retrieval_fingerprint``: ein externer Satz ist ein Zeiger auf fremdes
     Material, kein kuratierter Claim dieses Bestands.
+
+    Nur zwei Zustände sind Ergebnisse: ``external_candidates_found`` und
+    ``no_external_candidates``. Beide setzen voraus, dass mindestens ein
+    Dokument tatsächlich gelesen wurde. Jeder andere Zustand heißt „es wurde
+    nichts gelesen" und ist ausdrücklich kein Negativbefund. Ein Block, der
+    nach „durchsucht und nichts gefunden" aussieht, obwohl kein Dokument
+    geöffnet wurde, ist derselbe Fehltreffer wie eine vertippte Quellen-ID —
+    und genauso teuer, weil er nicht als Fehler auffällt.
+
+    ``extern-zweistufig/v2``: Eine lokale Quelle wird vollständig gelesen,
+    eine Netzquelle nur in den besten ``MAX_EXTERN_STUFE1`` Katalogeinträgen
+    und innerhalb von ``EXTERN_NETZ_MAX_ABRUFE`` Abrufen je Abfrage. Alles,
+    was dabei ungelesen bleibt, nennt der Grund.
     """
     bindung, bindungsfehler = parse_bindung()
     register = snapshot["extern"]["register"]
@@ -4006,9 +4331,14 @@ def build_external_result(snapshot, query, quellen_filter=None):
     tokens = _retrieval_tokens(query)
 
     block = {
-        "state": "no_external_candidates",
+        # Die Vorbelegung ist bewusst KEIN Ergebniszustand: verlässt ein Pfad
+        # die Funktion, ohne den Zustand zu setzen, sieht das nie nach einem
+        # Negativbefund aus.
+        "state": "unreachable",
         "algorithm": EXTERN_RETRIEVAL_PROFILE,
-        "live": True,
+        # 'live' wird verdient, nicht vorbelegt: wahr erst, wenn tatsächlich
+        # ein Dokument gelesen wurde und in dieses Ergebnis eingeht.
+        "live": False,
         "fetched_at": None,
         "sources": [],
         "hits": [],
@@ -4018,7 +4348,6 @@ def build_external_result(snapshot, query, quellen_filter=None):
     }
     if not register:
         block["state"] = "not_declared"
-        block["live"] = False
         block["reason"] = (
             f"{rel(EXTERN_REGISTER)} führt keine externe Bezugsquelle. "
             f"Es wird ausschließlich aufgeführtes Material gelesen."
@@ -4032,15 +4361,51 @@ def build_external_result(snapshot, query, quellen_filter=None):
     unbekannt = sorted(set(quellen_filter or []) - set(register))
     if unbekannt:
         block["state"] = "invalid_query"
-        block["live"] = False
         block["reason"] = (
             f"Nicht aufgeführte Quelle(n) {unbekannt}. Es wurde nichts "
-            f"durchsucht — dies ist kein Negativbefund. Aufgeführt sind: "
+            f"durchsucht — {EXTERN_KEIN_BEFUND}. Aufgeführt sind: "
             f"{sorted(register)}."
         )
         return block
 
+    # Ohne einen suchbaren Begriff kann kein Dokument einen Treffer haben.
+    # Lesen und „nichts gefunden" melden hieße, einen Befund über eine Frage
+    # auszustellen, die gar nicht gestellt wurde.
+    if not tokens:
+        block["state"] = "invalid_query"
+        block["reason"] = (
+            f"Die Frage enthält keinen suchbaren Begriff (nur Stoppwörter oder "
+            f"Einzelzeichen). Es wurde nichts durchsucht — {EXTERN_KEIN_BEFUND}."
+        )
+        return block
+
     treffer, wurzeln, protokoll, dokumentpfade = [], [], [], []
+    # Gezählte Grenzen der ganzen Abfrage: Netzabrufe über alle Netzquellen,
+    # gelesene Bytes über alle Quellen. Beides wird gezählt, nie über eine Uhr.
+    abrufe = {"rest": EXTERN_NETZ_MAX_ABRUFE}
+    gelesene_bytes = 0
+    netz_gelesen = 0
+    # Je berücksichtigter Quelle, aus der KEIN Dokument gelesen wurde, genau
+    # ein Eintrag (ursache, text). Die Ursache ist "not_bound" (lokale Quelle
+    # ohne brauchbare Bindung — Normalzustand eines frisch entpackten Pakets)
+    # oder "unreachable" (die Quelle hätte gelesen werden sollen, aber es kam
+    # kein Dokument an). Daraus entsteht unten der Zustand.
+    ungelesen = []
+    # Quellen, aus denen gelesen wurde, aber nicht alles Katalogisierte: ein
+    # Dokument war nicht lesbar, ein gezähltes Budget war erschöpft, oder
+    # Stufe 1 hat es bei einer Netzquelle gar nicht geöffnet. Auch das ist
+    # eine Lücke, und sie gehört in den Grund statt nur in die Notizen.
+    teilweise = []
+    # Fail closed ohne Teilergebnis: (zustand, grund), sobald ein fremder
+    # Tresor nicht vertrauenswürdig ist oder ein gezähltes Budget sprengt.
+    abbruch = None
+
+    def nicht_gelesen(ursache, text, notiz=True):
+        """Eine Quelle ohne gelesenes Dokument festhalten — nie still."""
+        if notiz:
+            block["notes"].append(text)
+        ungelesen.append((ursache, text))
+
     for xid in sorted(register):
         zeile = register[xid]
         if quellen_filter and xid not in quellen_filter:
@@ -4055,31 +4420,48 @@ def build_external_result(snapshot, query, quellen_filter=None):
         }
         block["sources"].append(eintrag)
         if status["modus"] == "unbound":
-            block["notes"].append(status["grund"])
+            nicht_gelesen("not_bound", status["grund"])
             continue
         if status["modus"] == "netz" and not _netz_erlaubt():
             eintrag["bound"] = False
-            block["notes"].append(
-                f"{xid}: {EXTERN_OFFLINE_ENV} ist gesetzt — nicht abgerufen"
+            nicht_gelesen(
+                "unreachable",
+                f"{xid}: {EXTERN_OFFLINE_ENV} ist gesetzt — nicht abgerufen",
             )
             continue
 
         if zeile["art"] == "skillsafe-vault":
             if status["modus"] != "lokal":
-                block["notes"].append(
-                    f"{xid}: ein fremder Tresor wird nur lokal gelesen"
+                nicht_gelesen(
+                    "unreachable",
+                    f"{xid}: ein fremder Tresor wird nur lokal gelesen",
                 )
                 continue
-            fremd, grund = _lese_fremden_tresor(status["wurzel"], status["anker"])
+            try:
+                fremd, grund = _lese_fremden_tresor(
+                    status["wurzel"], status["anker"])
+            except BudgetUeberschritten as exc:
+                abbruch = ("budget_exceeded", f"{xid}: {exc}")
+                break
             if grund:
-                block["state"] = "invalid_external_source"
-                block["reason"] = f"{xid}: {grund}"
-                return block
+                abbruch = ("invalid_external_source", f"{xid}: {grund}")
+                break
+            # Das Rezept des Fingerprints gehört zu extern-zweistufig/v1 und
+            # bleibt unverändert: jede Quelle, für die die Suche geöffnet
+            # wurde, geht mit ihrem Stand ein — auch wenn daraus am Ende kein
+            # Dokument kam. Lücken stehen im Grund, nicht im Fingerprint.
             wurzeln.append([xid, fremd["manifest_sha256"]])
+            if not fremd["documents"]:
+                nicht_gelesen(
+                    "unreachable",
+                    f"{xid}: der fremde Tresor enthält kein Dokument unter "
+                    f"knowledge/",
+                )
+                continue
             for dok in fremd["documents"]:
                 dokumentpfade.append(f"{xid}:{dok['path']}")
                 bestand = _bestand_score(dok["text"], query_norm, tokens)
-                if bestand["coverage"] < EXTERN_ABDECKUNG_MIN or not bestand["satz"]:
+                if bestand["treffer"] < EXTERN_MIN_BEGRIFFE or not bestand["satz"]:
                     continue
                 treffer.append(_extern_treffer(
                     xid, dok["path"], bestand, 0, zeile))
@@ -4087,56 +4469,189 @@ def build_external_result(snapshot, query, quellen_filter=None):
 
         katalog = kataloge.get(xid)
         if not katalog:
-            block["notes"].append(
+            nicht_gelesen(
+                "unreachable",
                 f"{xid}: kein Katalog sources/derived/{xid}__orchestrator.json "
-                f"— 'vault.py orchestrator-template {xid}' erzeugt das Gerüst"
+                f"— 'vault.py orchestrator-template {xid}' erzeugt das Gerüst",
             )
             continue
-        # Bei einer Netzquelle ist der Wurzel-Hash bewusst None; dann geht der
-        # Bindungsschluessel in den Fingerprint, nicht eine erfundene Zahl.
+        # Bei einer Netzquelle ist der Wurzel-Hash bewusst None; dann steht
+        # im Fingerprint "netz" und keine erfundene Zahl. Die Quelle geht ein,
+        # sobald die Suche für sie geöffnet wird — siehe oben beim fremden
+        # Tresor.
         wurzeln.append([xid, katalog["meta"]["generated_from_sha256"] or "netz"])
-        # Stufe 1 ist nur Prefilter: der Index wird nie roh geladen, sondern
-        # gefiltert, und nur die besten Kandidaten werden überhaupt geöffnet.
-        vorauswahl = sorted(
+        ist_netz = status["modus"] == "netz"
+        reihenfolge = sorted(
             ((_katalog_score(dok, query_norm, tokens), dok["path"], dok)
              for dok in katalog["documents"]),
             key=lambda eintrag: (-eintrag[0], eintrag[1]),
-        )[:MAX_EXTERN_STUFE1]
+        )
+        # Stufe 1 filtert nur bei einer Netzquelle: dort ist jedes Öffnen ein
+        # Abruf, also teuer und nicht reproduzierbar. Lokal ist Lesen billig
+        # und deterministisch; dort ordnet der Katalog nur, und kein Dokument
+        # fällt einem schwachen Katalogtext zum Opfer.
+        vorauswahl = reihenfolge[:MAX_EXTERN_STUFE1] if ist_netz else reihenfolge
+        ungeoeffnet = len(reihenfolge) - len(vorauswahl)
         ttl = bindung["cache_ttl_seconds"]
+        gelesen_hier = fehler_hier = budget_hier = 0
+        budget_gruende = []
         for katalog_score, relpfad, dok in vorauswahl:
-            text, _, grund = _extern_dokument_text(
-                status, relpfad, ttl, xid, protokoll)
+            if gelesene_bytes >= MAX_EXTERN_BYTES_GESAMT:
+                budget_hier += 1
+                grund = f"höchstens {MAX_EXTERN_BYTES_GESAMT} Byte je Abfrage"
+                if grund not in budget_gruende:
+                    budget_gruende.append(grund)
+                continue
+            try:
+                text, _, grund = _extern_dokument_text(
+                    status, relpfad, ttl, xid, protokoll, abrufe)
+            except AbrufbudgetErschoepft as exc:
+                budget_hier += 1
+                if str(exc) not in budget_gruende:
+                    budget_gruende.append(str(exc))
+                continue
             if grund:
                 block["notes"].append(f"{xid}/{relpfad}: {grund}")
+                fehler_hier += 1
                 continue
+            gelesen_hier += 1
+            gelesene_bytes += len(text.encode("utf-8"))
+            if ist_netz:
+                netz_gelesen += 1
             dokumentpfade.append(f"{xid}:{relpfad}")
             bestand = _bestand_score(text, query_norm, tokens)
-            # Abdeckung 0 fliegt raus, egal wie gut Stufe 1 aussah. Genau hier
-            # wird der Katalogtext als schwaches Signal entwertet.
-            if bestand["coverage"] < EXTERN_ABDECKUNG_MIN or not bestand["satz"]:
+            # Ohne einen einzigen Anfragebegriff fliegt das Dokument raus,
+            # egal wie gut der Katalogtext aussah. Genau hier wird er als
+            # schwaches Signal entwertet.
+            if bestand["treffer"] < EXTERN_MIN_BEGRIFFE or not bestand["satz"]:
                 continue
             treffer.append(_extern_treffer(
                 xid, relpfad, bestand, katalog_score, zeile))
 
-    treffer.sort(key=lambda t: (-t["score"], t["source_id"], t["document"],
-                                t["sentence_index"]))
-    block["hits"] = treffer[:MAX_EXTERN_TREFFER]
+        # Lücken dieser Quelle, je Ursache getrennt — der Grund nennt sie alle.
+        geoeffnet = gelesen_hier + fehler_hier
+        teile = []
+        if fehler_hier:
+            teile.append(
+                f"{fehler_hier} von {geoeffnet} geöffneten Dokumenten nicht lesbar")
+        if budget_hier:
+            text = (f"{budget_hier} Dokument(e) nicht geöffnet "
+                    f"({'; '.join(budget_gruende)})")
+            teile.append(text)
+            block["notes"].append(f"{xid}: {text}")
+        if ungeoeffnet:
+            text = (f"{ungeoeffnet} von {len(reihenfolge)} katalogisierten "
+                    f"Dokumenten nicht geöffnet (Stufe 1 öffnet bei einer "
+                    f"Netzquelle höchstens {MAX_EXTERN_STUFE1})")
+            teile.append(text)
+            block["notes"].append(f"{xid}: {text}")
+        if not gelesen_hier:
+            if fehler_hier and not budget_hier and not ungeoeffnet:
+                # Die Einzelgründe stehen je Dokument schon in den Notizen.
+                text = (f"{xid}: kein Dokument lesbar ({geoeffnet} aus dem "
+                        f"Katalog geöffnet)")
+            else:
+                text = f"{xid}: kein Dokument gelesen — {'; '.join(teile)}"
+            nicht_gelesen("unreachable", text, notiz=False)
+            continue
+        if teile:
+            teilweise.append(f"{xid}: {'; '.join(teile)}")
+
+    # Jeder Abruf steht im Log — auch dann, wenn die Suche gleich darauf
+    # fail-closed abbricht. Das Herkunftsprotokoll hängt nicht am Ergebnis.
+    protokoll_luecke = None
     if protokoll:
-        block["fetched_at"] = date.today().isoformat()
         alter = [e["cache_age_seconds"] for e in protokoll]
         block["notes"].append(
             f"{len(protokoll)} Abruf(e), Cache-Alter {min(alter)}–{max(alter)} s"
         )
-        _log_abrufe(protokoll)
+        unprotokolliert = _log_abrufe(protokoll)
+        if unprotokolliert:
+            # Vor dem Abruf war log.md schreibbar, beim Eintragen nicht mehr.
+            # Ungeschehen machen lässt sich der Abruf nicht — gemeldet wird er.
+            protokoll_luecke = (
+                f"Herkunftsprotokoll unvollständig: {len(unprotokolliert)} "
+                f"Abruf(e) nicht in log.md eingetragen ({unprotokolliert[0]})"
+            )
+            block["notes"].append(protokoll_luecke)
+
+    def mit_protokollhinweis(grund):
+        if not protokoll_luecke:
+            return grund
+        return f"{grund} {protokoll_luecke}." if grund else f"{protokoll_luecke}."
+
+    if abbruch:
+        # Schon gelesene Dokumente anderer Quellen werden verworfen: ein
+        # Teilergebnis sähe aus wie ein vollständiges.
+        zustand, grund = abbruch
+        block["state"] = zustand
+        block["reason"] = mit_protokollhinweis(
+            f"{grund}. Die externe Suche wurde abgebrochen, es liegt kein "
+            f"Ergebnis vor — {EXTERN_KEIN_BEFUND}."
+        )
+        return block
+
+    gelesen = sorted(set(dokumentpfade))
+    # Alles Aufgeführte, das nicht gelesen wurde: ganze Quellen, einzelne
+    # nicht lesbare Dokumente, was ein gezähltes Budget abgeschnitten und was
+    # Stufe 1 bei einer Netzquelle nicht geöffnet hat. Fehlt dieser Zusatz im
+    # Grund, wurde jedes katalogisierte Dokument jeder berücksichtigten Quelle
+    # gelesen.
+    luecken = [text for _, text in ungelesen] + teilweise
+    offen = "; ".join(luecken)
+    if not gelesen:
+        # Kein Dokument gelesen heißt: es gibt kein Ergebnis. Der Zustand
+        # nennt die Ursache, bei gemischten Ursachen die schwerwiegendere —
+        # "unreachable" (etwas hätte lesbar sein sollen) vor "not_bound"
+        # (auf diesem Host bewusst nicht eingerichtet).
+        nur_ungebunden = bool(ungelesen) and all(
+            ursache == "not_bound" for ursache, _ in ungelesen)
+        block["state"] = "not_bound" if nur_ungebunden else "unreachable"
+        block["reason"] = (
+            f"Es wurde kein externes Dokument gelesen — {EXTERN_KEIN_BEFUND}. "
+            f"Nicht gelesen: {offen}."
+        )
+        if bindungsfehler:
+            block["reason"] += (
+                f" Die Bindungsdatei {rel(BINDUNG)} ist fehlerhaft "
+                f"(Einzelheiten in notes)."
+            )
+        block["reason"] = mit_protokollhinweis(block["reason"])
+        return block
+
+    block["live"] = True
+    # Der Abrufzeitpunkt gehört zu einem gelesenen Netzdokument. Ein Abruf,
+    # dessen Inhalt nicht lesbar war, steht im Protokoll, nicht hier.
+    if netz_gelesen:
+        block["fetched_at"] = date.today().isoformat()
+    treffer.sort(key=lambda t: (-t["score"], t["source_id"], t["document"],
+                                t["sentence_index"]))
+    block["hits"] = treffer[:MAX_EXTERN_TREFFER]
     if block["hits"]:
         block["state"] = "external_candidates_found"
-    elif block["state"] == "no_external_candidates":
+        if luecken:
+            block["reason"] = (
+                f"Die Treffer stammen nur aus den gelesenen Dokumenten. "
+                f"Nicht gelesen: {offen}."
+            )
+    else:
+        block["state"] = "no_external_candidates"
         ohne = sorted(set(tokens)) if tokens else []
+        # Die Aussage reicht genau so weit wie das Gelesene — nicht bis zu
+        # jedem aufgeführten Dokument.
         block["reason"] = (
-            "Kein aufgeführtes Dokument enthält die Anfragebegriffe "
-            f"{ohne}. Fachbegriffe statt Eigennamen verwenden. Es wird "
-            "bewusst kein bester Fehltreffer geliefert."
+            f"Kein gelesenes Dokument enthält die Anfragebegriffe {ohne} "
+            f"(gelesen: {len(gelesen)}). Fachbegriffe statt Eigennamen "
+            f"verwenden. Es wird bewusst kein bester Fehltreffer geliefert."
         )
+        if luecken:
+            block["reason"] += (
+                f" Der Befund gilt nur für die gelesenen Dokumente. "
+                f"Nicht gelesen: {offen}."
+            )
+    block["reason"] = mit_protokollhinweis(block["reason"])
+    # Ein Fingerprint bezeugt ein Ergebnis. Ohne gelesenes Dokument gibt es
+    # keines; dort bleibt er null, statt einen Nicht-Befund zu bezeugen.
     block["external_fingerprint"] = _sha256_bytes(json.dumps(
         {"algorithm": EXTERN_RETRIEVAL_PROFILE,
          "roots": sorted(wurzeln),
@@ -4145,7 +4660,7 @@ def build_external_result(snapshot, query, quellen_filter=None):
                    t["score"]] for t in block["hits"]]},
         ensure_ascii=False, sort_keys=True, separators=(",", ":"),
     ).encode("utf-8"))
-    block["documents_read"] = sorted(set(dokumentpfade))
+    block["documents_read"] = gelesen
     return block
 
 
@@ -4180,17 +4695,32 @@ def _log_abrufe(protokoll):
     Das ist der Unterschied zwischen „wie eine interne Quelle behandelt" und
     „unbeaufsichtigt": wer prüfen will, ob nur aufgeführte Ziele gelesen
     wurden, kann das nachlesen.
+
+    Läuft still: Die Abfrage schreibt genau ein JSON-Dokument auf stdout, und
+    eine Fehlerzeile von ``cmd_log`` davor machte es unlesbar. Was nicht
+    geschrieben werden konnte, kommt als Liste zurück und landet im Block.
     """
+    fehler = []
     for eintrag in protokoll:
-        if eintrag["cache_age_seconds"]:
+        if eintrag.get("aus_cache"):
             continue
+        ausgabe = io.StringIO()
         try:
-            cmd_log("extern", (
-                f"abruf {eintrag['url']} sha256={eintrag['sha256']} "
-                f"bytes={eintrag['bytes']}"
-            ), still=True)
-        except (OSError, ValueError):
-            pass
+            with contextlib.redirect_stdout(ausgabe):
+                ergebnis = cmd_log("extern", (
+                    f"abruf {eintrag['url']} sha256={eintrag['sha256']} "
+                    f"bytes={eintrag['bytes']}"
+                ), still=True)
+        except Exception as exc:  # auch RollbackIncompleteError: nie ohne JSON
+            ergebnis = 1
+            ausgabe.write(f"{type(exc).__name__}: {exc}")
+        if ergebnis != 0:
+            zeilen = [z.strip() for z in ausgabe.getvalue().splitlines()
+                      if z.strip()]
+            meldung = zeilen[-1] if zeilen else "log.md nicht beschreibbar"
+            meldung = re.sub(r"^\W*log:\s*", "", meldung)
+            fehler.append(f"{eintrag['url']} — {meldung}")
+    return fehler
 
 
 def _tracked_path(p: Path) -> bool:
@@ -4938,10 +5468,9 @@ def _erster_satz(text, maximum=400):
     getrennte Logiken für dieselbe Frage würden garantiert auseinanderdriften.
     """
     for treffer in SATZENDE_RE.finditer(text):
-        kopf = text[:treffer.start()]
-        if not _ist_satzende(kopf):
+        if not _wort_beendet_satz(_letztes_wort(text, treffer.start())):
             continue
-        return kopf + treffer.group(1)
+        return text[:treffer.start()] + treffer.group(1)
     return text if len(text) <= maximum else text[:maximum].rstrip() + " …"
 
 

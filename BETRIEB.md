@@ -76,8 +76,8 @@ git add -A && git commit
 ```
 
 Schritt 5 ist der, den man vergisst. `tools/check_docs.py` fängt das ab: es
-zieht Version, Seiten, Claims, Quellen, manifestierte Dateien, Paketeinträge
-und Paket-SHA aus der echten Ausgabe und vergleicht sie mit `README.md` und
+zieht Version, Profilnummer, Seiten, Claims, Quellen, manifestierte Dateien,
+Paketeinträge und Paket-SHA aus der echten Ausgabe und vergleicht sie mit `README.md` und
 `index.html`. Es schreibt nichts und baut das Prüfpaket in ein
 Temporärverzeichnis.
 

@@ -13,7 +13,7 @@ suchen.
 Nur die Python-Standardbibliothek. Kein pip, kein virtualenv, kein Fremdpaket,
 auch nicht für die Tests.
 
-Gemessen mit CPython **3.9.6** und **3.13.13**. Beide bauen dasselbe Paket,
+Gemessen mit CPython **3.9** und **3.13**. Beide bauen dasselbe Paket,
 Byte für Byte, mit demselben SHA-256. Ältere Fassungen als 3.9 sind nicht
 geprüft und werden nicht zugesagt.
 
@@ -112,7 +112,8 @@ Die Matrix ist an ihrem Ertrag gemessen, nicht an einem Gefühl von Gründlichke
 `macos-latest` rot: 18 Testfehler, alle Ubuntu-Jobs grün, Ursache `/var` als
 Symlink auf `/private/var`. Der Sicherheitsteil des Tresors ist Pfadbehandlung
 — Symlinks, `dir_fd`, `O_NOFOLLOW`, `realpath` —, und genau dort laufen die
-Plattformen auseinander; 71 der 97 Tests hängen daran. Deshalb bleibt macOS.
+Plattformen auseinander; beim Zuschnitt der Matrix hingen 71 der damals 97
+Tests daran. Deshalb bleibt macOS.
 Gestrichen wurde stattdessen `ubuntu / 3.11`: nie ein Eigenbefund, eingeklemmt
 zwischen der Untergrenze 3.9 und dem aktuellen 3.13. Wer eine Zeile zurück in
 die Matrix holen will, nennt den Lauf, in dem sie allein rot war.
@@ -324,7 +325,8 @@ vollständige Quittung, eine ausgelassene Pflicht-Vollsichtung, eine ungültige
 Quittung, eine Zeile „Sichtung:" mit anderen Zahlen oder einer fremden
 Kennung, eine Angabe „Sichtung:" ohne eingereichte Quittung, eine
 erfundene Claim-ID und, wenn das Protokoll `erwartet` führt, ein
-übersehener Claim. Exit 1 bei einem Verstoß, 2 bei unbrauchbarem
+übersehener Claim. Ob Schritt 4c lief oder sichtbar ausgelassen wurde, prüft
+das Werkzeug nicht. Exit 1 bei einem Verstoß, 2 bei unbrauchbarem
 Protokoll oder falschem Stand.
 
 **Siegel gelten für ihren Stand.** Nach jedem Release sind alte Quittungen
@@ -448,7 +450,7 @@ schlägt überall fehl. Genau dafür gibt es zwei Tests.
 
 ### Warnung: `--extern` ist kein Regelbetrieb
 
-Ohne `--extern` verlässt kein Byte den Skill-Ordner. Wer das Flag
+Eine Abfrage ohne `--extern` lässt kein Byte aus dem Skill-Ordner. Wer das Flag
 gewohnheitsmäßig setzt, hat den Tresor faktisch in eine Live-Suche über einen
 ungefrorenen Baum verwandelt und Regel 2 (Vertrauen zur Abfragezeit)
 ausgehebelt. Es gehört ans Ende des Antwort-Workflows: erst der lokale
@@ -531,10 +533,17 @@ vergeben und diese Zahl nicht erreichen.
 
 ## Einen eigenen Tresor aufsetzen
 
-Der ausgelieferte Bestand `knowledge/demo-okf/` dokumentiert SkillSafe selbst.
-Für den praktischen Einsatz gehört er ersetzt. Das Rezept steht in
-`wissenstresor/references/mehrere-tresore.md`, Abschnitt 4, und ist mit v0.10.0
-Schritt für Schritt nachgefahren worden: es läuft durch und endet grün.
+Der ausgelieferte Bestand dokumentiert SkillSafe selbst (`knowledge/demo-okf/`)
+und zeigt an einer Seite, wie ein extern belegter Claim aussieht
+(`knowledge/demo-extern/`, dazu X-0001 und X-0002 in `sources/EXTERN.md`). Für
+den praktischen Einsatz gehört er ersetzt. Das Rezept steht in
+`wissenstresor/references/mehrere-tresore.md`, Abschnitt 4. Nachgefahren wurde
+es mit v0.10.0, vor den externen Quellen; seit v0.11.0 reicht es allein nicht.
+Bleibt `knowledge/demo-extern/` stehen, bricht `release major` ab („Domäne
+'demo-extern' hat keinen Abschnitt"). Bleibt X-0002 aufgeführt, schlägt der
+neue Tresor bei jeder Antwort, die nach der Vollsichtung etwas offenlässt, im
+SkillSafe-Repositorium nach (Schritt 4c). Mit den Ergänzungen unten endet das
+Rezept grün: `release major` ergibt v1.0.0, `doctor` meldet nichts.
 
 Zwei Dinge, die dort noch nicht stehen:
 
@@ -542,9 +551,12 @@ Zwei Dinge, die dort noch nicht stehen:
   Router bedingen sich gegenseitig. Wer die Demo-Seiten löscht, hat gebrochene
   `definition_claim`-Verweise, bis die Begriffs-Registry mit geleert ist, und
   einen Router, der auf nichts zeigt. Das ist kein Fehler, sondern der
-  Übergang. Reihenfolge: Seiten löschen, `schema/begriffswelten.json` auf
-  leere `concepts`-Liste setzen, `ROUTER.md`-Abschnitt ersetzen,
-  `sources/REGISTER.md` und `sources/raw/` leeren, dann erst `validate`.
+  Übergang. Reihenfolge: die Seiten beider Demo-Domänen löschen
+  (`knowledge/demo-okf/` und `knowledge/demo-extern/`),
+  `schema/begriffswelten.json` auf leere `concepts`-Liste setzen,
+  `ROUTER.md`-Abschnitte ersetzen, `sources/REGISTER.md` und `sources/raw/`
+  leeren, `sources/EXTERN.md` auf die Kopfzeile der Tabelle zurücksetzen und
+  `sources/derived/X-*` entfernen, dann erst `validate`.
 * **`checksum` ohne `--verify` pinnt auch einen kaputten Bestand.** Es prüft
   nicht, es schreibt. Immer erst `validate`, dann pinnen.
 
@@ -584,10 +596,13 @@ X" ist mehr wert als eine offene Annahme.
 ```bash
 git fetch --all --prune --tags
 git status --short --branch
-git log --oneline --graph --decorate origin/main..HEAD HEAD..origin/main
+git log --oneline --graph --decorate --left-right origin/main...HEAD
 ```
 
-Die letzte Zeile zeigt beide Richtungen. Erst danach mergen und taggen. Jeder
+Die letzte Zeile zeigt beide Richtungen: `>` markiert Commits, die nur auf
+`HEAD` liegen, `<` solche nur auf `origin/main`. Zwei Bereiche in einem Aufruf
+(`origin/main..HEAD HEAD..origin/main`) zeigen dagegen nie etwas, weil Git sie
+zu einer Menge zusammenfasst. Erst danach mergen und taggen. Jeder
 Release bekommt ein Tag, sonst ist kein Stand adressierbar:
 
 ```bash

@@ -54,7 +54,7 @@ Handbuch, ein Repo oder ein zweiter Tresor wird satzweise über Anker belegt,
 statt kopiert zu werden. Damit verschiebt sich eine bisher harte Zusage, und
 das soll genauso deutlich dastehen wie vorher ihre harte Fassung: **„kein
 Netzwerk im Skill" gilt jetzt für den Default-Query-Pfad**, nicht mehr
-absolut. Ohne `--extern` verlässt kein Byte den Skill-Ordner; mit `--extern`
+absolut. Eine Abfrage ohne `--extern` lässt kein Byte aus dem Skill-Ordner; mit `--extern`
 liest der Tresor ausschließlich Ziele, die namentlich in
 `sources/EXTERN.md` stehen, und protokolliert jeden Abruf. Erreicht wird nie
 etwas, das dort nicht aufgeführt ist.
@@ -201,9 +201,11 @@ wirkt endlich als Stoppwort.
 
 v0.17.0 ist die Zusammenführung. Der externe Fallback (Schritt 4c) folgt der
 zweiten Linie: Er ist Pflicht, sobald nach der Vollsichtung ein Teil der Frage
-ungedeckt bleibt und Quellen aufgeführt sind; unterbleibt er, steht das in der
-Antwort („Extern nicht gelesen: nicht nachgeschlagen"). Das löst die Option
-aus v0.13.0 ab. Ein externer Treffer ersetzt „Nicht im Bestand" weiterhin
+ungedeckt bleibt und Quellen aufgeführt sind; ausgenommen sind der
+Kennungsfall und ein auf einen Teil des Bestands begrenzter Umfang, und ein
+Verbot von Internetrecherche ist keine Ausnahme. Unterbleibt er, steht das in
+der Antwort: „Extern nicht gelesen: X-0001, X-0002 nicht nachgeschlagen
+(`<Grund>`) — kein Negativbefund". Das löst die Option aus v0.13.0 ab. Ein externer Treffer ersetzt „Nicht im Bestand" weiterhin
 nicht, und was nicht gelesen wurde, ist kein Negativbefund. Das lokale Ranking
 bleibt `hybrid-local/v4`. Auf `main` meldete v0.12.0 lokal ebenfalls
 „hybrid-local/v2", ein anderes Ranking als das gleichnamige dieser Folge;
@@ -214,8 +216,8 @@ Paketeinträge · SHA-256
 `0db94073cb8e10c9ae4e476984434d869e492be62a8fb2c1aa2700fdf08945a6`.
 Dazu 2 aufgeführte externe Bezugsquellen · 2 Satzanker.
 
-Alles läuft mit der Python-Standardbibliothek, gemessen mit CPython 3.9.6 und
-3.13.13; beide bauen dasselbe Paket mit demselben SHA-256. Selbst nachrechnen
+Alles läuft mit der Python-Standardbibliothek, gemessen mit CPython 3.9 und
+3.13; beide bauen dasselbe Paket mit demselben SHA-256. Selbst nachrechnen
 aus der Repository-Wurzel:
 
 ```bash
@@ -251,7 +253,8 @@ Wer fragt, benutzt selten die Wörter der Quelle. „Nasse Wände" steht in kein
 Claim, „Schimmelbefall" schon. Üblich wäre dafür ein Bedeutungsindex aus
 Embeddings. SkillSafe geht anders vor, weil in einem Skill der Leser mit
 Sprachverständnis ohnehin anwesend ist: das Modell. Es liest die Claims
-selbst. Das Script sorgt dafür, dass es alle liest, und weist das nach.
+selbst. Das Script sorgt dafür, dass ihm jeder Claim vorgelegt wird, und weist
+nach, dass zu jedem Stapel ein Urteil vorliegt.
 
 ### Drei Bausteine
 
@@ -429,8 +432,11 @@ python3 tools/rangfolge_check.py --vault <tresor> --gold <gold.json> --stand <st
 python3 tools/rangfolge_check.py --vault <tresor> --gold <gold.json> --stand <stand.json>
 ```
 
-Ob ein Agent mit dem eigenen Bestand dem Verfahren folgt, prüft das dritte
-Werkzeug. Es braucht ein Protokoll mit Frage, Antworttext und den an
+Ob ein Agent mit dem eigenen Bestand der Vollsichtung und den Regeln für
+„Nicht im Bestand" folgt (Pflicht-Vollsichtung, gültige Quittung, Zeile
+„Sichtung:", nur vorhandene Kennungen), prüft das dritte Werkzeug. Ob er
+Schritt 4c gefahren oder sichtbar ausgelassen hat, prüft es nicht. Es braucht
+ein Protokoll mit Frage, Antworttext und den an
 `--receipt` übergebenen Einträgen; das Format steht in
 [`tests/e2e/LIESMICH.md`](tests/e2e/LIESMICH.md):
 
@@ -560,12 +566,14 @@ sich. Commit und Push sind kein Teil des Builds.
 
 ## Demo-Bestand
 
-Der mitgelieferte Demo-Bestand `knowledge/demo-okf/` dokumentiert die
+Der mitgelieferte Demo-Bestand dokumentiert vor allem die
 Herkunft des Tresors mit seinen eigenen Mitteln: 6 Seiten, 28 Claims,
 4 Quellen (Google-OKF-Ankündigung, Karpathys `llm-wiki`-Gist, ein
 Ontologie-Artikel von Iusztin, der Volltext der OKF-Spezifikation v0.2),
 1 Begriffswelt und 9 beleggebundene Begriffe — validiert, indiziert,
-verlinkt.
+verlinkt. Fünf Seiten mit 26 Claims liegen unter `knowledge/demo-okf/`; die
+sechste, `knowledge/demo-extern/mietminderung.md` (C-0401, C-0402), zeigt eine
+Seite, die sich allein über die externe Bezugsquelle X-0001 belegt.
 
 Er belegt dabei seinen eigenen Supersessions-Pfad. Die Seite zu OKF v0.1
 trägt seit Aufnahme der v0.2-Spezifikation `status: veraltet` und wird über
@@ -594,8 +602,9 @@ Zwei Dinge, die oft verwechselt werden:
 Deshalb wird eine aufgeführte Netzquelle behandelt wie eine interne, auch
 dort, wo Internetrecherche ausdrücklich untersagt ist. Damit das überprüfbar
 bleibt statt behauptet: nur `GET` unter dem registrierten Präfix, jedes
-Redirect muss darunter bleiben, und jeder Abruf steht mit URL, Prüfsumme und
-Zeitpunkt in `log.md`. `SKILLSAFE_OFFLINE=1` schaltet Netzabrufe hart ab, vor
+Redirect muss darunter bleiben, und jedes abgerufene Dokument steht mit URL,
+Prüfsumme und Datum in `log.md` (ein gescheiterter Versuch nur in der Ausgabe
+des Aufrufs). `SKILLSAFE_OFFLINE=1` schaltet Netzabrufe hart ab, vor
 jedem Socket — die CI-Kette läuft damit netzfrei.
 
 ### Anleitung
@@ -639,11 +648,14 @@ python3 scripts/vault.py orchestrator-template X-0001 \
 python3 scripts/vault.py query --extern "Minderung Mangel Wohnung"
 ```
 
-Ohne `--extern` verlässt **kein Byte** den Skill-Ordner, weder zur Platte noch
-ins Netz. Das Flag gehört ans Ende des Antwort-Workflows: erst der lokale
-Bestand, dann die Vollsichtung mit Quittung, dann extern, und das nur, wenn
-die Frage danach ganz oder teilweise ungedeckt bleibt. Dann ist der Schritt
-Pflicht, und ein nicht gelesenes Dokument ist kein Negativbefund.
+Eine Abfrage ohne `--extern` lässt **kein Byte** aus dem Skill-Ordner, weder
+zur Platte noch ins Netz; ins Netz gehen nur `query --extern` und
+`anchor-template` für eine Netzquelle. Das Flag gehört ans Ende des
+Antwort-Workflows: erst der lokale Bestand, dann die Vollsichtung mit
+Quittung, dann extern, und das nur, wenn die Frage danach ganz oder teilweise
+ungedeckt bleibt. Dann ist der Schritt Pflicht (außer im Kennungsfall und bei
+einem auf einen Teil des Bestands begrenzten Umfang, `references/antworten.md`,
+Schritt 4c), und ein nicht gelesenes Dokument ist kein Negativbefund.
 
 Das Ranking läuft in zwei Stufen, und die zweite entscheidet:
 

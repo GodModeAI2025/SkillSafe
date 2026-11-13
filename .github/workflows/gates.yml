@@ -79,7 +79,8 @@ jobs:
           # grün. `/var` ist dort ein Symlink auf `/private/var`, und
           # _resolve_external_root verlangte einen kanonischen Pfad. Der
           # Sicherheitsteil des Tresors ist Pfadbehandlung — genau dort laufen
-          # Linux und macOS auseinander, und 71 der 97 Tests hängen daran.
+          # Linux und macOS auseinander; beim Zuschnitt der Matrix hingen 71
+          # der damals 97 Tests daran.
           - os: macos-latest
             python: "3.13"
           # Gestrichen am 06.08.2026: ubuntu / 3.11. In 14 Läufen nie ein

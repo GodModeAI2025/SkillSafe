@@ -172,3 +172,40 @@ einem Kontext steht. Die Kosten bleiben: Jede Frage, die eine Vollsichtung
 braucht, liest den Bestand einmal. Ersatz: Der Vertrag nennt den Grund, und
 eine Frage, die allein einer unbekannten Kennung gilt, braucht seit v0.15.0
 keine Vollsichtung mehr.
+
+## [2026-11-13] Einleitende Verben ("sagt", "steht", "enthaelt") als Funktionswoerter — verworfen
+Die vierte Abnahmerunde und ein Review zeigten: In v0.15.0 fiel "Was steht
+in C-9999?" unter die Ausnahme fuer unbekannte Kennungen, "Was sagt C-9999?"
+nicht, weil "steht" zufaellig in einem Claim vorkommt und "sagt" nicht; und
+"Mietminderung C-9999" fiel darunter, obwohl die Frage eine Sache nennt.
+Erwogen wurde, solche Verben in die Funktionswortliste aufzunehmen.
+Verworfen: Das waere eine Aenderung am Ranking (neues Profil, neue Messung,
+neuer Schnappschuss) und hoebe Fragen eher zu 'strong', also genau dorthin,
+wo das harte Gate am wenigsten misst. Ersatz seit v0.16.0: eine eigene,
+kleine Liste einleitender Woerter (KENNUNG_RAHMENWOERTER), die nur fuer die
+Frage zaehlt, ob eine Frage nichts als unbekannte Kennungen nennt. Fuer das
+Ranking bleiben die Woerter Inhaltswoerter.
+
+## [2026-11-13] Rahmenliste nur gegen die Inhaltswoerter des Rankings — verworfen
+Die erste Fassung von KENNUNG_RAHMENWOERTER pruefte nur die Inhaltswoerter
+des Rankings und enthielt Substantive wie "Aussage", "Quelle" und "Claim".
+Ein Review am Kandidaten fand drei Loecher: Homographe aus der
+Funktionswortliste ("Waren", "Soll und Haben") fehlen unter den
+Inhaltswoertern und fielen deshalb nicht als Sachwort auf; "Was ist eine
+Aussage laut S-0099?" fragt nach der Aussage und wurde trotzdem erlassen; und
+die Ziffern wurden nur an der Ausgabe geprueft, sodass ein knappes --limit
+ueber den Erlass entschied. Ersatz: eine geschlossene Liste gegen jedes Wort
+der Frage, benennende Substantive nur unmittelbar vor der Kennung, Ziffern
+am ganzen Bestand, und eine B-ID aus einer anderen Begriffswelt gilt nicht
+als fehlend. Lieber eine Vollsichtung zu viel als ein falscher Erlass.
+Eine zweite Pruefrunde fand dieselbe Luecke in der eigenen Liste: Verben, die
+auch Substantive sind ("Regeln", "Sagen"), und "und", das eine zweite Frage
+anhaengt ("Welche Regeln gibt es und was steht in C-9999?"). Seither ist ein
+grossgeschriebenes Wort mitten in der Frage ein Sachwort, Bindewoerter zaehlen
+nur zwischen zwei Kennungen, und die Ziffern zaehlen auch als Wortteil.
+Die dritte Pruefrunde zeigte, dass Grossschreibung allein nicht traegt: Wer
+klein schreibt ("was ist ein laut in c-9999"), umging die Regel. Seither ist
+jedes Wort hinter einem Artikel ein Substantiv, "laut" zaehlt nur vor einer
+Kennung, "aus", "stehen" und "lauten" sind gestrichen, ein Zeichen wie "§"
+ist ein Sachwort, und als Kennung zaehlt nur die Schreibung mit
+ASCII-Ziffern.

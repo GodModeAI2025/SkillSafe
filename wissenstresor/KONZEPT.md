@@ -525,8 +525,10 @@ Kennung nennt; die ganze Frage als Wortfolge ist nur mit getroffenem
 Inhaltswort ein Anker. Rangfolge und Punktzahlen sind dieselben wie in v3,
 die Messzahlen ebenfalls. Derselbe Review fand, dass das Siegel der
 Vollsichtung „a != b" und „a = b" gleich las, weil Satzzeichen am Wortrand
-wegfielen; seit v0.15.0 bleibt jedes Zeichen stehen außer dem Fragezeichen am
-Ende, und nur die Art der Anführungszeichen und Striche wird vereinheitlicht.
+wegfielen; seit v0.15.0 bleibt jedes Zeichen stehen. Egal sind nur Groß- und
+Kleinschreibung, die Menge des Leerraums, Fragezeichen am Ende und die
+typografische Form der Anführungszeichen und Striche; einfache und doppelte
+bleiben verschieden.
 
 **Und was die Tests nicht zeigten.** Ein vierter Durchgang prüfte nicht den
 Code, sondern seine Absicherung: 86 Einzelfehler in der Engine und 17 im
@@ -542,7 +544,9 @@ v0.15.0 hält ein Schnappschuss fest, was `query` für jede Goldfrage bei Limit
 Stärke, Abdeckung, Evidenz mit Punktzahl und je ein Prüfwert über die übrigen
 Blöcke. Jedes Gate des Messwerkzeugs hat einen Test, der es auslöst, die
 Messzahlen selbst stehen als Soll in der Suite, und der Leck-Wächter liest
-mit der Normalisierung der Engine. Ein Schnappschuss beweist keine
+mit der Normalisierung der Engine, seit v0.16.0 auch in ihrer Wortform: Eine
+Goldfrage, die als Alias in anderer Beugung dastand, fiel vorher nicht auf,
+obwohl die Engine sie traf. Ein Schnappschuss beweist keine
 Richtigkeit, er macht Bewegung sichtbar: Wer am Ranking dreht, sieht jede
 Folge und entscheidet sie, statt sie zu übersehen. Gegengeprüft mit einer
 eigenen Probe am Stand v0.15.0: Von 117 gezielt gewählten Einzelfehlern in
@@ -552,7 +556,7 @@ Die Probe ist selbst gebaut. Sie zeigt, dass die bekannten Lücken geschlossen
 sind, nicht dass es keine weiteren gibt.
 
 **Ende zu Ende gemessen.** Ob ein Modell dem Vertrag tatsächlich folgt, zeigt
-weder das Gold noch ein Review, sondern nur ein Lauf. Sechzehn frische Agenten
+weder das Gold noch ein Review, sondern nur ein Lauf. Zwanzig frische Agenten
 bekamen je einen entpackten Skill-Ordner und Nutzerfragen, sonst nichts: keine
 Erklärung des Verfahrens, kein Hinweis auf die Messung. Ausgewertet hat
 `tools/antwort_check.py`, das dem Agenten nichts glaubt: Aus dem Protokoll
@@ -564,10 +568,13 @@ erneut gegen die Engine.
 | 1, acht Agenten | v0.12.1 | 32 | 24 | 24 | 19 | 19 | 8 | 8 | 0 |
 | 2, vier Agenten | v0.13.0 | 12 | 8 | 8 | 8 | 8 | 4 | 4 | 0 |
 | 3, vier Agenten | v0.14.0 | 12 | 7 | 7 | 5 | 5 | 5 | 5 | 0 |
+| 4, vier Agenten | v0.15.0 | 12 | 7 | 7 | 4 | 4 | 5 | 5 | 0 |
 
-In allen drei Runden reichte jeder Agent zu jeder Frage eine gültige,
-vollständige Quittung ein; in Runde 2 und 3 liefen je sechs davon über drei
-Stapel. Kein „Nicht im
+In den ersten drei Runden reichte jeder Agent zu jeder Frage eine gültige,
+vollständige Quittung ein, in Runde 4 zu zehn von zwölf Fragen; die beiden
+übrigen brauchten keine (eine Kennung, die es nicht gibt, und eine Frage,
+die die gelesenen Seiten ganz beantworteten). Jede eingereichte Quittung war
+gültig; in Runde 2 bis 4 liefen je sechs davon über drei Stapel. Kein „Nicht im
 Bestand" stand ohne Quittung da, keine Negativfrage wurde beantwortet, kein
 Agent veränderte seine Kopie. Die Protokolle liegen unter `tests/e2e/`; ihre
 Siegel gelten nur für den Stand, an den sie gebunden sind.
@@ -589,11 +596,21 @@ Kennung, die es nicht gibt, eine Vollsichtung braucht (seit v0.15.0 nicht
 mehr, das weiß das Script selbst), wie eine reine Abstention aussieht, ob die
 Belegzeile einer Auslegung den Stand trägt, und einen Satz unter „Kontext
 und Grenzen" einer Demo-Seite, der mehr behauptete, als ein Claim trug.
+Runde 4 lief am Stand v0.15.0 und prüfte gezielt die neuen Regeln: Die Frage
+nach einer unbekannten Kennung beantwortete der Agent ohne Vollsichtung mit
+einem Satz, eine unbekannte Kennung neben einer Sache führte zur
+Vollsichtung, und bei einem per Kennung genannten, unvertretenen Begriff
+stand seine Seite unter den gekürzten; gefunden hat der Agent den Claim in
+der Vollsichtung. Die Anmerkungen betrafen nur noch Feinheiten:
+dass die Engine den Kennungsfall selbst melden sollte, statt ihn ableiten zu
+lassen (seit v0.16.0 `fallback.unknown_ids_only: true`), die Grenze
+zwischen Lesart und ungedecktem Zusatz und wie viel eine Antwort über die
+Dateien des Werkzeugs selbst sagen darf.
 
-Grenzen dieser Messung, ausdrücklich: 56 Fragen, ein Demo-Bestand, in dem die
-Vollsichtung ein einziger Stapel ist, Agenten desselben Modells, und die
-Fragen stammen bis auf zwei aus dem Gold: Die mit erwartetem Claim sind
-also Fragen, die zu einem Claim gehören.
+Grenzen dieser Messung, ausdrücklich: 68 Fragen, ein Demo-Bestand, in dem die
+Vollsichtung ein einziger Stapel ist, Agenten aus derselben Modellfamilie,
+und die Fragen stammen bis auf sieben aus dem Gold: Die mit erwartetem Claim
+sind also Fragen, die zu einem Claim gehören.
 Das zeigt, dass das Verfahren befolgbar ist und befolgt wurde. Es zeigt
 nicht, wie sorgfältig ein Modell 189 Stapel liest.
 
@@ -756,10 +773,12 @@ gemeldete Fehlermodus, C-0104), **Map-first**, die
 **Dead-End-Log** und der grep-bare Log-Präfix `## [JJJJ-MM-TT] aktion | Text`.
 Aus dem Ontologie-Artikel (S-0003) stammt die Typ-Strategie: kleine fixe
 Basis in `schema/types.yaml`, additive Erweiterung nur bei echtem Clash
-(genau das leistet das Type-Onboarding, C-0202/C-0204) und ein bewusst
-generischer Fallback-Typ `faktensammlung` für atomare Aussagen mit
-Beförderungsregel ab etwa drei verwandten Claims (C-0203/C-0205) — dieser
-Typ wurde im Bau tatsächlich per Onboarding registriert, nicht von Hand.
+(genau das leistet das Type-Onboarding, C-0202/C-0203) und ein bewusst
+generischer Fallback-Typ `faktensammlung` für atomare Aussagen, die bei
+Verdichtung zu Konzeptseiten befördert werden (C-0205; die Schwelle von etwa
+drei verwandten Claims ist eine Pflegeregel in `schema/types.yaml`, kein
+Claim) — dieser Typ wurde im Bau tatsächlich per Onboarding registriert,
+nicht von Hand.
 Die Namen `index.md` und `log.md` sind aus der Spezifikation übernommen, ihre
 dortigen Strukturen (§8, §9) aber bewusst nicht: `INDEX.md` ist eine Tabelle,
 weil sie eine menschliche Audit-Map ist, und `log.md` trägt den grep-baren
@@ -778,7 +797,14 @@ alle vier Quellen mit 26 Claims — der Tresor belegt seine eigenen
 Konstruktionsentscheidungen mit seinen eigenen Mitteln und hält seine eigene
 Supersession im Graphen fest, statt die überholte Fassung zu löschen.
 
-## Abnahmekriterien (zuletzt durchgeführt am 2026-08-06, Stand v0.11.1)
+## Abnahmekriterien (zuletzt vollständig durchgeführt am 2026-11-13, Stand v0.16.0)
+
+Die Suite in `tests/` prüft jedes dieser Kriterien bei jedem Lauf; Blöcke mit
+eigenem Messdatum nennen den Stand, an dem ihre Zahlen erhoben wurden. Die
+Ende-zu-Ende-Zahlen stehen in einem eigenen Block: Sie lassen sich nur gegen
+den Stand nachrechnen, an den ihre Quittungen gebunden sind, und das tut die
+Suite nicht. `tools/check_docs.py` hält sie an den Block `ergebnis` der
+Protokolle unter `tests/e2e/` gebunden.
 
 **Positiv:** `validate` und `doctor` grün auf 6 Seiten, 28 Claims,
 4 Quellen und 2 aufgeführten externen Bezugsquellen · `query OKF`, `query "offenes Wissensformat"` und `query C-0001`
@@ -828,10 +854,7 @@ Fragen): 18 direkt gefunden, bei 38 steht die Seite des Claims unter `pages`,
 bei 16 verlangt das Signal die Vollsichtung, 10 sind `partial`, 1 ist
 `strong`; kein Feld der Abfrage erlaubt eine Abstention, und dass auch die
 übrigen 11 in der Vollsichtung enden, ist Vertragsregel und nur am Agenten
-messbar · Ende zu Ende mit sechzehn frischen Agenten, ausgewertet mit
-`tools/antwort_check.py`: 56 Fragen, 0 Verstöße, 39 von 39 erwarteten Claims
-gefunden (32 davon nach verfehltem Ranking), 17 von 17 Negativfragen mit
-gültiger Quittung abgelehnt · 72 Paarfragen aus je zwei Vorzugsbenennungen:
+messbar · 72 Paarfragen aus je zwei Vorzugsbenennungen:
 `strong` nur, wenn beide Begriffe in der Ausgabe vertreten sind · ein per ID
 genannter Begriff, den die Ausgabe nicht zeigt, verhindert `strong` und
 steht mit `represented: false` da · ein
@@ -853,6 +876,12 @@ Stapel · keine Goldfrage steht im Skill-Ordner. Zeitmessung am synthetischen
 Bestand mit 1.506 Seiten und 7.528 Claims: `query` rund 3,5 Sekunden, davon
 knapp 3 für das unveränderte Validierungs-Gate; eine Frage mit 105 Begriffen
 (990 Zeichen) 4,7 Sekunden; die Ausgabe einer Abfrage rund 15.000 Zeichen.
+
+**Ende zu Ende (Messläufe vom 2026-11-12 und 2026-11-13, Stände v0.12.1 bis v0.15.0, nachgerechnet mit `tools/antwort_check.py` gegen den jeweils gebundenen Stand):**
+Zwanzig frische Agenten, 68 Fragen, 0 Verstöße · bei 46 von 46 Fragen mit
+erwartetem Claim wurde er gefunden, 36 davon nach verfehltem Ranking · 22 von
+22 Negativfragen korrekt abgelehnt, 21 mit gültiger Quittung und eine Frage
+nach einer Kennung, die es nicht gibt, mit dem Befund des Scripts.
 
 **Funktional:** Der Antworten-Workflow nutzt den stabilen JSON-Vertrag und
 formuliert weiterhin ein Answer Envelope mit Claim-Belegen, Stand und

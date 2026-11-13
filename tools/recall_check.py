@@ -18,10 +18,13 @@ Zwei Zahlen zählen, und nur eine davon ist ein Gate:
 Dazu drei Wächter, die nichts mit Güte zu tun haben: Die Vollsichtung muss
 jeden Claim genau einmal vorlegen, das Gold darf nicht im Skill liegen, und
 keine Goldfrage darf im Skill-Ordner stehen. Ein Gold, das der Bestand
-kennt, misst nur noch, ob er sich selbst wiederfindet. Verglichen wird so,
-wie die Engine Benennungen trifft: ohne Satzzeichen, ohne Groß- und
-Kleinschreibung, Umlaute in Umschrift. Eine Goldfrage als Alias sähe genau so
-aus.
+kennt, misst nur noch, ob er sich selbst wiederfindet. Verglichen wird Wort
+für Wort in der Form, in der die Engine Wörter vergleicht: ohne Satzzeichen,
+ohne Groß- und Kleinschreibung, Umlaute in Umschrift, jedes Wort auf seine
+Wortform-Familie gebracht (wortform/v1). So fällt eine Goldfrage auch dann
+auf, wenn sie als Alias in anderer Beugung dasteht, und eine lange Benennung,
+die fast die ganze Frage deckt, ebenso: Die Engine trifft eine Benennung als
+Wortfolge in der Frage. Eine freie Umschreibung erkennt kein Textvergleich.
 
 Read-only, nur Standardbibliothek. Aus der Repository-Wurzel:
 
@@ -47,8 +50,16 @@ STANDARD_VAULT = REPOSITORY / "wissenstresor"
 STANDARD_GOLD = REPOSITORY / "tests" / "gold" / "recall-demo.json"
 GOLD_SCHEMA = "skillsafe.recall-gold/v1"
 CLAIM_RE = re.compile(r"^C-\d{4}$")
-# Größere Dateien sind Medien oder Rohquellen und werden nicht durchsucht.
+# Größere Dateien sind Medien oder Rohquellen und werden nicht durchsucht,
+# außer die Engine liest sie als Text (TEXT_ENDUNGEN, knowledge/, schema/).
 LECK_MAX_BYTES = 5 * 1024 * 1024
+TEXT_ENDUNGEN = {".md", ".markdown", ".json", ".yaml", ".yml", ".txt", ".csv"}
+TEXT_ORDNER = {"knowledge", "schema"}
+# Wortform wie wortform/v1 der Engine (_wortstamm in scripts/vault.py). Dass
+# beide Fassungen dasselbe liefern, hält ein Test fest.
+WORTFORM_ENDUNGEN = (("en", 3), ("em", 4), ("er", 4), ("es", 3),
+                     ("e", 3), ("n", 3), ("s", 3))
+WORTFORM_S_VORGAENGER = frozenset("bcdfghklmnprtvw")
 
 
 class GoldFehler(ValueError):
@@ -151,6 +162,45 @@ def _norm(text):
     return re.sub(r"\s+", " ", text).strip()
 
 
+def _wortform_flexion(stamm):
+    for _ in range(3):
+        for endung, minimum in WORTFORM_ENDUNGEN:
+            if (not stamm.endswith(endung)
+                    or len(stamm) - len(endung) < minimum):
+                continue
+            if endung == "s" and stamm[-2] not in WORTFORM_S_VORGAENGER:
+                continue
+            stamm = stamm[:-len(endung)]
+            break
+        else:
+            break
+    return stamm
+
+
+def _wortstamm(token):
+    """Der Schlüssel der Wortform-Familie eines normalisierten Tokens.
+
+    Nachgebaut wie ``_norm``: 'Einträgen' und 'Einträge' landen beim selben
+    Schlüssel, wie in der Engine.
+    """
+    if len(token) < 4 or any(zeichen.isdigit() for zeichen in token):
+        return token
+    stamm = _wortform_flexion(
+        token.replace("ae", "a").replace("oe", "o").replace("ue", "u"))
+    if stamm.endswith("ung") and len(stamm) - 3 >= 4:
+        stamm = _wortform_flexion(stamm[:-3])
+    return stamm
+
+
+def _stammform(text):
+    """Normalisierter Text, jedes Wort auf seine Wortform-Familie gebracht.
+
+    Anders als im Ranking der Engine auch die Funktionswörter: Der Wächter
+    soll eher zu viel melden als zu wenig.
+    """
+    return " ".join(_wortstamm(wort) for wort in _norm(text).split())
+
+
 def _zeichenketten(wert):
     """Jede Zeichenkette eines JSON-Dokuments, Schlüssel eingeschlossen."""
     if isinstance(wert, str):
@@ -164,20 +214,31 @@ def _zeichenketten(wert):
             yield from _zeichenketten(inhalt)
 
 
-def _lesbarer_text(pfad):
+def _lesbarer_text(pfad, vault=None):
     """Was an einer Datei Text ist; leer bei Binär- und Riesendateien.
 
     Ohne Blick auf die Endung: ``FRAGEN.MD`` oder eine Datei ohne Endung
     enthält eine Goldfrage genauso wie ``notes/fragen.md``. JSON wird
     zusätzlich geparst, sonst versteckte ``\\u00e4`` einen Umlaut.
     """
+    # Was die Engine als Text liest, liest der Wächter ganz: Ein NUL-Byte in
+    # einer Kommentarzeile oder viel Füllstoff versteckte sonst eine Seite.
+    # Der Ordner zählt relativ zum Tresor, nicht am absoluten Pfad: Ein
+    # Tresor unter ~/knowledge/ machte sonst jede Datei zur Textdatei.
+    ordner = ""
+    if vault is not None:
+        try:
+            ordner = Path(pfad).relative_to(vault).parts[0]
+        except (ValueError, IndexError):
+            ordner = ""
+    textdatei = pfad.suffix.lower() in TEXT_ENDUNGEN or ordner in TEXT_ORDNER
     try:
-        if pfad.stat().st_size > LECK_MAX_BYTES:
+        if not textdatei and pfad.stat().st_size > LECK_MAX_BYTES:
             return ""
         roh = pfad.read_bytes()
     except OSError:
         return ""
-    if b"\x00" in roh[:8192]:
+    if not textdatei and b"\x00" in roh[:8192]:
         return ""
     text = roh.decode("utf-8", errors="ignore")
     if pfad.suffix.lower() == ".json":
@@ -188,23 +249,54 @@ def _lesbarer_text(pfad):
     return text
 
 
+def _benennungen(vault):
+    """Vorzugsbenennungen und Aliase aus schema/begriffswelten.json."""
+    try:
+        daten = json.loads((Path(vault) / "schema" / "begriffswelten.json")
+                           .read_text(encoding="utf-8"))
+        return [str(benennung) for begriff in daten.get("concepts", [])
+                for benennung in [begriff.get("preferred", ""),
+                                  *begriff.get("aliases", [])]
+                if str(benennung).strip()]
+    except (OSError, UnicodeError, ValueError, AttributeError, TypeError):
+        return []
+
+
 def leck_suche(vault, fragen):
-    """Goldfragen, die im Skill-Ordner stehen, in der Lesart der Engine."""
+    """Goldfragen, die im Skill-Ordner stehen, Wort für Wort in Wortform.
+
+    Zwei Richtungen: Steht die ganze Frage in einer Datei? Und steht eine
+    lange Benennung in der Frage? Die Engine trifft eine Benennung, sobald
+    sie als Wortfolge in der Frage steht; eine Goldfrage ohne ihr erstes Wort
+    als Alias wirkt deshalb wie die ganze Frage. Als Leck zählt eine
+    Benennung ab vier Wörtern, oder ab drei, wenn sie drei Viertel der Frage
+    deckt; kürzere Benennungen sind Begriffe, und dass eine Frage einen
+    Begriff nennt, ist kein Leck.
+    """
     vault = Path(vault)
     korpus = []
     for pfad in sorted(vault.rglob("*")):
         if pfad.is_file():
-            text = _norm(_lesbarer_text(pfad))
+            text = _stammform(_lesbarer_text(pfad, vault))
             if text:
                 korpus.append((pfad, f" {text} "))
+    benennungen = [_stammform(benennung) for benennung in _benennungen(vault)]
     lecks = []
     for frage in fragen:
-        nadel = _norm(frage)
+        nadel = _stammform(frage)
         if not nadel:
             continue
         for pfad, text in korpus:
             if f" {nadel} " in text:
                 lecks.append((frage, str(pfad.relative_to(vault))))
+        woerter = len(nadel.split())
+        for form in benennungen:
+            laenge = len(form.split())
+            if (laenge >= 4 or (laenge >= 3 and laenge >= 0.75 * woerter)) \
+                    and f" {form} " in f" {nadel} ":
+                ort = "schema/begriffswelten.json"
+                if (frage, ort) not in lecks:
+                    lecks.append((frage, ort))
     return lecks
 
 

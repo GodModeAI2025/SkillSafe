@@ -79,7 +79,8 @@ cd wissenstresor && python3 scripts/vault.py doctor && python3 scripts/vault.py 
 cd .. && python3 tools/build_skill_package.py
 #    README.md und index.html anpassen (Version, Testzahl, Paket-SHA; nach
 #    einer Änderung am Ranking auch die Messtabelle der Suche und den
-#    Schnappschuss der Rangfolge), dann:
+#    Schnappschuss der Rangfolge; nach einer neuen Ende-zu-Ende-Runde die
+#    Tabellen und Summen auch in wissenstresor/KONZEPT.md), dann:
 python3 tools/check_docs.py
 
 # 6. Alles gemeinsam committen
@@ -89,8 +90,12 @@ git add -A && git commit
 Schritt 5 ist der, den man vergisst. `tools/check_docs.py` fängt das ab: es
 zieht Version, Seiten, Claims, Quellen, manifestierte Dateien, Paketeinträge,
 Paket-SHA und die Messwerte der Suche aus der echten Ausgabe und vergleicht
-sie mit `README.md` und `index.html`. Es schreibt nichts und baut das
-Prüfpaket in ein Temporärverzeichnis.
+sie mit `README.md` und `index.html`. Die Ende-zu-Ende-Zahlen nimmt es aus
+den Protokollen unter `tests/e2e/` und vergleicht sie mit den Tabellen und
+Summen in `README.md`, `index.html` und `wissenstresor/KONZEPT.md`.
+Tabellenzeilen liest es so, wie sie gerendert aussehen; eine zweite Zeile mit
+derselben Beschriftung fällt auch dann auf, wenn sie anders notiert ist. Es
+schreibt nichts und baut das Prüfpaket in ein Temporärverzeichnis.
 
 **Stufenwahl:** `patch` bei Korrekturen, `minor` bei neuem Wissen oder einer
 additiven Profiländerung, `major` erst, wenn ein vorhandener Bestand ohne
@@ -235,12 +240,16 @@ python3 tools/rangfolge_check.py              # vergleicht, Exit 1 bei Abweichun
 python3 tools/rangfolge_check.py --schreiben  # hält den heutigen Stand fest
 ```
 
-Die Suite fährt den Vergleich mit. Wird er rot, nennt die Meldung Frage,
-Limit und Feld. Dann gilt: War es ein Versehen, wird es behoben. War es
-Absicht, ist es eine Entscheidung am Ranking und bekommt die neue
-Profilnummer. `--schreiben` ist nie die Reparatur eines roten Tests, sondern
-der letzte Schritt einer solchen Entscheidung — oder einer Änderung am
-Demo-Bestand, an dem gemessen wird (neue Claims, Titel, Tags, Begriffe).
+Die Suite fährt den Vergleich mit. Wird er rot, nennt die Meldung Frage, Limit
+und Feld. Dann gilt: War es ein Versehen, wird es behoben. War es Absicht und
+haben sich Evidenz, Punktzahl, Stärke oder Seiten bewegt, ist es eine
+Entscheidung am Ranking und bekommt die neue Profilnummer. Weicht nur der
+Block `fallback` ab (wann die Vollsichtung Pflicht ist, ihr Aufwand), ist die
+Rangfolge dieselbe: keine neue Profilnummer, aber ein Release-Eintrag. So war
+es in v0.16.0 mit `unknown_ids_only`. `--schreiben` ist nie die Reparatur
+eines roten Tests, sondern der letzte Schritt einer solchen Entscheidung —
+oder einer Änderung am Demo-Bestand, an dem gemessen wird (neue Claims, Titel,
+Tags, Begriffe).
 
 **Wer am Ranking dreht** — Gewichte, Funktionswörter, Wortform-Regeln,
 Schwellen der Trefferstärke —, hebt die Profilnummer (als Nächstes
@@ -319,22 +328,24 @@ erfundene Claim-ID und, wenn das Protokoll `erwartet` führt, ein
 Protokoll oder falschem Stand.
 
 **Siegel gelten für ihren Stand.** Nach jedem Release sind alte Quittungen
-ungültig. Ein Protokoll, das aufgehoben werden soll, braucht deshalb den
-Block `stand` mit dem Manifest-Digest; nachgerechnet wird gegen den Tresor
-dieses Commits (`git archive <commit> wissenstresor`). Die drei Messläufe
-vom 12. November 2026 liegen so unter `tests/e2e/`. Ihre Zahlen stehen in
-`README.md` und `index.html`, und `check_docs.py` bindet sie an den Block
-`ergebnis` der Protokolle.
+ungültig. Ein Protokoll, das aufgehoben werden soll, braucht deshalb den Block
+`stand` mit dem Manifest-Digest; nachgerechnet wird gegen den Tresor dieses
+Commits (`git archive <commit> wissenstresor`). Die vier Messläufe vom 12. und
+13. November 2026 liegen so unter `tests/e2e/`. Ihre Zahlen stehen in
+`README.md`, `index.html` und `wissenstresor/KONZEPT.md`, und
+`check_docs.py` bindet sie an die Protokolle: die Tabellenzeilen an den Block `ergebnis`, die Summen im
+Fließtext (Zahl der Agenten, „alle N …", Sichtungen über mehrere Stapel) an
+dieselben Protokolle samt ihren Quittungen.
 
-**Die Anmerkungen sind die halbe Messung.** Die Agenten der drei Läufe
+**Die Anmerkungen sind die halbe Messung.** Die Agenten der vier Läufe
 sollten zusätzlich in einem Satz sagen, was am Vertrag unklar war. Daraus
-kamen die Korrekturen in v0.13.0, v0.14.0 und v0.15.0, darunter ein falscher
+kamen die Korrekturen in v0.13.0 bis v0.16.0, darunter ein falscher
 Satz, den erst ein Agent bemerkte. Wer den Vertrag ändert, lässt ihn danach
 lesen.
 
-**Was diese Messung nicht sagt.** 56 Fragen, ein Bestand mit einem Stapel,
-Agenten eines Modells. Sie zeigt, dass das Verfahren befolgbar ist, nicht wie
-sorgfältig ein Modell 189 Stapel liest.
+**Was diese Messung nicht sagt.** 68 Fragen, ein Bestand mit einem Stapel,
+Agenten aus derselben Modellfamilie. Sie zeigt, dass das Verfahren befolgbar
+ist, nicht wie sorgfältig ein Modell 189 Stapel liest.
 
 ## Störfälle
 
@@ -366,7 +377,12 @@ Unbrauchbar ist auch eine Frage, die die Engine nicht annimmt
 Exit 1 nennt je Antwort den Verstoß. *Quittung nicht gültig:* fast immer eine
 abweichende Schreibung der Frage oder ein fehlendes `sweep_args` im Protokoll
 (`--size`, `--domain`). *Vollsichtung war Pflicht* oder *„Nicht im Bestand"
-ohne Quittung:* Der Agent hat abgekürzt. Bevor man das dem Modell anlastet,
+ohne Quittung:* Der Agent hat abgekürzt. Pflicht ist die Vollsichtung auch,
+wenn die Liste der gekürzten Seiten selbst gekürzt war
+(`omitted_pages_truncated`). Hat der Mensch einen Umfang vorgegeben, gehört
+das ins Protokoll (`"umfang_vorgegeben": true` und der Umfang in
+`sweep_args`, siehe `tests/e2e/LIESMICH.md`); sonst zählt die Sichtung
+dieses Umfangs als ausgelassene Pflicht. Bevor man das dem Modell anlastet,
 `references/antworten.md` an der Stelle lesen, an der er abgebogen ist: In
 den Messläufen gab es keinen Verstoß, aber jede Unsicherheit, die ein Agent
 meldete, ging auf eine Lücke im Text zurück. *Erwarteter

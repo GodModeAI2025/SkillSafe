@@ -408,9 +408,14 @@ Das Ranking gibt an, wie viel der Frage es erkannt hat. Gerechnet wird nur
 * `coverage.query_terms.content` — die Fragebegriffe: Inhaltstokens ohne
   Funktionswörter und ohne die Ziffern genannter IDs, sofern es die ID im
   Bestand gibt. Eine vertippte oder fremde ID bleibt als Wort stehen und
-  steht dann unter `unmatched`; `coverage.unknown_ids` nennt sie zusätzlich
-  im Wortlaut (C- und S-IDs, die es nicht gibt, sowie B-IDs, die es nicht
-  oder nicht in der gewählten Welt gibt). Das ist ein Befund des Scripts,
+  steht dann unter `unmatched`; `coverage.unknown_ids` nennt sie zusätzlich,
+  in Großschreibung (C- und S-IDs, die es nicht gibt, sowie B-IDs, die es
+  nicht oder nicht in der gewählten Welt gibt). Als Kennung zählt nur die
+  Schreibung mit ASCII-Ziffern; „C-０００１" ist keine Kennung, sondern ein
+  gewöhnliches Wort, und steht nicht unter `unknown_ids`. Nennt die Frage daneben eine
+  vorhandene Kennung mit denselben Ziffern („C-0401 S-0401"), fallen die
+  Ziffern ganz aus `content`; die unbekannte steht dann nur unter
+  `unknown_ids`. Das ist ein Befund des Scripts,
   kein Urteil des Rankings; was daraus für die Antwort folgt, regelt
   `references/antworten.md` in Schritt 2b. Stehen die Ziffern zufällig
   irgendwo im Bestand („S-2026" und eine Jahreszahl), gelten sie als
@@ -455,9 +460,61 @@ Fragebegriff, der nur in der Fundstelle steht, gilt deshalb als getroffen.
 | `weak` | alles andere |
 | `null` | nicht bewertet: Fehlerzustand (`invalid_query`, `ambiguous`, `invalid_vault`, `vault_busy`, `snapshot_changed`) |
 
-`fallback.exhaustive_review_required` ist genau bei `weak` und `none` wahr,
+`fallback.exhaustive_review_required` ist bei `weak` und `none` wahr,
 `fallback.reason` dann `weak_candidates_only` oder
-`no_retrieval_candidates`. Der Top-Level-`state` bleibt davon unberührt und
+`no_retrieval_candidates`. Einzige Ausnahme seit v0.16.0: Nennt die Frage
+nichts als unbekannte Kennungen, ist das Feld falsch,
+`fallback.unknown_ids_only` wahr und `fallback.reason` heißt
+`unknown_ids_only`, gleich welche Stärke; in jedem anderen Fall ist
+`fallback.unknown_ids_only` falsch. Ausgaben vor v0.16.0 haben das Feld
+nicht. Nichts als heißt, alles zugleich:
+
+* Jede genannte Kennung fehlt im ganzen Bestand. Eine B-ID aus einer anderen
+  Begriffswelt steht bei `--world` zwar unter `unknown_ids`, aber es gibt
+  sie; dann ist es kein Kennungsfall.
+* Kein kuratierter Begriff ist getroffen.
+* Die Ziffern der Kennungen stehen nirgends im Bestand: in keinem Claim,
+  keiner Fundstelle, keinem Seitentitel und keinem Tag, auch nicht als
+  Wortteil („Formblatt C9991", „die 9993er Fassung"). Geprüft wird am ganzen
+  Bestand, nicht an der Ausgabe, also unabhängig von `--limit`.
+* Jedes übrige Wort der Frage steht in der geschlossenen Liste
+  `KENNUNG_RAHMENWOERTER`, und zwar in genau dieser Form (nach Umschrift):
+  Fragewörter (was, wer, wie, wo, wozu, worum, woraus, wofür, woran, worüber,
+  welche und ihre Formen), bestimmte und unbestimmte Artikel und „dieser" in
+  allen Formen, Präpositionen (in, im, ins, zu, zum, zur, über, laut, nach,
+  von, vom, bei, beim, mit, auf, für, um, an, am), es, sich, ist, sind,
+  gibt, geht, handelt, gilt, denn, eigentlich, genau, bitte, mir, uns, drin,
+  darin und die Verben steht, sagt, besagt/besagen, enthält/enthalten,
+  bedeutet/bedeuten, heißt/heißen, meint/meinen/gemeint, regelt,
+  beschreibt/beschreiben, nennt/nennen, erklärt/erkläre/erklären/erklär,
+  zeigt/zeige/zeigen, lautet, existiert/existieren. Großgeschrieben zählt
+  ein solches Wort nur als erstes Wort der Frage; mitten in der Frage ist es
+  ein Substantiv („Was ist ein Laut …"). Hinter einem Artikel, einer Form
+  von „dieser" oder „welche" und hinter zum, zur, beim, vom, im, am, ins ist
+  es auch kleingeschrieben ein Substantiv („was ist ein laut in c-9999",
+  „zum aus"); dort darf nur eine Kennung stehen. „laut" zählt nur als
+  Präposition unmittelbar vor einer Kennung, auch über einen Artikel
+  („laut C-9999", „laut der Quelle S-0099"), nie als erstes Wort; „bitte"
+  nur als erstes oder letztes Wort. „und", „oder" und „sowie" zählen nur
+  zwischen zwei Kennungen („C-9998 und C-9999"); sonst hängen sie eine
+  zweite Frage an. Ein Substantiv, das die Kennung nur benennt (Kennung, ID,
+  Claim, Quelle, Begriff, Eintrag, Nummer, auch im Plural), zählt allein
+  unmittelbar vor ihr: „die Quelle S-0099" ja, „Was ist ein Claim laut
+  S-0099?" nein.
+* Außer Buchstaben und Ziffern stehen in der Frage nur gewöhnliche
+  Satzzeichen: Punkt, Komma, Semikolon, Doppelpunkt, Frage- und
+  Ausrufezeichen, Anführungszeichen, Klammern, Striche, Auslassungspunkte,
+  Schrägstrich und die Auszeichnung * _ `. Jedes andere Zeichen ist ein
+  Sachwort („Was bedeutet § in C-9999?").
+
+Jedes andere Wort ist ein Sachwort, auch ein Homograph, den das Ranking als
+Funktionswort überliest („Waren", „Soll und Haben"), ein Verb, das auch ein
+Substantiv ist („Regeln", „Sagen", „Lauten"), und auch „Aussage" oder
+„Inhalt". Die Liste gilt nur hier; für das Ranking sind diese Wörter
+gewöhnliche Wörter. Fehlt ein Wort, folgt eine Vollsichtung, die nichts
+Neues findet: Das ist die sichere Richtung. Dass es die Kennung nicht gibt,
+ist im Kennungsfall die ganze Antwort; eine Vollsichtung fände nichts
+anderes. Der Top-Level-`state` bleibt davon unberührt und
 eingefroren. Ein Fehlerzustand ist kein „kein Kandidat": Dort ist die Stärke
 `null` und die Pflicht-Vollsichtung kein Thema, weil es nichts zu sichten
 gibt, solange der Fehler besteht.
@@ -480,7 +537,10 @@ stehen, je mit `path`, der Zahl ihrer gekürzten direkten `claims` sowie
 `best_claim` und `best_score` des besten davon; gibt es mehr, ist
 `coverage.omitted_pages_truncated` wahr. Ein unvertretener Begriff steht
 dort mit der Seite seines Definitions-Claims, denn der ist ein direkter
-Kandidat. Eine leere
+Kandidat; muss die Liste gekürzt werden, gehen solche Seiten den übrigen
+vor. Erst bei mehr als 20 unvertretenen Begriffen mit eigenen
+Definitionsseiten fehlt eine davon, und dann ist
+`coverage.omitted_pages_truncated` wahr. Eine leere
 Liste bei `omitted_direct` größer null heißt: Jeder gekürzte direkte Kandidat
 liegt auf einer Seite, die ohnehin unter `pages` steht und ganz gelesen wird.
 
@@ -570,10 +630,14 @@ Claim-IDs des Stapels. Es bindet damit Stand, Frage und Zuschnitt. Ein neuer
 Release, eine andere Frage oder eine andere Stapelgröße machen es ungültig.
 
 Die Frage wird dafür viel enger normalisiert als für das Ranking:
-Unicode-NFC, Kleinschreibung, Leerraum zu einem Leerzeichen, typografische
+Unicode-NFC, Kleinschreibung, jede Folge von Leerzeichen zu einem und
+Leerraum am Rand weg (ob zwischen zwei Zeichen überhaupt Leerraum steht,
+zählt also; Zeilenumbrüche und Tabulatoren sind in einer Frage ohnehin
+verboten), typografische
 Anführungszeichen und Striche zu ihrer einfachen Form (`„ “ ” « » ″` zu `"`;
 `‚ ‘ ’ ‹ › ′`, Gravis und Akut zu `'`; Bindestrich-, Halbgeviert-, Geviert-
-und Minuszeichen zu `-`), und Fragezeichen am Ende fallen weg. Mehr nicht:
+und Minuszeichen zu `-`), und Fragezeichen am Ende fallen weg, auch
+mehrere. Mehr nicht:
 Jedes andere Zeichen bleibt stehen, auch ein Komma oder ein Punkt. Das Ranking darf „Maßen" und „Massen", `<` und `>=`,
 „C++" und „C#" gleich lesen, weil ein Treffer mehr nur ein Kandidat mehr ist.
 Das Siegel darf es nicht: Es sagt, zu welcher Frage geurteilt wurde. Bis

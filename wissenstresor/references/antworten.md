@@ -26,7 +26,8 @@ Protokoll für den jeweils maßgeblichen Tresor durchlaufen — eine
      Relevanzkandidaten, noch keine Deckung der Frage. Wie belastbar sie
      sind, sagt Schritt 2b.
    * `no_candidates` → kein semantischer Negativbefund. Evidenz bleibt leer;
-     Schritt 4b ist Pflicht (einzige Ausnahme: die unbekannte Kennung in
+     Schritt 4b ist Pflicht (einzige Ausnahme:
+     `fallback.unknown_ids_only: true`, die unbekannte Kennung in
      Schritt 2b).
    * `ambiguous` → genannte Begriffswelt klären und mit
      `--world BW-nnnn` erneut abfragen.
@@ -40,16 +41,17 @@ Protokoll für den jeweils maßgeblichen Tresor durchlaufen — eine
    | Stärke | Heißt | Was zu tun ist |
    |---|---|---|
    | `strong` | Jeder Inhaltsbegriff ist exakt, als Wortform oder über einen kuratierten Begriff getroffen, jeder getroffene Begriff ist in der Ausgabe vertreten, und jede genannte Kennung gibt es | Weiter mit Schritt 3 und 4: Kandidaten lesen und antworten. Decken sie die Frage nicht, Schritt 4b. |
-   | `partial` | Ein Anker trägt (ein vertretener kuratierter Begriff, eine genannte ID oder die ganze Frage als Wortfolge in einem Claim), oder mindestens zwei Begriffe sind getroffen und das sind mindestens 60 % — aber etwas blieb offen: `unmatched` oder `partial` ist nicht leer, ein Begriff ist unvertreten, oder eine Kennung gibt es nicht | Tragen die getroffenen Begriffe die Frage: weiter mit Schritt 3 und 4. Steht unter den ungetroffenen das, wonach gefragt wird: direkt zu Schritt 4b, wie bei `weak`. |
+   | `partial` | Ein Anker trägt (ein vertretener kuratierter Begriff, eine vorhandene ID an einem ausgegebenen Claim oder die ganze Frage als Wortfolge in einem Claim, wenn dabei ein Inhaltswort getroffen ist), oder mindestens zwei Begriffe sind getroffen und das sind mindestens 60 % — aber etwas blieb offen: `unmatched` oder `partial` ist nicht leer, ein Begriff ist unvertreten, oder eine Kennung gibt es nicht | Tragen die getroffenen Begriffe die Frage: weiter mit Schritt 3 und 4. Steht unter den ungetroffenen das, wonach gefragt wird: direkt zu Schritt 4b, wie bei `weak`. Im Zweifel erst Schritt 4; bleibt danach etwas offen, folgt 4b. |
    | `weak` | Weniger als das: ein einzelner getroffener Begriff ohne Anker, Wortteil- oder Zufallstreffer | Schritt 4 entfällt, direkt zu Schritt 4b. Die Kandidaten sind Fingerzeige, keine Antwort. |
    | `none` | Kein Kandidat | Schritt 4 entfällt, direkt zu Schritt 4b. |
 
    Bei `weak` und `none` steht zusätzlich
-   `fallback.exhaustive_review_required: true`. Die Vollsichtung legt dann
-   ohnehin jeden Claim vor; die Kandidatenseiten vorher zu lesen wäre
-   dieselbe Arbeit zweimal. Bei `partial` bleibt das Feld falsch, auch wenn
-   der Kern der Frage ungetroffen ist: Welcher Begriff der Kern ist, kann
-   nur das Modell beurteilen.
+   `fallback.exhaustive_review_required: true`, außer die Frage gilt allein
+   einer unbekannten Kennung (`fallback.unknown_ids_only: true`, siehe unten).
+   Die Vollsichtung legt dann ohnehin jeden Claim vor; die Kandidatenseiten
+   vorher zu lesen wäre dieselbe Arbeit zweimal. Bei `partial` bleibt das Feld
+   falsch, auch wenn der Kern der Frage ungetroffen ist: Welcher Begriff der
+   Kern ist, kann nur das Modell beurteilen.
 
    **Zwei Dinge heißen `partial`.** Die Stärke aus der Tabelle, und die
    Liste `query_terms.partial`. Die Liste nennt Begriffe, die nur als Teil
@@ -62,26 +64,43 @@ Protokoll für den jeweils maßgeblichen Tresor durchlaufen — eine
    der ihn trägt, fiel dem Limit zum Opfer. Und ein Treffer kann in der
    Fundstelle eines Claims liegen (`source.locator`) statt in seinem Text.
 
-   **Unbekannte Kennungen.** Nennt die Frage eine C-, S- oder B-ID, die es
-   im Bestand nicht gibt, steht sie unter `coverage.unknown_ids`, und das
-   Ergebnis ist nie `strong`. Dass es sie nicht gibt, ist ein Befund des
-   Scripts, kein Urteil des Rankings: Es kennt jede Kennung, eine
-   Vollsichtung fände nichts anderes. Stehen ihre Ziffern unter `unmatched`
-   und steht dort und unter `partial` sonst nichts, gilt die Frage allein
-   dieser Kennung („Was steht in C-9999?"), und die Antwort ist ein Satz:
-   „Die Kennung C-9999 gibt es im Bestand nicht." Schritt 4b entfällt dann,
-   auch bei `weak` oder `none`. Die Formel „Nicht im Bestand" steht dort
-   nicht, sie bleibt der Quittung vorbehalten. In jedem anderen Fall gilt
-   die Tabelle: Steht dort mehr, fragt die Frage auch nach einer Sache, und
-   sind die Ziffern selbst getroffen, kann etwas anderes gemeint sein als
-   eine Kennung.
+   **Unbekannte Kennungen.** Nennt die Frage eine C-, S- oder B-ID, die es im
+   Bestand nicht gibt, steht sie unter `coverage.unknown_ids`, und das
+   Ergebnis ist nie `strong`. Als Kennung zählt nur die Schreibung mit
+   ASCII-Ziffern; „C-０００１" ist für das Script ein gewöhnliches Wort. Dass
+   es eine solche Kennung nicht gibt, ist ein Befund des Scripts, kein Urteil
+   des Rankings: Es kennt jede Kennung, eine Vollsichtung fände nichts
+   anderes. Bei `--world` steht unter `unknown_ids` auch eine B-ID aus einer
+   anderen Begriffswelt; die gibt es, nur nicht in dieser Welt. Nennt die Frage nichts als solche Kennungen („Was
+   steht in C-9999?", „Worum geht es in S-0099?"), meldet das Script auch das:
+   `fallback.unknown_ids_only` ist `true`, `fallback.reason` heißt
+   `unknown_ids_only`, und `fallback.exhaustive_review_required` ist falsch.
+   Das gilt vor jeder Zeile der Tabelle, gleich welche Stärke dasteht, auch
+   bei `partial`. Die Antwort stellt dann das Fehlen fest, am einfachsten mit
+   dem Satz „Die Kennung C-9999 gibt es im Bestand nicht.", gern gefolgt von
+   der Rückfrage, ob eine andere gemeint war; eine andere Kennung (C-, S-, B-
+   oder X-) schlägt sie dabei nicht vor, denn das wäre ein Zitat. Schritt 4b entfällt, zitiert
+   wird kein Claim, und die Formel „Nicht im Bestand" steht dort nicht, sie bleibt der
+   Quittung vorbehalten. Die unbekannte Kennung nennt die Antwort nur, um ihr
+   Fehlen festzustellen, nachzufragen, was gemeint war, sie ausdrücklich als
+   Quelle auszuschließen („nicht aus S-0099") oder die Frage zu wiederholen;
+   nie als Quelle („Laut C-9999 …", „- C-9999 (…)"). Ist `fallback.unknown_ids_only` falsch,
+   gilt die Tabelle: Dann fragt die Frage auch nach einer Sache
+   („Mietminderung C-9999", auch „Waren C-9999"), nennt eine vorhandene
+   Kennung oder einen Begriff, die Ziffern der Kennung stehen selbst im
+   Bestand, oder es gibt die Kennung in einer anderen Begriffswelt. Die
+   Entscheidung trifft das Script; welche Wörter dabei als einleitend gelten,
+   nennt `schema/profil.md`: eine geschlossene Liste, jedes andere Wort ist
+   ein Sachwort, ebenso jedes Zeichen außer gewöhnlichen Satzzeichen.
 
    **Unvertretene Begriffe.** Jeder getroffene Begriff unter
    `concepts.matched` sagt in `represented`, ob die Ausgabe etwas von ihm
    zeigt: einen Claim seiner Seite oder seinen Definitions-Claim. Steht dort
    `false`, hat das Limit ihn verdrängt; das Ergebnis ist dann höchstens
    `partial`, und die Seite seines Definitions-Claims steht unter
-   `coverage.omitted_pages`. Sie gehört zu den Seiten, die Schritt 4 liest.
+   `coverage.omitted_pages`, auch wenn die Liste gekürzt ist (bei mehr als
+   20 solchen Seiten ist `omitted_pages_truncated` wahr, und es gilt
+   Schritt 4b). Sie gehört zu den Seiten, die Schritt 4 liest.
 
    Beantworten die in Schritt 4 gelesenen Seiten die Frage ganz, ist die
    Vollsichtung bei `partial` und `strong` nicht nötig. Nötig wird sie,
@@ -136,9 +155,10 @@ Protokoll für den jeweils maßgeblichen Tresor durchlaufen — eine
    derselbe ist.
 4b. **Vollsichtung — die Bedeutungssuche.** Pflicht bei `weak` und `none`
    (dort anstelle von Schritt 4; einzige Ausnahme ist die unbekannte Kennung
-   aus Schritt 2b), und immer, bevor irgendein Teil der Frage als „Nicht im
-   Bestand" ausgewiesen wird. Hier liest das Modell jeden Claim und urteilt
-   nach Bedeutung; das Script sorgt dafür, dass keiner fehlt.
+   aus Schritt 2b, `fallback.unknown_ids_only: true`), und immer, bevor
+   irgendein Teil der Frage als „Nicht im Bestand" ausgewiesen wird. Hier
+   liest das Modell jeden Claim und urteilt nach Bedeutung; das Script
+   sorgt dafür, dass keiner fehlt.
 
    ```
    python3 scripts/vault.py sweep "<frage>"              # Plan: Zahl der Stapel (entbehrlich, s. u.)
@@ -167,15 +187,19 @@ Protokoll für den jeweils maßgeblichen Tresor durchlaufen — eine
      einordnen, dürfen gewählt und zitiert werden. `-` heißt nur, dass aus
      diesem Stapel nichts in die Antwort eingeht.
    * **Die Frage nicht verändern.** Das Siegel bindet Stand, Frage,
-     Stapelgröße und Zuschnitt. Egal sind nur Groß-/Kleinschreibung,
-     Leerraum, die Art der Anführungszeichen und Striche und das
-     Fragezeichen am Ende. Alles andere ist eine andere Frage: ein anderes
-     Wort, aber auch ein Komma, ein Operator, ein Vorzeichen oder „ß" statt
-     „ss". Am sichersten steht sie einmal in einer Shell-Variablen
-     (`F='…'`) und in jedem Aufruf als `"$F"`. Jede weitere Frage braucht
-     ihre eigene Sichtung, auch wenn dieselben Stapel gerade erst gelesen
-     wurden: Geurteilt wird gegen die Frage, und genau das bindet das
-     Siegel.
+     Stapelgröße und Zuschnitt. Egal sind nur Groß-/Kleinschreibung, wie viel
+     Leerraum steht (mehrere Leerzeichen, Leerraum am Rand; einen
+     Zeilenumbruch oder Tabulator nimmt die Engine in einer Frage gar nicht
+     an), die typografische Form der Anführungszeichen und Striche („…" wie
+     "…", ‚…' wie '…', Halbgeviertstrich wie Bindestrich) und Fragezeichen am
+     Ende, auch mehrere. Alles andere ist eine andere Frage: ein anderes Wort,
+     aber auch ein Komma, ein Operator, ein Vorzeichen, ein Leerzeichen, wo
+     vorher keins stand („a<=b" gegen „a <= b"), einfache statt doppelter
+     Anführungszeichen oder „ß" statt „ss". Am sichersten steht sie einmal in
+     einer Shell-Variablen (`F='…'`) und in jedem Aufruf als `"$F"`. Jede
+     weitere Frage braucht ihre eigene Sichtung, auch wenn dieselben Stapel
+     gerade erst gelesen wurden: Geurteilt wird gegen die Frage, und genau das
+     bindet das Siegel.
    * **Quittung auswerten.** `sweep_complete` liefert die ausgewählten
      Claims als vollwertige `evidence` (Rolle `sweep_selected`) und ihre
      Seiten in `pages`; diese Seiten lesen wie in Schritt 4, samt der
@@ -197,7 +221,14 @@ Protokoll für den jeweils maßgeblichen Tresor durchlaufen — eine
      schränken den Umfang ein und sparen Lesearbeit, erlauben dann aber
      kein „Nicht im Bestand", nur „in diesem Umfang nicht gefunden"
      (`abstention.allowed: false`). Maßgeblich ist das Feld: Es ist nur
-     wahr, wenn der Umfang gezählt jeden Claim des Bestands enthält.
+     wahr, wenn der Umfang gezählt jeden Claim des Bestands enthält. Bei
+     `weak` und `none` gilt: Gibt der Mensch einen Umfang vor („such nur in
+     demo-okf"), oder nennt die Frage selbst eine Domäne oder Seite als
+     Umfang („Was steht in demo-okf zu …?"), erfüllt die Sichtung dieses
+     Umfangs die Pflicht, und die Antwort sagt höchstens „in diesem Umfang
+     nicht gefunden". In jedem
+     anderen Fall erfüllt eine eingeschränkte Sichtung die Pflicht nicht,
+     denn der gesuchte Claim kann außerhalb liegen.
 
    `search` darf mit Synonymen helfen, ersetzt die Vollsichtung aber nicht:
    ein fehlender Lexiktreffer ist kein Negativbeweis.
@@ -260,10 +291,11 @@ Regeln im Envelope:
   Lizenz, Rechten, Herausgeber oder Aktualität wird deshalb nie aus diesen
   Angaben beantwortet, sondern nur aus Claims; trägt sie kein Claim, lautet
   die Antwort „Nicht im Bestand". Dasselbe gilt für `matched_labels`,
-  Begriffsbenennungen und Tags. Steht das Gefragte nur dort oder unter
-  „Kontext und Grenzen" einer gelesenen Seite, darf die Antwort diesen
-  Beinahe-Treffer in „Hinweise:" nennen, ausdrücklich als Angabe ohne
-  Belegkraft; sie bleibt „Nicht im Bestand".
+  Begriffsbenennungen, Tags, die Begriffsauszeichnung einer Seite
+  (`pages[].concepts`) und ihre Kanten (`relations`). Steht das Gefragte nur
+  dort oder unter „Kontext und Grenzen" einer gelesenen Seite, darf die
+  Antwort diesen Beinahe-Treffer in „Hinweise:" nennen, ausdrücklich als
+  Angabe ohne Belegkraft; sie bleibt „Nicht im Bestand".
 * Jede Belegzeile nennt den Stand: den `stand` der Seite des Claims
   (`pages[].stand`), nicht den Stand der Quelle (`source.stand`). Zusätze
   wie „eigene Einordnung", „externe Bezugsquelle" oder „überholte Fassung"
@@ -314,11 +346,11 @@ Regeln im Envelope:
   Ergebnis anders als der lokale Teil nicht reproduzierbar ist.
 * Trägt ein genutzter Claim das Signal `external_source`, stammt sein Beleg
   aus einer aufgeführten externen Quelle. Er ist damit vollwertige Evidenz —
-  aber sein Wortlaut steht anderswo. Die Belegzeile hat dieselbe Form wie
-  jede andere: Quelle ist die `X-nnnn`, Fundstelle die Anker-ID. Liegt aus
-  der Pflege ein `doctor`-Hinweis auf Anker-Drift vor, gehört er in
-  „Hinweise:". Eigens dafür läuft `doctor` beim Antworten nicht: Regel 2
-  gilt auch hier.
+  aber sein Wortlaut steht anderswo. Die Belegzeile hat dieselbe Form wie jede
+  andere, mit dem Zusatz „externe Bezugsquelle": Quelle ist die `X-nnnn`,
+  Fundstelle die Anker-ID. Liegt aus der Pflege ein `doctor`-Hinweis auf
+  Anker-Drift vor, gehört er in „Hinweise:". Eigens dafür läuft `doctor` beim
+  Antworten nicht: Regel 2 gilt auch hier.
 * Ein Treffer auf einer Seite mit `status: veraltet` ist kein Fehler des
   Rankings. Die Gewichte bewerten Geltung nicht, sie hängen nur das Signal
   `page_status:veraltet` an; über die Begriffserweiterung kann eine überholte
@@ -346,15 +378,23 @@ Regeln im Envelope:
   verlangt; es wird nicht aus Modellwissen entschieden. Dasselbe gilt
   für einen Zusatz der Frage, den kein Claim kennt („für Sprachassistenten",
   „in Teilzeit"): Die Antwort sagt, wofür der Claim gilt, und weist den
-  Zusatz als ungedeckt aus.
+  Zusatz als ungedeckt aus. Die Grenze: Ein Wort der Frage, das nur anders
+  benennt, was der Claim sagt („die Maschine" für „das Modell"), ist Lesart
+  und gehört in „Hinweise:". Ein Wort, das eine Bedingung, eine Eigenschaft
+  oder einen Gegenstand hinzufügt, den der Claim nicht nennt, ist ein Zusatz
+  und gehört in „Nicht im Bestand:".
 * **Unbestimmte Fragen.** Lässt die Frage mehrere Lesarten zu und deckt der
   Bestand mehr als eine, werden sie getrennt beantwortet; deckt er nur eine,
-  nennt die Antwort diese Lesart. Rückfragen ist erlaubt, raten nicht.
+  nennt die Antwort diese Lesart. Die übrigen Lesarten muss sie nicht als
+  „Nicht im Bestand" ausweisen; tut sie es, gilt Schritt 6. Rückfragen ist
+  erlaubt, raten nicht.
 * **Der Skill selbst ist kein Bestand.** `SKILL.md`, `KONZEPT.md`,
   `LICENSE`, `references/` und `schema/` gehören zum Motor. Eine Frage an
   den Bestand wird nie aus ihnen beantwortet. Betrifft sie den Tresor
   selbst (Lizenz, Aufbau, Bedienung), darf „Hinweise:" die zuständige Datei
-  nennen; was dort steht, ist Auskunft über das Werkzeug und kein Beleg.
+  nennen und in einem Satz sagen, was dort dazu steht, ausdrücklich als
+  Auskunft über das Werkzeug ohne Belegkraft. Die Antwort an den Bestand
+  bleibt davon unberührt, also in der Regel „Nicht im Bestand".
 
 ## Beispiele
 
@@ -397,7 +437,8 @@ Soll ich eine Quelle dazu aufnehmen?
 ```
 
 **Unbekannte Kennung** — „Was steht in C-9999?" → `query` liefert `weak`,
-`coverage.unknown_ids` nennt C-9999, und unter `unmatched` steht nur „9999".
+`coverage.unknown_ids` nennt C-9999, unter `unmatched` steht nur „9999", und
+`fallback.unknown_ids_only` ist `true`.
 Antwort: „Die Kennung C-9999 gibt es im Bestand nicht. Falls eine andere
 gemeint war, bitte nennen." Keine Vollsichtung, keine Zeile „Sichtung:",
 und nicht die Formel „Nicht im Bestand".

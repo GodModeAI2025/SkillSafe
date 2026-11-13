@@ -51,9 +51,14 @@ Diese sechs Regeln gelten in jedem Workflow und stechen jede Bequemlichkeit:
    verstanden hat. Bei `weak` oder `none` ist die **Vollsichtung** Pflicht
    (`vault.py sweep`): Sie legt jeden Claim in Stapeln vor, das Modell
    urteilt nach Bedeutung, und das Script prüft die Quittung. Einzige
-   Ausnahme: Die Frage gilt allein einer Kennung, die es laut
-   `coverage.unknown_ids` nicht gibt; das weiß das Script selbst. „Nicht im
-   Bestand" darf ausschließlich nach einer Quittung mit
+   Ausnahme: Die Frage nennt nichts als Kennungen, die es im Bestand nicht
+   gibt; das entscheidet das Script selbst und meldet es mit
+   `fallback.unknown_ids_only: true` (unter `coverage.unknown_ids` steht bei
+   `--world` auch eine B-ID einer anderen Begriffswelt, und die gibt es).
+   Gibt der Mensch einen Umfang vor („nur in demo-okf") oder nennt die Frage
+   selbst eine Domäne oder Seite als Umfang, genügt die Sichtung dieses
+   Umfangs; die Abstention heißt dann „in diesem Umfang nicht gefunden".
+   „Nicht im Bestand" darf ausschließlich nach einer Quittung mit
    `state: sweep_complete` und `abstention.allowed: true` stehen — nie
    nach einem Router-, Lexik- oder Top-k-Fehlschlag, und auch nicht nach
    `strong`: Ein verstandener Begriff beweist nicht, dass der Bestand zu

@@ -26,14 +26,17 @@ Repository-Wurzel:
     python3 tools/rangfolge_check.py
     python3 tools/rangfolge_check.py --schreiben
 
-Exit 0 ohne Abweichung, 1 mit Abweichung, 2 bei unbrauchbaren Eingaben.
+Exit 0 ohne Abweichung, 1 mit Abweichung, 2 bei unbrauchbaren Eingaben:
+Tresor nicht bereit, Gold oder Schnappschuss unlesbar oder falsch gebaut.
 """
 
 import argparse
 import hashlib
 import importlib.util
 import json
+import os
 import sys
+import tempfile
 from pathlib import Path
 
 
@@ -42,6 +45,7 @@ STANDARD_VAULT = REPOSITORY / "wissenstresor"
 STANDARD_GOLD = REPOSITORY / "tests" / "gold" / "recall-demo.json"
 STANDARD_STAND = REPOSITORY / "tests" / "gold" / "rangfolge-demo.json"
 SCHEMA = "skillsafe.rangfolge/v1"
+GOLD_SCHEMA = "skillsafe.recall-gold/v1"
 # Je Goldfrage mit erwartetem Claim: knapp, mittel und Standard. Bei knappem
 # Limit entscheidet die Nachrück-Regel, wer bleibt.
 LIMITS = (1, 3, 8)
@@ -66,6 +70,10 @@ FESTE_ABFRAGEN = (
     ("Was steht in C-0401?", 8, None),
     ("Was steht in C-9999?", 8, None),
     ("Was sagen C-0401 und C-9999?", 8, None),
+    # Seit v0.16.0 entscheidet die Engine, ob eine Frage nichts als
+    # unbekannte Kennungen nennt: ein einleitendes Wort ja, ein Sachwort nein.
+    ("Erkläre C-9999", 8, None),
+    ("Mietminderung C-9999", 8, None),
     ("B-0001", 8, None),
     ("S-0004", 8, None),
     # Seit hybrid-local/v4 nie 'strong': ein per ID genannter Begriff ohne
@@ -94,8 +102,8 @@ FESTE_ABFRAGEN = (
 BLOECKE = ("coverage", "concepts", "pages", "evidence", "fallback")
 # Aus 'fallback' zählt, was das Ranking entscheidet. Die Felder zum externen
 # Nachschlagen beschreiben eine andere Baustelle und bleiben draußen.
-FALLBACK_FELDER = ("exhaustive_review_required", "reason", "page_paths",
-                   "page_paths_total", "sweep")
+FALLBACK_FELDER = ("exhaustive_review_required", "unknown_ids_only", "reason",
+                   "page_paths", "page_paths_total", "sweep")
 
 
 class RangfolgeFehler(ValueError):
@@ -118,14 +126,32 @@ def lade_engine(vault):
     return modul
 
 
+def _ist_frage(wert):
+    return isinstance(wert, str) and bool(wert.strip())
+
+
 def lade_gold(pfad):
     try:
         daten = json.loads(Path(pfad).read_text(encoding="utf-8"))
         fragen = [eintrag["frage"] for eintrag in daten["fragen"]]
-        negativ = list(daten.get("negativ", []))
-    except (OSError, UnicodeError, ValueError, KeyError, TypeError) as exc:
+        negativ = daten.get("negativ", [])
+    except (OSError, UnicodeError, ValueError, KeyError, TypeError,
+            AttributeError, RecursionError) as exc:
         raise RangfolgeFehler(f"{pfad} ist kein lesbares Gold: {exc}") from exc
-    return fragen, negativ
+    if daten.get("schema") != GOLD_SCHEMA or not fragen:
+        raise RangfolgeFehler(
+            f"{pfad} ist kein lesbares Gold: Schema {GOLD_SCHEMA!r} und "
+            f"mindestens eine Frage erwartet")
+    # Ein Text statt einer Liste zerfiele sonst in einzelne Zeichen, jedes
+    # eine "Frage".
+    if (not isinstance(daten["fragen"], list)
+            or not all(_ist_frage(frage) for frage in fragen)
+            or not isinstance(negativ, list)
+            or not all(_ist_frage(frage) for frage in negativ)):
+        raise RangfolgeFehler(
+            f"{pfad} ist kein lesbares Gold: 'fragen' braucht eine Liste von "
+            f"Einträgen mit 'frage' als Text, 'negativ' eine Liste von Fragen")
+    return fragen, list(negativ)
 
 
 def abfragen_liste(fragen, negativ):
@@ -167,9 +193,63 @@ def zeile(engine, bestand, frage, limit, welt):
     }
 
 
+def _frage_fehler(engine, frage):
+    """Warum die Engine diese Frage nicht annähme, sonst None.
+
+    Der Schnappschuss ruft build_query_result direkt; die Prüfung der Frage,
+    die query vorher macht, steht deshalb hier.
+    """
+    if not frage.strip():
+        return "sie ist leer"
+    if len(frage) > engine.MAX_QUERY_LENGTH:
+        return f"sie ist länger als {engine.MAX_QUERY_LENGTH} Zeichen"
+    if any(ord(zeichen) < 32 or ord(zeichen) == 127 for zeichen in frage):
+        return "sie enthält ein Steuerzeichen oder einen Zeilenumbruch"
+    try:
+        frage.encode("utf-8")
+    except UnicodeEncodeError:
+        return "sie enthält ein Zeichen, das sich nicht als UTF-8 schreiben lässt"
+    return None
+
+
+def schreibe_stand(ziel, text):
+    """Den Schnappschuss ersetzen, ganz oder gar nicht.
+
+    Erst ganz kodieren, dann in eine Datei daneben schreiben und umbenennen:
+    Ein Fehler lässt den alten Schnappschuss stehen, statt ihn zu leeren.
+    """
+    try:
+        daten = text.encode("utf-8")
+    except UnicodeEncodeError as exc:
+        raise RangfolgeFehler(
+            f"Der Schnappschuss lässt sich nicht als UTF-8 schreiben: {exc}"
+        ) from exc
+    ziel = Path(ziel)
+    try:
+        griff, temp = tempfile.mkstemp(
+            prefix=f".{ziel.name}.", suffix=".neu", dir=str(ziel.parent))
+    except OSError as exc:
+        raise RangfolgeFehler(f"{ziel} lässt sich nicht schreiben: {exc}") from exc
+    try:
+        with os.fdopen(griff, "wb") as datei:
+            datei.write(daten)
+        os.replace(temp, str(ziel))
+    except OSError as exc:
+        try:
+            os.unlink(temp)
+        except OSError:
+            pass
+        raise RangfolgeFehler(f"{ziel} lässt sich nicht schreiben: {exc}") from exc
+
+
 def aufnehmen(vault, abfragen):
     """Den heutigen Stand für diese Abfragen berechnen."""
     engine = lade_engine(vault)
+    for frage, _limit, _welt in abfragen:
+        fehler = _frage_fehler(engine, frage)
+        if fehler:
+            raise RangfolgeFehler(
+                f"Die Engine nimmt die Frage {frage!r} nicht an: {fehler}")
     bestand, fehler = engine._load_released_query_snapshot("Schnappschuss")
     if fehler is not None:
         raise RangfolgeFehler(
@@ -214,20 +294,49 @@ def lade_stand(pfad, vault):
         )
     try:
         daten = json.loads(pfad.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, ValueError) as exc:
+    except (OSError, UnicodeError, ValueError, RecursionError) as exc:
         raise RangfolgeFehler(f"{pfad} ist nicht lesbar: {exc}") from exc
     if (not isinstance(daten, dict) or daten.get("schema") != SCHEMA
             or not isinstance(daten.get("abfragen"), list)):
         raise RangfolgeFehler(f"{pfad}: Schema {SCHEMA!r} erwartet")
-    for nummer, eintrag in enumerate(daten["abfragen"], 1):
-        if (not isinstance(eintrag, dict)
-                or not isinstance(eintrag.get("frage"), str)
-                or not isinstance(eintrag.get("limit"), int)
-                or not (eintrag.get("welt") is None
-                        or isinstance(eintrag["welt"], str))):
+    for feld, typ in (("retrieval", str), ("wortform", str), ("claims", int)):
+        wert = daten.get(feld)
+        if isinstance(wert, bool) or not isinstance(wert, typ):
             raise RangfolgeFehler(
-                f"{pfad}: Abfrage {nummer} braucht frage, limit und welt")
+                f"{pfad}: Kopffeld {feld!r} fehlt oder hat den falschen Typ")
+    for nummer, eintrag in enumerate(daten["abfragen"], 1):
+        fehler = _eintrag_fehler(eintrag)
+        if fehler:
+            raise RangfolgeFehler(f"{pfad}: Abfrage {nummer}: {fehler}")
     return daten
+
+
+# Was zeile() schreibt, mit den Typen, die vergleiche() erwartet.
+EINTRAG_FELDER = {
+    "frage": (str,), "limit": (int,), "welt": (str, type(None)),
+    "state": (str, type(None)), "staerke": (str, type(None)),
+    "abdeckung": (int, float, type(None)), "evidenz": (list,),
+    "bloecke": (dict,),
+}
+
+
+def _eintrag_fehler(eintrag):
+    """Warum ein Eintrag des Schnappschusses unbrauchbar ist, sonst None."""
+    if not isinstance(eintrag, dict):
+        return "ist kein Objekt"
+    for feld, typen in EINTRAG_FELDER.items():
+        if feld not in eintrag:
+            return f"Feld {feld!r} fehlt"
+        wert = eintrag[feld]
+        if isinstance(wert, bool) or not isinstance(wert, typen):
+            return f"Feld {feld!r} hat den Typ {type(wert).__name__}"
+    if not all(isinstance(beleg, str) for beleg in eintrag["evidenz"]):
+        return "evidenz braucht Einträge als Text"
+    if set(eintrag["bloecke"]) != set(BLOECKE):
+        return f"bloecke braucht genau die Blöcke {', '.join(BLOECKE)}"
+    if not all(isinstance(wert, str) for wert in eintrag["bloecke"].values()):
+        return "bloecke braucht Prüfwerte als Text"
+    return None
 
 
 def vergleiche(alt, neu, erwartete_abfragen):
@@ -297,7 +406,7 @@ def main(argv=None):
         abfragen = abfragen_liste(fragen, negativ)
         if args.schreiben:
             neu = aufnehmen(vault, abfragen)
-            stand.write_text(_als_text(neu), encoding="utf-8")
+            schreibe_stand(stand, _als_text(neu))
             print(f"🟢 rangfolge-check: {len(neu['abfragen'])} Abfragen unter "
                   f"{neu['retrieval']} festgehalten in {stand}.")
             return 0
@@ -318,12 +427,21 @@ def main(argv=None):
             print(f"   {eintrag}")
         if len(abweichungen) > 40:
             print(f"   … und {len(abweichungen) - 40} weitere")
-        if alt.get("retrieval") == neu.get("retrieval"):
+        if alt.get("retrieval") != neu.get("retrieval"):
+            print("   Neues Profil: neu messen, dann --schreiben (BETRIEB.md).")
+        elif all(eintrag.endswith(": Block fallback weicht ab")
+                 for eintrag in abweichungen):
+            # Rangfolge, Punktzahlen und Stärke sind gleich geblieben; nur
+            # ein Feld darüber, wann die Vollsichtung Pflicht ist, oder wie
+            # ihr Aufwand lautet.
+            print("   Nur der Block fallback weicht ab, die Rangfolge ist "
+                  "dieselbe. War das ein Versehen: beheben. War es Absicht: "
+                  "keine neue Profilnummer, aber ein Release-Eintrag, dann "
+                  "--schreiben (BETRIEB.md).")
+        else:
             print(f"   Das Profil heißt weiter {neu['retrieval']}. War das ein "
                   f"Versehen: beheben. War es Absicht: Profilnummer heben, neu "
                   f"messen, dann --schreiben (BETRIEB.md).")
-        else:
-            print("   Neues Profil: neu messen, dann --schreiben (BETRIEB.md).")
         return 1
     print(f"🟢 rangfolge-check: {len(alt['abfragen'])} Abfragen, "
           f"{neu['retrieval']} gibt aus, was festgehalten ist.")

@@ -192,6 +192,51 @@ SWEEP_QUITTUNG_RE = re.compile(
 )
 KOMPOSITUM_MIN_TEIL = 4
 MAX_OMITTED_PAGES = 20
+# Wörter, die eine Frage nach einer Kennung nur einleiten oder verbinden
+# ("Was steht in C-9999?", "Worum geht es in S-0099?"). Sie zählen allein für
+# die Frage, ob eine Frage nichts als unbekannte Kennungen nennt
+# (fallback.unknown_ids_only). Die Liste ist geschlossen: Jedes andere Wort
+# ist ein Sachwort, auch ein Homograph wie "Waren" oder "Soll", den das
+# Ranking als Funktionswort überliest, und auch "Aussage" oder "Inhalt".
+# Verben, die zugleich ein Substantiv sind ("regeln", "sagen", "lauten",
+# "stehen"), stehen deshalb nicht darin. Für das Ranking sind diese Wörter
+# gewöhnliche Wörter.
+KENNUNG_RAHMENWOERTER = frozenset("""
+was wer wie wo wozu worum woraus wofuer woran worueber welche welcher welches
+welchen welchem der die das den dem des ein eine einen einem einer eines diese
+dieser dieses diesen diesem in im ins zu zum zur ueber laut nach von vom bei
+beim mit auf fuer um an am es sich ist sind gibt geht handelt gilt und oder
+sowie denn eigentlich genau bitte mir uns drin darin steht sagt besagt besagen
+enthaelt enthalten bedeutet bedeuten heisst heissen meint meinen gemeint regelt
+beschreibt beschreiben nennt nennen erklaert erklaere erklaeren erklaer zeigt
+zeige zeigen lautet existiert existieren
+""".split())
+# Bindewörter verbinden nur Kennungen ("C-9998 und C-9999"); sonst hängen sie
+# eine zweite Frage an ("Welche Regeln gibt es und was steht in C-9999?").
+KENNUNG_BINDEWOERTER = frozenset({"und", "oder", "sowie"})
+# Hinter einem Artikel, einer Form von "dieser" oder "welche" und hinter
+# einer Präposition mit Artikel steht ein Substantiv, auch kleingeschrieben:
+# "was ist ein laut in c-9999", "zum aus", "das stehen". Dort darf nur eine
+# Kennung stehen ("in der Quelle S-0099", "was steht im C-9999").
+KENNUNG_DETERMINATIVE = frozenset("""
+der die das den dem des ein eine einen einem einer eines diese dieser dieses
+diesen diesem welche welcher welches welchen welchem zum zur beim vom im am ins
+""".split())
+# Satzzeichen und Auszeichnung gliedern eine Frage nur. Jedes andere Zeichen
+# außerhalb der Wörter ist ein Sachwort ("Was bedeutet § in C-9999?").
+KENNUNG_GLIEDERUNG_RE = re.compile(
+    r"[\s.,;:!?'\"„“”‚‘’«»‹›()\[\]{}\-‐‑‒–—…/*_`]+")
+# Ein Substantiv, das die Kennung nur benennt, zählt allein unmittelbar vor
+# ihr ("die Quelle S-0099", "die Kennungen C-9998 und C-9999"). Anderswo ist
+# es die gefragte Sache: "Was ist ein Claim laut S-0099?".
+KENNUNG_NOMEN_RE = re.compile(
+    r"(?i)(?<![^\W\d_])(?:kennung(?:en)?|ids?|claims?|quellen?"
+    r"|begriff(?:e|en)?|eintr(?:ag|äge|aege|ägen|aegen)|nummern?)[ \t]+"
+    r"(?=[CSB]-[0-9]{4}(?![A-Za-z0-9]))")
+# Als Kennung zählt nur die Schreibung mit ASCII-Ziffern, wie in der Frage
+# selbst (build_query_result): "C-０００１" ist ein gewöhnliches Wort.
+KENNUNG_ALLE_RE = re.compile(r"(?i)(?<![A-Z0-9])[CSB]-[0-9]{4}(?![A-Z0-9])")
+KENNUNG_PLATZHALTER = "zzkennungzz"
 # fallback.page_paths nannte bis v2 jede Seite des Bestands, als Arbeitsliste
 # des alten Rückfalls ("alle Seiten lesen"). Den Rückfall trägt seither die
 # Vollsichtung; die Liste blähte bei 1.500 Seiten jede Abfrage um rund 65 kB
@@ -2986,6 +3031,7 @@ def _query_base(query, state, *, manifest_digest=None, version=None,
         },
         "fallback": {
             "exhaustive_review_required": False,
+            "unknown_ids_only": False,
             "reason": None,
             "page_paths": [],
             "page_paths_total": 0,
@@ -3541,14 +3587,17 @@ def build_query_result(snapshot, world=None, limit=8):
     """Reines, ganzzahlig geranktes Hybrid-Retrieval über validierte Claims."""
     query = snapshot["query"]
     query_norm = _retrieval_norm(query)
-    query_claim_ids = set(re.findall(r"(?i)(?<![A-Z0-9])C-\d{4}(?![A-Z0-9])",
-                                     query))
+    # Eine Kennung hat ASCII-Ziffern. "C-０００１" ist keine, sondern ein
+    # gewöhnliches Wort: Stünde sie unter unknown_ids, hieße das "gibt es
+    # nicht", obwohl es C-0001 gibt.
+    query_claim_ids = set(re.findall(
+        r"(?i)(?<![A-Z0-9])C-[0-9]{4}(?![A-Z0-9])", query))
     query_claim_ids = {value.upper() for value in query_claim_ids}
-    query_source_ids = set(re.findall(r"(?i)(?<![A-Z0-9])S-\d{4}(?![A-Z0-9])",
-                                      query))
+    query_source_ids = set(re.findall(
+        r"(?i)(?<![A-Z0-9])S-[0-9]{4}(?![A-Z0-9])", query))
     query_source_ids = {value.upper() for value in query_source_ids}
-    query_concept_ids = set(re.findall(r"(?i)(?<![A-Z0-9])B-\d{4}(?![A-Z0-9])",
-                                       query))
+    query_concept_ids = set(re.findall(
+        r"(?i)(?<![A-Z0-9])B-[0-9]{4}(?![A-Z0-9])", query))
     query_concept_ids = {value.upper() for value in query_concept_ids}
     concepts = snapshot["concepts"]
     worlds = snapshot["worlds"]
@@ -3968,7 +4017,7 @@ def build_query_result(snapshot, world=None, limit=8):
     verdeckt = {}
     # Ein unvertretener Begriff steht hier immer mit seiner Definitionsseite:
     # Sein Definitions-Claim ist ein direkter Kandidat, und das Limit hat
-    # ihn abgeschnitten.
+    # ihn abgeschnitten. Beim Kürzen der Liste bleibt sie erhalten (unten).
     for k in gekuerzt:
         if not k["direkt"] or k["path"] in gezeigte_seiten:
             continue
@@ -3979,6 +4028,14 @@ def build_query_result(snapshot, world=None, limit=8):
         eintrag["claims"] += 1
     omitted_pages = sorted(
         verdeckt.values(), key=lambda e: (-e["best_score"], e["path"]))
+    # Die Seite des Definitions-Claims eines unvertretenen Begriffs bleibt in
+    # der Liste, auch wenn sie gekürzt wird: Der Vertrag schickt den Agenten
+    # dorthin.
+    definitionsseiten = {
+        k["path"] for k in gekuerzt
+        if definitionen.get(k["claim"]["id"]) in unvertretene}
+    sichtbare_seiten = _sichtbare_seiten(
+        omitted_pages, definitionsseiten, MAX_OMITTED_PAGES)
     alle_seiten = sorted(
         (path, [claim["id"] for claim in page["claims"]])
         for path, page in pages.items() if page["claims"]
@@ -4031,6 +4088,35 @@ def build_query_result(snapshot, world=None, limit=8):
         version=snapshot["version"], warnings=snapshot["warnings"],
     )
     schwach = staerke in {"none", "weak"}
+    # Nennt die Frage nichts als Kennungen, die es nicht gibt, ist die
+    # Antwort ein Befund des Scripts ("C-9999 gibt es nicht"); eine
+    # Vollsichtung fände nichts anderes. Nichts als heißt: keine vorhandene
+    # Kennung, auch keine B-ID aus einer anderen Begriffswelt, kein
+    # getroffener Begriff, und außer den Kennungen nur Wörter aus
+    # KENNUNG_RAHMENWOERTER. Ein Sachwort ("Mietminderung C-9999", "Waren
+    # C-9999") gehört zur Frage und will gesucht werden. Stehen die Ziffern
+    # irgendwo im Bestand, in einem Claim, einer Fundstelle, einem Titel oder
+    # Tag, kann etwas anderes gemeint sein als eine Kennung; auch dann bleibt
+    # die Vollsichtung Pflicht. Geprüft wird das am ganzen Bestand, nicht an
+    # der Ausgabe: Was das Limit abschneidet, steht trotzdem da.
+    ziffern_unbekannt = {kennung.split("-", 1)[1] for kennung in unbekannte_ids}
+
+    def ziffern_im_bestand():
+        # Jede Ziffernfolge des Bestands, auch als Wortteil ("C9991",
+        # "9992a", "9993er"): Auch dann kann etwas anderes gemeint sein.
+        folgen = set()
+        for eintrag in seiten_tokens.values():
+            for menge in (eintrag["title"], eintrag["tag"],
+                          *eintrag["claims"].values()):
+                for token in menge:
+                    folgen.update(re.findall(r"[0-9]+", token))
+        return bool(ziffern_unbekannt & folgen)
+
+    nur_unbekannte_kennung = (
+        bool(ziffern_unbekannt) and not bekannte_ids and not direct
+        and not any(kennung in concepts for kennung in unbekannte_ids)
+        and _nur_kennung_und_rahmen(query)
+        and not ziffern_im_bestand())
     result.update({
         "coverage": {
             "retrieval_complete": True,
@@ -4053,14 +4139,17 @@ def build_query_result(snapshot, world=None, limit=8):
                 "omitted_context": sum(
                     1 for k in gekuerzt if not k["direkt"]),
             },
-            "omitted_pages": omitted_pages[:MAX_OMITTED_PAGES],
+            "omitted_pages": sichtbare_seiten,
             "omitted_pages_truncated": len(omitted_pages) > MAX_OMITTED_PAGES,
             "unknown_ids": unbekannte_ids,
         },
         "fallback": {
-            "exhaustive_review_required": schwach,
+            "exhaustive_review_required": (
+                schwach and not nur_unbekannte_kennung),
+            "unknown_ids_only": nur_unbekannte_kennung,
             "reason": (
-                "no_retrieval_candidates" if not evidence
+                "unknown_ids_only" if nur_unbekannte_kennung
+                else "no_retrieval_candidates" if not evidence
                 else "weak_candidates_only" if schwach else None
             ),
             "page_paths": sorted(snapshot["pages"])[:MAX_FALLBACK_SEITEN],
@@ -4089,6 +4178,72 @@ def build_query_result(snapshot, world=None, limit=8):
         "retrieval_fingerprint": fingerprint,
     })
     return result
+
+
+def _nur_kennung_und_rahmen(query):
+    """Nennt die Frage außer Kennungen nur Wörter aus KENNUNG_RAHMENWOERTER?
+
+    Gelesen wird jedes Wort der Frage, nicht nur die Inhaltswörter des
+    Rankings: Dort fehlen Homographe wie "Waren", die hier Sachwörter sind.
+    Ein benennendes Substantiv zählt nur unmittelbar vor einer Kennung, ohne
+    Satzzeichen dazwischen ("die Quelle S-0099", nicht "ein Eintrag
+    (C-9999)"). Ein großgeschriebenes Wort mitten in der Frage ist im
+    Deutschen ein Substantiv und damit ein Sachwort ("Was ist ein Laut …?"),
+    ebenso jedes Wort hinter einem Artikel, auch kleingeschrieben ("was ist
+    ein laut in c-9999"). "laut" zählt nur als Präposition vor einer
+    Kennung, "bitte" nur am Anfang oder am Ende, ein Bindewort nur zwischen
+    zwei Kennungen. Ein Zeichen außer Buchstaben, Ziffern und gewöhnlichen
+    Satzzeichen ist ein Sachwort ("Was bedeutet § in C-9999?").
+    """
+    text = KENNUNG_NOMEN_RE.sub(" ", query)
+    text = KENNUNG_ALLE_RE.sub(f" {KENNUNG_PLATZHALTER} ", text)
+    if KENNUNG_GLIEDERUNG_RE.sub("", WORT_RE.sub("", text)):
+        return False
+    woerter = []
+    for stelle, wort in enumerate(WORT_RE.findall(text)):
+        gross = stelle > 0 and wort[:1].isupper()
+        woerter.extend((teil, gross) for teil in _retrieval_norm(wort).split())
+    nur_woerter = [wort for wort, _ in woerter]
+    if KENNUNG_PLATZHALTER not in nur_woerter:
+        return False
+    letzte = len(nur_woerter) - 1
+    for stelle, (wort, gross) in enumerate(woerter):
+        if wort == KENNUNG_PLATZHALTER:
+            continue
+        if wort not in KENNUNG_RAHMENWOERTER or gross:
+            return False
+        davor = nur_woerter[stelle - 1] if stelle else None
+        danach = nur_woerter[stelle + 1:stelle + 3]
+        if davor in KENNUNG_DETERMINATIVE and wort not in KENNUNG_DETERMINATIVE:
+            return False
+        if wort == "laut" and not (stelle and (
+                danach[:1] == [KENNUNG_PLATZHALTER]
+                or (danach[:1] and danach[0] in KENNUNG_DETERMINATIVE
+                    and danach[1:2] == [KENNUNG_PLATZHALTER]))):
+            return False
+        if wort == "bitte" and 0 < stelle < letzte:
+            return False
+        if wort in KENNUNG_BINDEWOERTER and not (
+                0 < stelle < letzte
+                and nur_woerter[stelle - 1] == KENNUNG_PLATZHALTER
+                and nur_woerter[stelle + 1] == KENNUNG_PLATZHALTER):
+            return False
+    return True
+
+
+def _sichtbare_seiten(seiten, vorrang, grenze):
+    """Die ersten `grenze` Einträge, Seiten aus `vorrang` zuerst.
+
+    `seiten` ist nach Rang sortiert, und die Auswahl behält diese Reihenfolge.
+    Eine Seite aus `vorrang` verdrängt nur eine ohne Vorrang, nie eine andere
+    mit Vorrang; erst wenn es mehr Vorrangseiten gibt als Plätze, entscheidet
+    unter ihnen der Rang.
+    """
+    mit = [eintrag for eintrag in seiten if eintrag["path"] in vorrang]
+    ohne = [eintrag for eintrag in seiten if eintrag["path"] not in vorrang]
+    platz = max(0, grenze - len(mit))
+    gewaehlt = {eintrag["path"] for eintrag in mit[:grenze] + ohne[:platz]}
+    return [eintrag for eintrag in seiten if eintrag["path"] in gewaehlt]
 
 
 def cmd_query(question_words, world=None, limit=8, extern=False,
@@ -4177,9 +4332,10 @@ def _sweep_frage_norm(frage):
     mehr nur ein Kandidat mehr ist. Ein Siegel dagegen sagt: Zu genau dieser
     Frage wurde geurteilt. Gleich bleibt deshalb nur, was zwischen zwei
     Aufrufen derselben Frage schwankt, ohne etwas zu bedeuten:
-    Groß-/Kleinschreibung, Leerraum, die Art der Anführungszeichen und
-    Striche und das Fragezeichen am Ende. Jedes andere Zeichen bleibt
-    stehen, auch Satzzeichen im Inneren.
+    Groß-/Kleinschreibung, die Menge des Leerraums (nicht, ob zwischen zwei
+    Zeichen überhaupt welcher steht), die Art der Anführungszeichen und
+    Striche und Fragezeichen am Ende. Jedes andere Zeichen bleibt stehen,
+    auch Satzzeichen im Inneren.
 
     Bis v0.14.0 fielen Satzzeichen an jedem Wortrand weg. Damit teilten sich
     "a != b" und "a = b" ein Siegel, ebenso ".5" und "5" oder "!aktiv" und

@@ -184,6 +184,7 @@ class RangfolgeTests(unittest.TestCase):
             self.assertIn("Abweichung(en) vom festgehaltenen Stand", rot.stdout)
             self.assertIn("evidenz festgehalten", rot.stdout)
             self.assertIn("Das Profil heißt weiter", rot.stdout)
+            self.assertIn("Profilnummer heben", rot.stdout)
             self.assertFalse(list(vault.rglob("__pycache__")))
 
             # --schreiben hält den neuen Stand fest, außerhalb des Skills.
@@ -199,6 +200,22 @@ class RangfolgeTests(unittest.TestCase):
             self.assertEqual(drinnen.returncode, 2, drinnen.stdout)
             self.assertIn("liegt im Skill-Ordner", drinnen.stdout)
             self.assertFalse((vault / "notes/s.json").exists())
+
+    def test_a_fallback_only_change_needs_no_new_profile(self):
+        """Weicht nur der Block fallback ab, ist die Rangfolge dieselbe."""
+        basis = json.loads(STAND.read_text(encoding="utf-8"))
+        for eintrag in basis["abfragen"]:
+            if eintrag["frage"] == "Was ist OKF?" and eintrag["limit"] == 8:
+                eintrag["bloecke"]["fallback"] = "0" * 10
+        with tempfile.TemporaryDirectory(prefix="skillsafe-rang-") as temp:
+            datei = Path(temp) / "stand.json"
+            datei.write_text(json.dumps(basis, ensure_ascii=False),
+                             encoding="utf-8")
+            result = self.werkzeug("--stand", str(datei))
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("Nur der Block fallback weicht ab", result.stdout)
+        self.assertIn("keine neue Profilnummer", result.stdout)
+        self.assertNotIn("Profilnummer heben", result.stdout)
 
     def test_every_recorded_field_is_compared(self):
         """Ein verfälschter Schnappschuss fällt auf, Feld für Feld."""
@@ -219,6 +236,8 @@ class RangfolgeTests(unittest.TestCase):
         faelle = {
             "staerke": (lambda d, e: e.update(staerke="weak"),
                         "staerke festgehalten 'weak'"),
+            "zustand": (lambda d, e: e.update(state="no_candidates"),
+                        "state festgehalten 'no_candidates'"),
             "abdeckung": (lambda d, e: e.update(abdeckung=1),
                           "abdeckung festgehalten 1"),
             "evidenz": (evidenz, "evidenz festgehalten"),
@@ -226,6 +245,15 @@ class RangfolgeTests(unittest.TestCase):
                       "Block coverage weicht ab"),
             "seiten": (lambda d, e: e["bloecke"].update(pages="0" * 10),
                        "Block pages weicht ab"),
+            # Jeder Block hat seinen Prüfwert, auch die beiden, die keine
+            # Rangfolge tragen: concepts (vertreten, erweitert) und fallback
+            # (wann die Vollsichtung Pflicht ist, und warum).
+            "begriffe": (lambda d, e: e["bloecke"].update(concepts="0" * 10),
+                         "Block concepts weicht ab"),
+            "rueckfall": (lambda d, e: e["bloecke"].update(fallback="0" * 10),
+                          "Block fallback weicht ab"),
+            "belege": (lambda d, e: e["bloecke"].update(evidence="0" * 10),
+                       "Block evidence weicht ab"),
             "profil": (lambda d, e: d.update(retrieval="hybrid-local/v2"),
                        "retrieval: festgehalten 'hybrid-local/v2'"),
             "fehlende Frage": (
@@ -246,13 +274,124 @@ class RangfolgeTests(unittest.TestCase):
                     self.assertEqual(result.returncode, 1, result.stdout)
                     self.assertIn(meldung, result.stdout)
             kaputt = Path(temp) / "kaputt.json"
+            eintrag = next(e for e in basis["abfragen"]
+                           if (e["frage"], e["limit"]) == (ziel, 8))
+
+            def mit(**felder):
+                # Mit dem echten Kopf: So prüft jeder Fall seinen eigenen
+                # Fehler und nicht nur das fehlende Kopffeld.
+                return json.dumps(dict(
+                    basis, abfragen=[dict(eintrag, **felder)]))
+
+            ohne_bloecke = dict(eintrag)
+            del ohne_bloecke["bloecke"]
+            ohne_fallback = dict(eintrag["bloecke"])
+            del ohne_fallback["fallback"]
             for inhalt in ("kein json", '{"schema": "anderes/v1"}',
                            json.dumps({"schema": "skillsafe.rangfolge/v1",
-                                       "abfragen": [{"frage": "x"}]})):
-                kaputt.write_text(inhalt, encoding="utf-8")
-                result = self.werkzeug("--stand", str(kaputt))
-                self.assertEqual(result.returncode, 2, result.stdout)
-                self.assertNotIn("Traceback", result.stdout + result.stderr)
+                                       "abfragen": [{"frage": "x"}]}),
+                           mit(bloecke=["x"]), mit(bloecke="abc"),
+                           mit(bloecke={"coverage": 5}), mit(evidenz="C-0001:5"),
+                           mit(evidenz=[5]), mit(limit=True), mit(limit="8"),
+                           mit(abdeckung="50"), mit(state=["x"]),
+                           json.dumps({"schema": "skillsafe.rangfolge/v1",
+                                       "abfragen": [ohne_bloecke]}),
+                           json.dumps({"schema": "skillsafe.rangfolge/v1",
+                                       "abfragen": ["x"]}),
+                           mit(bloecke={}), mit(bloecke=ohne_fallback),
+                           mit(frage=""), json.dumps(dict(basis, claims=True)),
+                           json.dumps({k: v for k, v in basis.items()
+                                       if k != "wortform"}),
+                           mit(bloecke=dict(eintrag["bloecke"], zusatz="abc")),
+                           json.dumps(dict(basis, retrieval=None)),
+                           json.dumps(dict(basis, claims="28")),
+                           "[" * 100000):
+                with self.subTest(stand=inhalt[:60]):
+                    kaputt.write_text(inhalt, encoding="utf-8")
+                    result = self.werkzeug("--stand", str(kaputt))
+                    self.assertEqual(result.returncode, 2, result.stdout)
+                    self.assertNotIn("Traceback", result.stdout + result.stderr)
+            # Ebenso ein kaputtes Gold: Ein Text statt einer Liste zerfiele
+            # sonst in einzelne Zeichen, jedes eine Frage.
+            gold = json.loads(GOLD.read_text(encoding="utf-8"))
+            kaputt_gold = Path(temp) / "gold.json"
+            for name, inhalt in {
+                    "negativ als Text": dict(gold, negativ="Wie?"),
+                    "negativ mit Zahl": dict(gold, negativ=[1]),
+                    "fragen als Text": dict(gold, fragen="Was?"),
+                    "Frage leer": dict(gold, fragen=[{"frage": " "}]),
+                    "Frage als Zahl": dict(gold, fragen=[{"frage": 3}]),
+                    "Gold als Liste": [1, 2],
+                    "ohne Fragen": dict(gold, fragen=[]),
+                    "fremdes Schema": dict(gold, schema="irgendwas/v9"),
+                    "zu tief": None}.items():
+                with self.subTest(gold=name):
+                    kaputt_gold.write_text(
+                        "[" * 100000 if inhalt is None else json.dumps(inhalt),
+                        encoding="utf-8")
+                    result = self.werkzeug("--gold", str(kaputt_gold))
+                    self.assertEqual(result.returncode, 2, result.stdout)
+                    self.assertIn("kein lesbares Gold", result.stdout)
+                    self.assertNotIn("Traceback", result.stdout + result.stderr)
+
+    def test_mixed_deviations_ask_for_a_new_profile(self):
+        """Weicht neben fallback auch Evidenz ab, ist es kein reiner Fall.
+
+        Und eine Frage, die die Engine gar nicht annähme, gehört in keinen
+        Schnappschuss: Sie hielte ein Ranking fest, das nie jemand bekommt.
+        """
+        basis = json.loads(STAND.read_text(encoding="utf-8"))
+        for eintrag in basis["abfragen"]:
+            if eintrag["frage"] == "Was ist OKF?" and eintrag["limit"] == 8:
+                eintrag["bloecke"]["fallback"] = "0" * 10
+            if (eintrag["frage"] == "Welche Vertrauensstufen gibt es?"
+                    and eintrag["limit"] == 8):
+                eintrag["evidenz"] = list(reversed(eintrag["evidenz"]))
+        with tempfile.TemporaryDirectory(prefix="skillsafe-rang-") as temp:
+            datei = Path(temp) / "stand.json"
+            datei.write_text(json.dumps(basis, ensure_ascii=False),
+                             encoding="utf-8")
+            result = self.werkzeug("--stand", str(datei))
+            self.assertEqual(result.returncode, 1, result.stdout)
+            self.assertIn("Profilnummer heben", result.stdout)
+            self.assertNotIn("Nur der Block fallback weicht ab", result.stdout)
+
+            gold = json.loads(GOLD.read_text(encoding="utf-8"))
+            gold["negativ"] = list(gold["negativ"]) + ["Was ist\nOKF?"]
+            mit_umbruch = Path(temp) / "gold.json"
+            mit_umbruch.write_text(json.dumps(gold, ensure_ascii=False),
+                                   encoding="utf-8")
+            ziel = Path(temp) / "neu.json"
+            result = self.werkzeug("--gold", str(mit_umbruch), "--stand",
+                                   str(ziel), "--schreiben")
+            self.assertEqual(result.returncode, 2, result.stdout)
+            self.assertIn("nimmt die Frage", result.stdout)
+            self.assertFalse(ziel.exists())
+            # Ebenso zu lang, mit DEL, oder nicht als UTF-8 schreibbar; ein
+            # vorhandener Schnappschuss bleibt dabei unangetastet.
+            vorhanden = Path(temp) / "vorhanden.json"
+            vorhanden.write_text(STAND.read_text(encoding="utf-8"),
+                                 encoding="utf-8")
+            for name, frage in (("zu lang", "x" * 1001),
+                                ("DEL", "Was ist\x7fOKF?"),
+                                ("Surrogat", "Was ist OKF\udcff?")):
+                with self.subTest(frage=name):
+                    gold = json.loads(GOLD.read_text(encoding="utf-8"))
+                    gold["negativ"] = list(gold["negativ"]) + [frage]
+                    mit_umbruch.write_text(json.dumps(gold), encoding="utf-8")
+                    result = self.werkzeug("--gold", str(mit_umbruch),
+                                           "--stand", str(vorhanden),
+                                           "--schreiben")
+                    self.assertEqual(result.returncode, 2,
+                                     result.stdout + result.stderr)
+                    self.assertNotIn("Traceback", result.stdout + result.stderr)
+                    self.assertEqual(vorhanden.read_text(encoding="utf-8"),
+                                     STAND.read_text(encoding="utf-8"))
+            # Ein Ziel, das sich nicht schreiben lässt: Exit 2.
+            result = self.werkzeug("--stand", str(Path(temp) / "fehlt" / "neu.json"),
+                                   "--schreiben")
+            self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+            self.assertNotIn("Traceback", result.stdout + result.stderr)
 
     def test_tool_leaves_the_vault_untouched(self):
         vorher = _cli(SOURCE_SKILL, "checksum", "--verify")

@@ -29,7 +29,7 @@ geschützte `dir_fd`-Operationen fail-closed ab.
 📖 **Konzept & Architekturentscheidungen:** [`wissenstresor/KONZEPT.md`](wissenstresor/KONZEPT.md)
 🌐 **Landingpage:** [`index.html`](index.html) (GitHub-Pages-fähig, Source = repo root)
 
-**Aktueller Release: v0.15.0** (Profil `oksv-lite/1.3`) mit Begriffswelten,
+**Aktueller Release: v0.16.0** (Profil `oksv-lite/1.3`) mit Begriffswelten,
 deterministischem Hybrid-Retrieval, geprüften Bild-/PDF-Regionen und einem
 reproduzierbaren `.skill`-Paket für Claude Code und Codex. Der
 Frontmatter-Parser lehnt Verschachtelung fail-closed ab statt sie still
@@ -116,8 +116,9 @@ Kennung nennt (`coverage.unknown_ids`). Rangfolge und Punktzahlen sind
 dieselben wie in v3; Fingerabdrücke aus v3 gelten trotzdem nicht mehr, weil
 sie den Profilnamen tragen. Derselbe Review zeigte, dass das Siegel der
 Vollsichtung „a != b" und „a = b" gleich las: Seit v0.15.0 bleibt an der
-Frage jedes Zeichen stehen außer dem Fragezeichen am Ende; nur die Art der
-Anführungszeichen und Striche wird vereinheitlicht.
+Frage jedes Zeichen stehen. Egal sind nur Groß- und Kleinschreibung, die
+Menge des Leerraums, Fragezeichen am Ende und die typografische Form der
+Anführungszeichen und Striche (einfache und doppelte bleiben verschieden).
 
 Zweitens die dritte Abnahmerunde: Gilt eine Frage allein einer Kennung, die
 es nicht gibt, braucht sie keine Vollsichtung mehr, denn das weiß das Script
@@ -129,16 +130,62 @@ Drittens die Absicherung der Messung selbst. Ein Review hatte Dutzende
 kleiner Fehler in Ranking und Messwerkzeug eingebaut, und die Hälfte blieb
 grün. Seither hält ein Schnappschuss fest, was `query` für jede Goldfrage
 ausgibt (`tools/rangfolge_check.py`), der Leck-Wächter liest eine Goldfrage
-so, wie die Engine sie träfe, das harte Gate hat eine Positivkontrolle, und
+in der Normalisierung der Engine und seit v0.16.0 auch in ihrer Wortform,
+das harte Gate hat eine Positivkontrolle, und
 `tools/antwort_check.py` lässt sich nicht mehr über die Form einer Antwort
 täuschen (umbrochene Formel, behauptete Sichtung ohne Quittung, eine andere
 Frage in den Schaltern der Sichtung). Gegengeprüft mit 117 gezielt gewählten
 Einzelfehlern: 116 fallen jetzt auf, der verbleibende ist gleichwertig. Das
 zeigt, dass die bekannten Lücken zu sind, nicht dass es keine weiteren gibt.
 
-Abnahme: 181 Tests bestanden · 37 manifestierte Dateien · 39 sichere
+v0.16.0 setzt um, was die vierte Abnahmerunde und vier Reviews mit
+Gegenprüfung fanden, einer am Stand v0.15.0 und drei am Kandidaten. Ob eine
+Frage nichts als Kennungen nennt, die es nicht gibt, entscheidet jetzt das
+Script selbst: `fallback.unknown_ids_only` ist dann wahr, und die Vollsichtung
+entfällt. Vorher musste der Agent das aus drei Feldern ableiten, und die Regel
+hing daran, ob ein Füllverb wie „steht" zufällig in einem Claim vorkam;
+„Mietminderung C-9999" fiel sogar darunter, obwohl die Frage eine Sache nennt.
+Jetzt gilt eine geschlossene Liste einleitender Wörter: Jedes andere Wort ist
+ein Sachwort, auch ein Homograph wie „Waren", den das Ranking als
+Funktionswort überliest, ein großgeschriebenes Wort mitten in der Frage,
+ein Wort hinter einem Artikel („was ist ein laut in c-9999"), ein Zeichen
+wie „§" und eine mit „und" angehängte zweite Frage. Die Ziffern der Kennung
+werden am ganzen Bestand geprüft, nicht an der Ausgabe, eine B-Kennung aus
+einer anderen Begriffswelt gilt nicht als fehlend, und als Kennung zählt nur
+die Schreibung mit ASCII-Ziffern. Rangfolge, Punktzahlen und Stärke
+sind unverändert, das Profil bleibt `hybrid-local/v4`.
+`tools/antwort_check.py` erkennt an dem neuen Feld, welche Regel für eine
+Ausgabe gilt. Eine Kennung, die es nicht gibt, lässt es nur in einem Satzteil
+gelten, der nichts sagt als ihr Fehlen, nachfragt, sie ausdrücklich als
+Quelle ausschließt oder die Frage wiederholt; jede andere Nennung führt sie
+als Quelle und ist erfunden, gleich in welcher Form. Jede S-, X- und
+B-Kennung einer Antwort prüft es gegen die Register des Bestands; wer eine
+vorhandene Kennung als fehlend hinstellt oder im Kennungsfall eine andere
+vorschlägt, verstößt ebenfalls. Es liest Kennungen mit typografischem Strich, prüft
+die Zeile „Sichtung:" in jeder Schreibweise, jede Angabe, die eine
+vollständige Sichtung behauptet, und Sätze wie „gesichtet habe ich 20 von 28
+Claims" gegen die Quittung, und verlangt die Vollsichtung auch dann, wenn die
+Liste der gekürzten Seiten selbst gekürzt war. Der Antworten-Vertrag sagt genauer, was bei `partial` im Zweifel zu tun
+ist, wo die Grenze zwischen Lesart und ungedecktem Zusatz liegt, dass eine
+eingeschränkte Sichtung die Pflicht bei `weak` und `none` nur dann erfüllt,
+wenn der Mensch den Umfang vorgegeben hat oder die Frage selbst eine Domäne
+oder Seite als Umfang nennt, und wie viel eine Antwort über die Dateien des
+Werkzeugs selbst sagen darf. Die Seite, auf der ein unvertretener Begriff
+definiert ist, fällt beim Kürzen der Seitenliste nicht mehr heraus, und der
+Leck-Wächter erkennt eine Goldfrage auch in anderer Beugung, als Alias ohne
+ihr erstes Wort und in einer Seite, die ein NUL-Byte oder viel Füllstoff
+trägt. `tools/check_docs.py` liest Tabellenzeilen so, wie sie gerendert
+aussehen (HTML über einen Parser, „Runde 03" wie „Runde 3"), und bindet auch
+die Summen im Fließtext an die Protokolle, an jeder Fundstelle, in Ziffern wie
+in Worten. Dabei fiel auf, dass hier „alle 22 Negativfragen mit gültiger
+Quittung" stand, obwohl eine davon, die Frage nach einer unbekannten Kennung,
+vertragsgemäß ohne Sichtung auskam. `tools/rangfolge_check.py` endet bei einem
+kaputten Schnappschuss oder Gold mit Exit 2 statt mit einem Traceback, ebenso
+bei einer Frage, die die Engine gar nicht annähme.
+
+Abnahme: 193 Tests bestanden · 37 manifestierte Dateien · 39 sichere
 Paketeinträge · SHA-256
-`0ce136cb794e78268a997a0e8f9b2fe33e2b8e8eac9e5fb7614a1c4688357b7f`.
+`9694e8e6cc411893df472cc3e517715d0386989c209e1d302a40b40c908b8ed4`.
 Dazu 2 aufgeführte externe Bezugsquellen · 2 Satzanker.
 
 Alles läuft mit der Python-Standardbibliothek, gemessen mit CPython 3.9.6 und
@@ -275,7 +322,7 @@ bewegt.
 
 ### Ende zu Ende: Folgt ein Modell dem Verfahren?
 
-Das misst kein Gold. Sechzehn frische Agenten bekamen je einen entpackten
+Das misst kein Gold. Zwanzig frische Agenten bekamen je einen entpackten
 Skill-Ordner und Nutzerfragen im Wortlaut, ohne Erklärung des Verfahrens.
 Ausgewertet hat ein Werkzeug, das dem Agenten nichts glaubt: Es liest aus dem
 Protokoll nur Frage, Antworttext und Quittungseinträge und fährt jede Quittung
@@ -286,6 +333,7 @@ erneut gegen die Engine.
 | Ende zu Ende, Runde 1 | v0.12.1 | 32 | 24 | 24 | 19 | 19 | 8 | 8 | **0** |
 | Ende zu Ende, Runde 2 | v0.13.0 | 12 | 8 | 8 | 8 | 8 | 4 | 4 | **0** |
 | Ende zu Ende, Runde 3 | v0.14.0 | 12 | 7 | 7 | 5 | 5 | 5 | 5 | **0** |
+| Ende zu Ende, Runde 4 | v0.15.0 | 12 | 7 | 7 | 4 | 4 | 5 | 5 | **0** |
 
 *mit Claim:* Fragen, zu denen ein Claim im Bestand steht · *Ranking verfehlt:*
 davon solche, deren Claim das Ranking nicht lieferte · *negativ:* Fragen, die
@@ -293,16 +341,20 @@ der Bestand nicht beantwortet · *Verstöße:* „Nicht im Bestand" ohne
 vollständige Quittung, ausgelassene Pflicht-Vollsichtung, ungültige Quittung,
 erfundene Claim-ID, übersehener Claim.
 
-Alle 32 Fragen, deren Claim das Ranking verfehlte, wurden über die
-Vollsichtung gefunden; alle 17 Negativfragen wurden mit gültiger Quittung
-abgelehnt. In Runde 2 und 3 liefen je sechs Sichtungen über drei Stapel. Was
-das nicht zeigt: wie sorgfältig ein Modell einen Bestand mit 189 Stapeln
-liest. Die Messung gilt für 28 Claims und Agenten eines Modells.
+Alle 36 Fragen, deren Claim das Ranking verfehlte, wurden über die
+Vollsichtung gefunden. Alle 22 Negativfragen wurden korrekt abgelehnt: 21 mit
+gültiger Quittung als „Nicht im Bestand", 1 mit dem Befund des Scripts, dass
+es die erfragte Kennung nicht gibt (Runde 4; dafür braucht es seit v0.15.0
+keine Sichtung). In Runde 2 bis 4 liefen je sechs Sichtungen über drei Stapel.
+Was das nicht zeigt: wie sorgfältig ein Modell einen Bestand mit 189 Stapeln
+liest. Die Messung gilt für 28 Claims und Agenten aus derselben Modellfamilie.
 
 Jede Runde lief am Stand davor und fand, was am Vertrag unklar war; daraus
 kamen die Korrekturen des jeweils nächsten Release. Runde 3 fragte zusätzlich
 nach zwei kuratierten Begriffen in einer Frage und nach einer Kennung, die es
-nicht gibt.
+nicht gibt; Runde 4 prüfte gezielt die Regeln aus v0.15.0, mit einer Kennung
+neben einer Sache, einem unvertretenen Begriff, einem Vergleichsoperator in
+der Frage und einer Frage nach dem Werkzeug selbst.
 
 Die Protokolle liegen in [`tests/e2e/`](tests/e2e/LIESMICH.md). Ihre Siegel
 gelten für den Stand, an den sie gebunden sind, und lassen sich dort

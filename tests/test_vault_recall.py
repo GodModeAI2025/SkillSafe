@@ -654,8 +654,120 @@ class QuerySignalTests(VaultCase):
                     payload["coverage"]["unknown_ids"], unbekannt)
                 self.assertNotEqual(
                     payload["coverage"]["match_strength"], "strong")
-                self.assertTrue(
+                # Die Frage gilt allein der Kennung: Das weiß das Script,
+                # und eine Vollsichtung fände nichts anderes.
+                self.assertFalse(
                     payload["fallback"]["exhaustive_review_required"])
+                self.assertIs(payload["fallback"]["unknown_ids_only"], True)
+                self.assertEqual(
+                    payload["fallback"]["reason"], "unknown_ids_only")
+        # Einleitende Wörter ändern daran nichts, gleich ob sie zufällig in
+        # einem Claim vorkommen: Die Liste steht in KENNUNG_RAHMENWOERTER.
+        # Ein benennendes Substantiv zählt unmittelbar vor der Kennung.
+        for frage in ("Was sagt C-9999?", "Worum geht es in S-0099?",
+                      "Erkläre C-9999", "Was ist C-9999?",
+                      "Was steht in C-9998 und C-9999?",
+                      "Was steht in der Quelle S-0099?",
+                      "Was steht in den Kennungen C-9998 und C-9999?",
+                      "Was steht in den Einträgen C-9998 und C-9999?",
+                      "Worum handelt es sich bei C-9999?",
+                      "Bitte erkläre C-9999",
+                      # "laut" vor der Kennung, auch über einen Artikel;
+                      # "bitte" am Ende; Satzzeichen und Auszeichnung.
+                      "Was gilt laut der Quelle S-0099?",
+                      "Was steht in C-9999, bitte?",
+                      "Was steht in `C-9999`?", "Was steht in „C-9999“?",
+                      "Welche der Kennungen C-9998 und C-9999 gibt es?",
+                      "Was steht in den Begriffen B-9998 und B-9999?"):
+            with self.subTest(frage=frage):
+                _, payload = self.query(frage)
+                self.assertIs(payload["fallback"]["unknown_ids_only"], True)
+                self.assertFalse(
+                    payload["fallback"]["exhaustive_review_required"])
+        # Gilt die Frage auch einer Sache, oder stehen die Ziffern selbst im
+        # Bestand, bleibt die Vollsichtung Pflicht. Sachwort ist jedes Wort
+        # außerhalb der Liste: auch ein Homograph, den das Ranking als
+        # Funktionswort überliest ("Waren", "Soll und Haben"), und ein
+        # Substantiv, das die gefragte Sache ist ("eine Aussage laut S-0099").
+        for frage in ("Was sagt S-0099 zur Mietminderung bei Schimmel?",
+                      "S-0007", "Mietminderung C-9999", "Miete C-9999",
+                      "Waren C-9999", "Was sagt S-0099 zu Soll und Haben?",
+                      "Was ist eine Aussage laut S-0099?",
+                      "Was ist ein Claim laut S-0099?",
+                      "Was ist ein Eintrag (C-9999)?",
+                      "Was ist der Inhalt von C-9999?", "What is C-9999?",
+                      # Ein Homograph der Liste als Substantiv, eine
+                      # angehängte zweite Frage, ein großes Wort mittendrin.
+                      "Regeln C-9999",
+                      "Welche Regeln gibt es und was steht in C-9999?",
+                      "Was bedeutet das genau, und was steht in C-9999?",
+                      "Was ist ein Laut und was ist C-9999?",
+                      "Was steht in C-9999? Und was in C-9998?",
+                      # Kleingeschrieben: hinter einem Artikel steht ein
+                      # Substantiv (dritte Prüfrunde).
+                      "was ist ein laut in c-9999", "was sagt c-9999 zum aus",
+                      "welche bitte enthält c-9999",
+                      "was steht in c-9999 zum ist",
+                      "was sagt c-9999 über das stehen",
+                      "welcher laut steht in c-9999",
+                      "C-9999 was ist ein laut", "welche lauten nennt c-9999",
+                      # "laut" nur vor einer Kennung, nie am Anfang; Verben,
+                      # die auch Substantive sind, stehen nicht in der Liste.
+                      "Laut C-9999", "Lauten C-9999", "Stehen C-9999",
+                      "Laut in C-9999?", "„Laut“ – was ist das in C-9999?",
+                      "Erkläre bitte C-9999",
+                      # Ein Zeichen ist ein Sachwort.
+                      "Was bedeutet ∀ laut C-9999?", "Was bedeutet § in C-9999?",
+                      "Was ist % in C-9999?", "Was gilt für € laut C-9999?",
+                      "Was bedeutet \U0001F525 in C-9999?",
+                      # Je eine Regel allein: das große Wort mittendrin, das
+                      # Bindewort, das eine zweite Frage anhängt.
+                      "Was sagt C-9999 über Wie?",
+                      "Was steht in C-9999 und worum geht es?"):
+            with self.subTest(frage=frage):
+                _, payload = self.query(frage)
+                self.assertTrue(payload["coverage"]["unknown_ids"])
+                self.assertIs(payload["fallback"]["unknown_ids_only"], False)
+                self.assertNotEqual(
+                    payload["fallback"]["reason"], "unknown_ids_only")
+                if payload["coverage"]["match_strength"] in ("weak", "none"):
+                    self.assertTrue(
+                        payload["fallback"]["exhaustive_review_required"])
+        # Geprüft wird am ganzen Bestand, nicht an der Ausgabe: Die Ziffern
+        # von S-0007 stehen in der Fundstelle A-0007 von C-0402, und die
+        # schneidet ein knappes Limit ab.
+        for limit in ("1", "8"):
+            with self.subTest(limit=limit):
+                _, knapp = self.query("Was steht in S-0007?", "--limit", limit)
+                self.assertIs(knapp["fallback"]["unknown_ids_only"], False)
+        # Vollbreit-Ziffern: kein Absturz und keine Kennung. Als Kennung
+        # zählt nur die Schreibung mit ASCII-Ziffern; stünde "C-０００１" unter
+        # unknown_ids, hieße das "gibt es nicht", obwohl es C-0001 gibt.
+        for frage in ("Was steht in C-\uff19\uff19\uff19\uff19?",
+                      "Was steht in C-\uff10\uff10\uff10\uff11?",
+                      "Was regelt C-\uff10\uff10\uff10\uff11 zu Markdown?"):
+            with self.subTest(frage=frage):
+                result, breit = self.query(frage)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(breit["coverage"]["unknown_ids"], [])
+                self.assertIs(breit["fallback"]["unknown_ids_only"], False)
+        # Neben einer vorhandenen Kennung oder einem getroffenen Begriff ist
+        # es kein Kennungsfall; was die Stärke verlangt, gilt wie sonst.
+        for frage in ("C-0401 C-9999", "OKF C-9999"):
+            with self.subTest(frage=frage):
+                _, payload = self.query(frage)
+                self.assertEqual(payload["coverage"]["unknown_ids"], ["C-9999"])
+                self.assertIs(payload["fallback"]["unknown_ids_only"], False)
+                self.assertNotEqual(
+                    payload["fallback"]["reason"], "unknown_ids_only")
+        _, ohne_frage = self.query("C-9999")
+        self.assertEqual(ohne_frage["state"], "no_candidates")
+        self.assertEqual(ohne_frage["fallback"]["reason"], "unknown_ids_only")
+        self.assertIs(ohne_frage["fallback"]["unknown_ids_only"], True)
+        self.assertFalse(ohne_frage["fallback"]["exhaustive_review_required"])
+        # Eine Frage ohne jede Kennung ist nie der Kennungsfall.
+        _, ohne_kennung = self.query("Was steht in?")
+        self.assertIs(ohne_kennung["fallback"]["unknown_ids_only"], False)
         # Eine vorhandene ID bleibt, was sie war: ein Anker, kein Wort.
         _, bekannt = self.query("Was steht in C-0001?")
         self.assertEqual(
@@ -675,6 +787,36 @@ class QuerySignalTests(VaultCase):
         # Eine B-ID der gewählten Welt bleibt ebenfalls ein Anker.
         _, welt = self.query("B-0001", "--world", "BW-0001")
         self.assertEqual(welt["coverage"]["query_terms"]["content"], [])
+        # Ziffern als Wortteil eines Claims ("Formblatt C9991", "Anlage
+        # C-9992a", "die 9993er Fassung") stehen im Bestand: kein Erlass.
+        self.use_private_vault()
+        seite = self.root / "knowledge/demo-okf/okf.md"
+        text = seite.read_text(encoding="utf-8")
+        claim = re.search(r"^- \*\*C-0001\*\* .*$", text, flags=re.M).group(0)
+        seite.write_text(text.replace(
+            claim, claim + " (vgl. Formblatt C9991, Anlage C-9992a, die "
+                           "9993er Fassung)").replace(
+            "tags: [okf, format,", "tags: [okf, formblatt-9994, format,").replace(
+            "title: Open Knowledge Format (OKF)",
+            "title: Open Knowledge Format (OKF) 9997"), encoding="utf-8")
+        self.release()
+        # Auch im Tag und im Seitentitel stehen Ziffern im Bestand.
+        for ziffern in ("9991", "9992", "9993", "9994", "9997"):
+            with self.subTest(wortteil=ziffern):
+                _, teil = self.query(f"Was steht in C-{ziffern}?")
+                self.assertEqual(teil["coverage"]["unknown_ids"],
+                                 [f"C-{ziffern}"])
+                self.assertIs(teil["fallback"]["unknown_ids_only"], False)
+        _, frei = self.query("Was steht in C-9996?")
+        self.assertIs(frei["fallback"]["unknown_ids_only"], True)
+        # Eine B-ID aus einer anderen Welt steht unter unknown_ids, aber es
+        # gibt sie: Der Satz "gibt es im Bestand nicht" wäre falsch.
+        self.install_second_world()
+        _, fremd = self.query("Was bedeutet B-0900?", "--world", "BW-0001")
+        self.assertEqual(fremd["coverage"]["unknown_ids"], ["B-0900"])
+        self.assertIs(fremd["fallback"]["unknown_ids_only"], False)
+        _, eigen = self.query("Was bedeutet B-0900?")
+        self.assertEqual(eigen["coverage"]["unknown_ids"], [])
 
     def test_second_concept_is_never_dropped_behind_a_strong_label(self):
         """Zwei kuratierte Begriffe in einer Frage.
@@ -802,6 +944,53 @@ class QuerySignalTests(VaultCase):
         _, beide = self.query("Was sagt S-2026 zu OKF?")
         self.assertEqual(beide["coverage"]["unknown_ids"], ["S-2026"])
         self.assertEqual(beide["coverage"]["match_strength"], "partial")
+
+    def test_the_definition_page_survives_a_shortened_page_list(self):
+        """Die Liste der gekürzten Seiten hat eine Obergrenze.
+
+        Der Vertrag schickt den Agenten zur Definitionsseite eines
+        unvertretenen Begriffs. Fiel sie der Obergrenze zum Opfer, stand der
+        Begriff unvertreten da, und niemand sagte, wo er definiert ist.
+        """
+        engine = load_engine(self.root)
+        frage = "S-0004 OKF B-0004"
+        snapshot, fehler = engine._load_released_query_snapshot(frage)
+        self.assertIsNone(fehler)
+        voll = engine.build_query_result(snapshot)
+        self.assertEqual(
+            [seite["path"] for seite in voll["coverage"]["omitted_pages"]],
+            ["knowledge/demo-okf/okf.md",
+             "knowledge/demo-okf/ontologie-strategie.md"])
+        vorher = engine.MAX_OMITTED_PAGES
+        engine.MAX_OMITTED_PAGES = 1
+        try:
+            knapp = engine.build_query_result(snapshot)
+        finally:
+            engine.MAX_OMITTED_PAGES = vorher
+        # Die Seite mit dem höheren Rang weicht, die Definitionsseite bleibt.
+        self.assertEqual(
+            [seite["path"] for seite in knapp["coverage"]["omitted_pages"]],
+            ["knowledge/demo-okf/ontologie-strategie.md"])
+        self.assertTrue(knapp["coverage"]["omitted_pages_truncated"])
+        self.assertFalse(
+            {b["id"]: b for b in knapp["concepts"]["matched"]}
+            ["B-0004"]["represented"])
+
+        # Die Auswahl selbst: Vorrangseiten verdrängen nur Seiten ohne
+        # Vorrang, nie einander, und die Reihenfolge bleibt der Rang.
+        def seiten(*namen):
+            return [{"path": name} for name in namen]
+
+        def wahl(namen, vorrang, grenze):
+            return [eintrag["path"] for eintrag in engine._sichtbare_seiten(
+                seiten(*namen), set(vorrang), grenze)]
+
+        self.assertEqual(wahl("xaB", "aB", 2), ["a", "B"])
+        self.assertEqual(wahl("axB", "aB", 2), ["a", "B"])
+        self.assertEqual(wahl("xyz", "", 2), ["x", "y"])
+        self.assertEqual(wahl("xaBc", "aBc", 2), ["a", "B"])
+        self.assertEqual(wahl("xy", "y", 5), ["x", "y"])
+        self.assertEqual(wahl("", "a", 3), [])
 
     def test_a_phrase_made_of_a_function_word_is_no_anchor(self):
         """"IT" ist als Abkürzung ein Inhaltswort der Frage, im Bestand aber
@@ -1154,11 +1343,11 @@ class SweepTests(VaultCase):
 
         # Ein neuer Release ist ein neuer Stand: alte Quittungen verfallen.
         page = self.root / "knowledge/demo-okf/fakten.md"
-        page.write_text(
-            page.read_text(encoding="utf-8").replace(
-                "Sammelbecken für belegte", "Sammelbecken für die belegten"),
-            encoding="utf-8",
-        )
+        inhalt = page.read_text(encoding="utf-8")
+        self.assertIn("Sammelbecken dieser Domäne für belegte", inhalt)
+        page.write_text(inhalt.replace(
+            "Sammelbecken dieser Domäne für belegte",
+            "Sammelbecken dieser Domäne für die belegten"), encoding="utf-8")
         self.release()
         _, neuer_stand = self.sweep(self.FRAGE, "--receipt", quittung)
         self.assertEqual(neuer_stand["state"], "invalid_receipt")
@@ -1738,6 +1927,23 @@ class RecallGateTests(unittest.TestCase):
                       "ｖｏｌｌｂｒｅｉｔ", "C-0001 / §5.1", "  viel   Raum\n"):
             self.assertEqual(
                 self.tool._norm(probe), engine._retrieval_norm(probe), probe)
+        # Die Wortform ebenso: jedes Wort des Skill-Ordners und des Golds,
+        # dazu Grenzfälle der Endungsregeln.
+        woerter = {"prozess", "status", "pruefungen", "waende", "maengel",
+                   "s2026", "abcs", "ung", "lesung", "ab", "einer", "ritus"}
+        for pfad in SOURCE_SKILL.rglob("*"):
+            if pfad.is_file():
+                woerter.update(self.tool._norm(
+                    self.tool._lesbarer_text(pfad)).split())
+        for eintrag in self.fragen:
+            woerter.update(self.tool._norm(eintrag["frage"]).split())
+        self.assertGreater(len(woerter), 1000)
+        abweichend = sorted(wort for wort in woerter if self.tool._wortstamm(
+            wort) != engine._wortstamm(wort))
+        self.assertEqual(abweichend, [])
+        for eintrag in self.fragen:
+            self.assertEqual(self.tool._stammform(eintrag["frage"]),
+                             engine._stamm_norm(eintrag["frage"]))
 
         frage = next(e["frage"] for e in self.fragen if "ä" in e["frage"]
                      or "ö" in e["frage"] or "ü" in e["frage"])
@@ -1745,10 +1951,20 @@ class RecallGateTests(unittest.TestCase):
         nackt = frage.rstrip("?")
         umschrift = (nackt.replace("ä", "ae").replace("ö", "oe")
                      .replace("ü", "ue").replace("ß", "ss"))
+        # Dieselbe Frage in anderer Beugung trifft die Engine über die
+        # Wortform-Stufe; als Alias brächte sie die Frage auf 'strong'.
+        self.assertIn("Einträge ", nackt)
+        gebeugt = nackt.replace("Einträge ", "Einträgen ")
+        self.assertNotEqual(gebeugt, nackt)
+        self.assertEqual(engine._stamm_norm(gebeugt), engine._stamm_norm(nackt))
         alle = [eintrag["frage"] for eintrag in self.fragen]
         nfd = __import__("unicodedata").normalize("NFD", frage)
         varianten = {
             "ohne Fragezeichen": ("notes/a.md", f"Alias: {nackt}\n"),
+            "gebeugt": ("notes/a.md", f"Alias: {gebeugt}\n"),
+            "gebeugt als Alias": (
+                "schema/zusatz.json",
+                json.dumps({"aliases": [gebeugt]}, ensure_ascii=True)),
             "Umschrift": ("notes/a.md", f"- {umschrift}\n"),
             "Großschreibung": ("notes/a.md", nackt.upper() + "\n"),
             "Umbruch im Zitat": (
@@ -1763,6 +1979,15 @@ class RecallGateTests(unittest.TestCase):
             "Textdatei": ("notes/fragen.txt", frage + "\n"),
             "JSON mit Escape": (
                 "schema/extra.json",
+                json.dumps({"aliases": [nackt]}, ensure_ascii=True)),
+            # Ein Schlüssel ist auch eine Zeichenkette, und die Endung zählt
+            # unabhängig von der Schreibung: Mit Escape stünde die Frage
+            # sonst nirgends im Klartext.
+            "JSON-Schlüssel": (
+                "schema/extra.json",
+                json.dumps({nackt: "x"}, ensure_ascii=True)),
+            "JSON, Endung groß": (
+                "schema/EXTRA.JSON",
                 json.dumps({"aliases": [nackt]}, ensure_ascii=True)),
         }
         with tempfile.TemporaryDirectory(prefix="skillsafe-gold-") as temp:
@@ -1783,6 +2008,498 @@ class RecallGateTests(unittest.TestCase):
                 b"\x00\x01" + frage.encode("utf-8"))
             self.assertEqual(self.tool.leck_suche(vault, alle), [])
 
+            # Wo ein Leck wirkt: in der echten Begriffsdatei, auch ohne das
+            # erste Wort der Frage (die Engine trifft eine Benennung als
+            # Wortfolge in der Frage), und in einer Seite tief unter
+            # knowledge/, auch hinter einem NUL-Byte oder viel Füllstoff.
+            def mit_alias(name, alias):
+                ziel = Path(temp) / name / "wt"
+                shutil.copytree(SOURCE_SKILL, ziel)
+                pfad = ziel / "schema/begriffswelten.json"
+                daten = json.loads(pfad.read_text(encoding="utf-8"))
+                daten["concepts"][0]["aliases"].append(alias)
+                pfad.write_text(json.dumps(daten, ensure_ascii=False, indent=2),
+                                encoding="utf-8")
+                return ziel
+
+            ohne_erstes = " ".join(nackt.split()[1:])
+            for name, alias in (("alias-ganz", nackt),
+                                ("alias-ohne-erstes", ohne_erstes)):
+                with self.subTest(alias=name):
+                    self.assertEqual(
+                        self.tool.leck_suche(mit_alias(name, alias), alle),
+                        [(frage, "schema/begriffswelten.json")])
+            # Ein Begriff aus zwei Wörtern der Frage ist kein Leck.
+            kurz = mit_alias("alias-kurz", " ".join(nackt.split()[-2:]))
+            self.assertEqual(self.tool.leck_suche(kurz, alle), [])
+            # Die Schwelle: ab vier Wörtern, oder ab drei, wenn sie drei
+            # Viertel der Frage decken; verglichen an Wortgrenzen.
+            schwelle = [
+                ("drei-von-vier", "heißt das Wissensformat",
+                 "Wie heißt das Wissensformat?", True),
+                ("drei-von-fünf", "das offene Wissensformat",
+                 "Wie heißt das offene Wissensformat?", False),
+                ("vier-woerter", "heißt das offene Wissensformat",
+                 "Sag mir, wie heißt das offene Wissensformat genau?", True),
+                ("wortteil", "heißt das Wissensform",
+                 "Wie heißt das Wissensformat?", False),
+            ]
+            for name, alias, frage_probe, leck in schwelle:
+                with self.subTest(schwelle=name):
+                    gefunden = self.tool.leck_suche(
+                        mit_alias(f"schwelle-{name}", alias), [frage_probe])
+                    self.assertEqual(
+                        gefunden,
+                        [(frage_probe, "schema/begriffswelten.json")]
+                        if leck else [])
+            # Textordner zählen relativ zum Tresor: Liegt der Tresor selbst
+            # unter einem Ordner "schema", bleibt eine Binärdatei binär; eine
+            # Datei unter knowledge/ liest der Wächter ganz.
+            binaer = b"\x00\x01" + frage.encode("utf-8")
+            unter_schema = Path(temp) / "schema" / "wt"
+            shutil.copytree(SOURCE_SKILL, unter_schema)
+            (unter_schema / "notes/bild.bin").write_bytes(binaer)
+            self.assertEqual(self.tool.leck_suche(unter_schema, alle), [])
+            (unter_schema / "knowledge/anhang.dat").write_bytes(binaer)
+            self.assertEqual(self.tool.leck_suche(unter_schema, alle),
+                             [(frage, "knowledge/anhang.dat")])
+            seite = "knowledge/demo-okf/okf-v02.md"
+            for name in ("Seite", "NUL", "Füllstoff"):
+                with self.subTest(seite=name):
+                    ziel = Path(temp) / f"seite-{name}" / "wt"
+                    shutil.copytree(SOURCE_SKILL, ziel)
+                    pfad = ziel / seite
+                    text = pfad.read_text(encoding="utf-8") + f"\n{nackt}\n"
+                    if name == "NUL":
+                        text = text.replace("---\n", "---\n# Notiz \x00\n", 1)
+                    if name == "Füllstoff":
+                        text += "x " * (3 * 1024 * 1024)
+                    pfad.write_text(text, encoding="utf-8")
+                    self.assertEqual(self.tool.leck_suche(ziel, alle),
+                                     [(frage, seite)])
+
+    def test_doc_check_reads_tables_and_sums_like_a_reader(self):
+        """Was gerendert gleich aussieht oder gleich gemeint ist, zählt gleich.
+
+        Eine zweite, falsche Zeile fällt in jeder Schreibweise auf; eine
+        richtige Angabe in anderer, legitimer Schreibweise ist kein Fehler;
+        und nichts endet in einem Traceback.
+        """
+        spec = importlib.util.spec_from_file_location(
+            "skillsafe_check_docs_leser", DOCS_TOOL)
+        docs = importlib.util.module_from_spec(spec)
+        vorher = sys.dont_write_bytecode
+        sys.dont_write_bytecode = True
+        try:
+            spec.loader.exec_module(docs)
+        finally:
+            sys.dont_write_bytecode = vorher
+
+        class Stand(dict):
+            def __missing__(self, schluessel):
+                return None
+
+        stand = Stand({
+            f"recall_{gruppe}": werte[:5] for gruppe, werte in MESSUNG.items()})
+        stand.update(docs.e2e_eintraege(docs.e2e_stand()))
+        readme, landing = docs.README, docs.LANDING
+        text = readme.read_text(encoding="utf-8")
+        html = landing.read_text(encoding="utf-8")
+        dritte_md = "| Ende zu Ende, Runde 3 | v0.14.0 | 12 | 7 | 7 | 5 | 5 | 5 | 5 | **0** |"
+        dritte_html = ("<tr><td>Runde 3</td><td>12</td><td>7</td><td>5</td>"
+                       "<td>5</td><td>0</td></tr>")
+        self.assertEqual(text.count(dritte_md), 1)
+        self.assertEqual(html.count(dritte_html), 1)
+        falsch_md = "| Ende zu Ende, Runde 3 | v0.14.0 | 12 | 7 | 6 | 5 | 4 | 5 | 4 | **1** |"
+
+        def meldungen(readme_text, landing_text, protokoll=stand):
+            with tempfile.TemporaryDirectory(prefix="skillsafe-docs-") as temp:
+                try:
+                    docs.README = Path(temp) / "README.md"
+                    docs.LANDING = Path(temp) / "index.html"
+                    docs.README.write_text(readme_text, encoding="utf-8")
+                    docs.LANDING.write_text(landing_text, encoding="utf-8")
+                    return [m for m in docs.pruefe(protokoll)
+                            if "Messwerte" in m or "Ende-zu-Ende" in m]
+                finally:
+                    docs.README, docs.LANDING = readme, landing
+
+        self.assertEqual(meldungen(text, html), [])
+        zweite = {
+            "Runde 03": (text.replace(dritte_md, dritte_md + "\n" + falsch_md
+                                      .replace("Runde 3", "Runde 03")), html),
+            "Vollbreite": (text.replace(dritte_md, dritte_md + "\n" + falsch_md
+                                        .replace("Runde 3", "Runde \uff13")),
+                           html),
+            "Markdown mit Tag": (text.replace(
+                dritte_md, dritte_md + "\n" + falsch_md.replace(
+                    "Ende zu Ende, Runde 3", "<b>Ende zu Ende, Runde 3</b>")),
+                html),
+            "ohne Strich am Rand": (text.replace(
+                dritte_md, dritte_md + "\n" + falsch_md.strip("|").strip()),
+                html),
+            "Landing mit Entity": (text, html.replace(
+                dritte_html, dritte_html + dritte_html.replace(
+                    "<td>Runde 3</td>", "<td>Runde&nbsp;3</td>").replace(
+                    "<td>0</td></tr>", "<td>1</td></tr>"))),
+            "Landing Runde 03": (text, html.replace(
+                dritte_html, dritte_html + dritte_html.replace(
+                    "Runde 3", "Runde 03").replace(
+                    "<td>0</td></tr>", "<td>1</td></tr>"))),
+            "Landing ohne </td>": (text, html.replace(
+                dritte_html, dritte_html + "<tr><td>Runde 3<td>12<td>7<td>5"
+                "<td>5<td>1</tr>")),
+            "Landing fett": (text, html.replace(
+                dritte_html, dritte_html + dritte_html.replace(
+                    "<td>Runde 3</td>", "<td><b>Runde 3</b></td>").replace(
+                    "<td>0</td></tr>", "<td>1</td></tr>"))),
+            "README Link": (text.replace(dritte_md, dritte_md + "\n" + falsch_md
+                .replace("Ende zu Ende, Runde 3",
+                         "[Ende zu Ende, Runde 3](tests/e2e/runde-3.json)")),
+                html),
+            "README HTML-Tabelle": (text.replace(
+                dritte_md, dritte_md + "\n\n<table><tr><td>Ende zu Ende, Runde 3"
+                "</td><td>v0.14.0</td><td>12</td><td>7</td><td>6</td><td>5</td>"
+                "<td>4</td><td>5</td><td>4</td><td>1</td></tr></table>\n"), html),
+            "README zweite Tabelle ohne Rand": (text.replace(
+                dritte_md, dritte_md + "\n\nLauf | Stand | a | b | c | d | e | f"
+                " | g | h\n---|---|---|---|---|---|---|---|---|---\n"
+                + falsch_md.strip("|").strip() + "\n"), html),
+            "README falsche Zeile als Kopf": (text.replace(
+                dritte_md, dritte_md + "\n\n" + falsch_md.strip("|").strip()
+                + "\n---|---|---|---|---|---|---|---|---|---\n"), html),
+            "README im Zitat": (text.replace(
+                dritte_md, dritte_md + "\n\n> " + falsch_md + "\n"), html),
+            "README Fußnote": (text.replace(dritte_md, dritte_md + "\n" + falsch_md
+                .replace("Runde 3", "Runde 3 ¹")), html),
+            "README Entity": (text.replace(dritte_md, dritte_md + "\n" + falsch_md
+                .replace("Runde 3", "Runde&nbsp;3")), html),
+            "README vollbreites Komma": (text.replace(
+                dritte_md, dritte_md + "\n" + falsch_md.replace(
+                    "Ende zu Ende, Runde 3", "Ende zu Ende\uff0cRunde 3")), html),
+            "README Code danach": (text.replace(
+                dritte_md, dritte_md + "\n\n```Runde``` heißt hier ein Lauf.\n\n"
+                + falsch_md.replace("| Ende", "| Ende", 1) + "\n\n```Ende``` der "
+                "Nachträge.\n"), html),
+            "README Vierer-Zaun": (text.replace(
+                dritte_md, dritte_md + "\n\n````md\n```bash\n````\n\n"
+                + falsch_md + "\n"), html),
+            "README Tilde-Zaun": (text.replace(
+                dritte_md, dritte_md + "\n\n~~~md\n```\n~~~\n\n" + falsch_md
+                + "\n"), html),
+            "README kurze Trennstriche": (text.replace(
+                dritte_md, dritte_md + "\n\nLauf|Stand|a|b|c|d|e|f|g|h\n"
+                "-|-|-|-|-|-|-|-|-|-\n" + falsch_md.strip("|").strip()
+                + "\n"), html),
+            "README Kommentar im Codespan": (text.replace(
+                dritte_md, dritte_md + "\n\nKommentare beginnen mit `<!--`.\n\n"
+                + falsch_md + "\n\nund enden mit `-->`.\n"), html),
+            "Landing Fußnote": (text, html.replace(
+                dritte_html, dritte_html + dritte_html.replace(
+                    "<td>Runde 3</td>", "<td>Runde 3 &dagger;</td>").replace(
+                    "<td>0</td></tr>", "<td>1</td></tr>"))),
+            "Landing Umbruch": (text, html.replace(
+                dritte_html, dritte_html + dritte_html.replace(
+                    "<td>Runde 3</td>", "<td>Runde<br>3</td>").replace(
+                    "<td>0</td></tr>", "<td>1</td></tr>"))),
+            "Landing th": (text, html.replace(
+                dritte_html, dritte_html + dritte_html.replace(
+                    "<td>Runde 3</td>", "<th>Runde 3</th>").replace(
+                    "<td>0</td></tr>", "<td>1</td></tr>"))),
+            "Landing groß": (text, html.replace(
+                dritte_html, dritte_html + dritte_html.upper().replace(
+                    "RUNDE 3", "Runde 3").replace("<TD>0</TD></TR>",
+                                                  "<TD>1</TD></TR>"))),
+        }
+        for name, (inhalt, seite) in zweite.items():
+            with self.subTest(zweite=name):
+                gemeldet = meldungen(inhalt, seite)
+                self.assertTrue(any("Runde 3 steht 2-mal da" in m
+                                    for m in gemeldet), gemeldet)
+        # Richtig, nur anders geschrieben: kein Fehler.
+        legitim = {
+            "Ziffern": (text.replace("Zwanzig frische Agenten",
+                                     "20 frische Agenten"), html),
+            "typografisches Zeichen": (text.replace(
+                'als „Nicht im Bestand", 1 mit',
+                "als „Nicht im Bestand“, 1 mit"), html),
+            "Ziffern in den Runden": (text, html.replace(
+                "in allen vier Runden", "in allen 4 Runden")),
+            "Ordnungszahl als Ziffer": (text, html.replace(
+                "In der zweiten bis vierten Runde", "In der 2. bis 4. Runde")),
+            "je mit Ziffern": (text.replace(
+                "je sechs Sichtungen über drei", "je 6 Sichtungen über 3"),
+                html),
+            "Entity in der Zeile": (text, html.replace(
+                "<td>Runde 3</td>", "<td>Runde&nbsp;3</td>")),
+            "alte Zeile im Kommentar": (text, html.replace(
+                dritte_html, dritte_html + "<!-- " + dritte_html.replace(
+                    "<td>0</td></tr>", "<td>1</td></tr>") + " -->")),
+            "Zeile im Codeblock": (text + "\n```\n" + falsch_md + "\n```\n",
+                                   html),
+            "Zeile im Kommentar": (text + "\n<!--\n" + falsch_md + "\n-->\n",
+                                   html),
+            "eingerückter Codeblock": (text + "\n\nBeispiel:\n\n    " + falsch_md
+                                       + "\n", html),
+            # Nach einer Leerzeile ist eine Zeile mit Strichen ohne Rand und
+            # ohne Trennzeile Prosa, keine Tabellenzeile.
+            "Strich in Prosa nach der Tabelle": (
+                text + "\n\nEnde zu Ende, Runde 3 | falsch | 1\n", html),
+            "eine statt 1": (text.replace('„Nicht im Bestand", 1 mit',
+                                          '„Nicht im Bestand", eine mit'),
+                             html.replace('„Nicht im Bestand", 1 mit',
+                                          '„Nicht im Bestand", eine mit')),
+            "Entity im Satz der Landingpage": (text, html.replace(
+                "Zwanzig frische Agenten", "Zwanzig&nbsp;frische Agenten")),
+            "alter Satz im Kommentar": (text + "\n<!-- Sechzehn frische Agenten "
+                                        "bekamen je eine Frage. -->\n", html),
+        }
+        for name, (inhalt, seite) in legitim.items():
+            with self.subTest(legitim=name):
+                self.assertEqual(meldungen(inhalt, seite), [])
+        # Jede Fundstelle eines Satzes zählt, auch hervorgehoben, als Tag,
+        # mit Entity oder mit anderen Anführungszeichen.
+        for name, zusatz in {
+                "Agenten": "\nSechzehn frische Agenten bekamen je eine Frage.\n",
+                "verfehlt": "\nAlle 40 Fragen, deren Claim das Ranking "
+                            "verfehlte, wurden über die Vollsichtung "
+                            "gefunden.\n",
+                "fett": "\n**Sechzehn** frische Agenten bekamen je eine Frage.\n",
+                "Tag": "\n<b>16</b> frische Agenten bekamen je eine Frage.\n",
+                "Entity": "\nSechzehn&nbsp;frische Agenten bekamen je eine "
+                          "Frage.\n",
+                "fett in der Summe": "\nAlle **40** Fragen, deren Claim das "
+                                     "Ranking verfehlte, wurden über die "
+                                     "Vollsichtung gefunden.\n",
+                "einfache Zeichen": "\nAlle 22 Negativfragen wurden korrekt "
+                                    "abgelehnt: 22 mit gültiger Quittung als "
+                                    "‚Nicht im Bestand‘, 0 mit dem Befund des "
+                                    "Scripts.\n"}.items():
+            with self.subTest(zweiter_satz=name):
+                gemeldet = meldungen(text + zusatz, html)
+                self.assertEqual(len(gemeldet), 1, gemeldet)
+                self.assertIn("README.md: Ende-zu-Ende-Summe", gemeldet[0])
+        # Eine Runde ohne Protokoll, auch mit Zusatz, und eine zweite
+        # Messzeile mit Zusatz.
+        gemeldet = meldungen(text.replace(
+            dritte_md, dritte_md + "\n| Ende zu Ende, Runde 5 (Nachtrag) | "
+            "v0.16.0 | 12 | 12 | 12 | 0 | 0 | 0 | 0 | **0** |"), html)
+        self.assertTrue(any("Runde 5 steht in der Tabelle" in m
+                            for m in gemeldet), gemeldet)
+        zeile_kontrolle = next(
+            zeile for zeile in text.splitlines()
+            if zeile.startswith("| Jetzt, blinde Kontrolle |"))
+        gemeldet = meldungen(text.replace(
+            zeile_kontrolle, zeile_kontrolle + "\n" + zeile_kontrolle.replace(
+                "Jetzt, blinde Kontrolle", "Jetzt, blinde Kontrolle †").replace(
+                "| 56 |", "| 55 |")), html)
+        self.assertTrue(any("'kontrolle' steht 2-mal da" in m
+                            for m in gemeldet), gemeldet)
+        # Die dritte Zahl der Negativsumme auf der Landingpage.
+        gemeldet = meldungen(text, html.replace("1 mit dem Befund",
+                                                "5 mit dem Befund"))
+        self.assertEqual(len(gemeldet), 1, gemeldet)
+        self.assertIn("(21, 22, 5)", gemeldet[0])
+        # Kein Traceback: eine Hochzahl in einer Zelle, 100 Agenten.
+        hoch = meldungen(text.replace(
+            "| Ende zu Ende, Runde 4 | v0.15.0 | 12 | 7 | 7 | 4 | 4 | 5 | 5 | **0** |",
+            "| Ende zu Ende, Runde 4 | v0.15.0 | 12 | 7 | 7 | 4 | 4 | 5 | 5 | **0**¹ |"),
+            html)
+        self.assertTrue(any("Ende-zu-Ende-Runde 4 steht auf" in m
+                            for m in hoch), hoch)
+        viele = Stand(stand)
+        viele["e2e_agenten_1"] = 90
+        gemeldet = meldungen(text, html, viele)
+        self.assertTrue(any("die Protokolle nennen 102" in m
+                            for m in gemeldet), gemeldet)
+
+    def test_doc_check_reads_markdown_context_and_binds_every_number(self):
+        """check_docs liest Markdown wie ein Renderer und bindet jede Zahl.
+
+        Befunde der dritten Prüfrunde: eingerückte Zeilen im Listenpunkt und
+        als Absatzfortsetzung sind sichtbar, ein Zaun im Zitat ist Code, ein
+        Zusatz an der Rundennummer macht keine andere Zeile, unsichtbare
+        Zeichen trennen kein Zahlwort, und eine vertippte Riesenzahl endet in
+        einer Meldung statt in einem MemoryError.
+        """
+        spec = importlib.util.spec_from_file_location(
+            "skillsafe_check_docs_kontext", DOCS_TOOL)
+        docs = importlib.util.module_from_spec(spec)
+        vorher = sys.dont_write_bytecode
+        sys.dont_write_bytecode = True
+        try:
+            spec.loader.exec_module(docs)
+        finally:
+            sys.dont_write_bytecode = vorher
+
+        class Stand(dict):
+            def __missing__(self, schluessel):
+                return None
+
+        stand = Stand({
+            f"recall_{gruppe}": werte[:5] for gruppe, werte in MESSUNG.items()})
+        stand.update(docs.e2e_eintraege(docs.e2e_stand()))
+        originale = {"README.md": docs.README, "index.html": docs.LANDING,
+                     "KONZEPT.md": docs.KONZEPT, "LIESMICH.md": docs.LIESMICH}
+        attribute = {"README.md": "README", "index.html": "LANDING",
+                     "KONZEPT.md": "KONZEPT", "LIESMICH.md": "LIESMICH"}
+        texte = {datei: pfad.read_text(encoding="utf-8")
+                 for datei, pfad in originale.items()}
+
+        def meldungen(stand_neu=stand, **ersatz):
+            with tempfile.TemporaryDirectory(prefix="skillsafe-docs-") as temp:
+                try:
+                    for datei, inhalt in ersatz.items():
+                        name = datei.replace("_", ".")
+                        ziel = Path(temp) / name
+                        ziel.write_text(inhalt, encoding="utf-8")
+                        setattr(docs, attribute[name], ziel)
+                    return [m for m in docs.pruefe(stand_neu)
+                            if "Messwerte" in m or "Ende-zu-Ende" in m]
+                finally:
+                    for datei, pfad in originale.items():
+                        setattr(docs, attribute[datei], pfad)
+
+        self.assertEqual(meldungen(), [])
+        konzept = texte["KONZEPT.md"]
+        vierte = ("| 4, vier Agenten | v0.15.0 | 12 | 7 | 7 | 4 | 4 | 5 | 5 "
+                  "| 0 |")
+        falsch = ("| 4, vier Agenten | v0.15.0 | 12 | 7 | 6 | 4 | 4 | 5 | 5 "
+                  "| 1 |")
+        kopf = ("| Runde | Stand | Fragen | a | b | c | d | e | f | g |\n"
+                "|---|---|---|---|---|---|---|---|---|---|\n")
+        self.assertEqual(konzept.count(vierte), 1)
+
+        # Markdown-Kontext: Tabelle im Listenpunkt, Fortsetzungszeile, Zaun
+        # im Zitat.
+        liste = konzept + ("\n- Nachtrag:\n\n    " + kopf.replace("\n", "\n    ")
+                           + falsch + "\n")
+        self.assertTrue(any("2-mal" in m for m in
+                            meldungen(KONZEPT_md=liste)), "Listenpunkt")
+        fortsetzung = konzept + ("\nNachtrag zur vierten Runde:\n    Achtzehn "
+                                 "frische Agenten bekamen je eine Frage.\n")
+        self.assertTrue(any("'Achtzehn' frische Agenten" in m for m in
+                            meldungen(KONZEPT_md=fortsetzung)))
+        zitat = konzept + "\n> ```\n> " + vierte + "\n> ```\n"
+        self.assertEqual(meldungen(KONZEPT_md=zitat), [])
+        codeblock = konzept + "\n\n    " + vierte + "\n"
+        self.assertEqual(meldungen(KONZEPT_md=codeblock), [])
+
+        # KONZEPT-Zeilen mit Zusatz an der Nummer oder anderer Beschriftung.
+        for name, zeile, teil in (
+                ("Fußnote", falsch.replace("| 4,", "| 4 ¹,"), "2-mal"),
+                ("Kreuz", falsch.replace("| 4,", "| 4†,"), "2-mal"),
+                ("Runde davor", falsch.replace("| 4,", "| Runde 4,"), "2-mal"),
+                ("frische", falsch.replace("vier Agenten",
+                                           "vier frische Agenten"), "2-mal"),
+                ("Nachtrag ohne Protokoll",
+                 "| 5 (Nachtrag), vier Agenten | v0.16.0 | 12 | 7 | 7 | 4 | 4 "
+                 "| 5 | 5 | 0 |", "Runde 5 steht in der Tabelle"),
+                ("zweistellig ohne Protokoll",
+                 "| 10, vier Agenten | v0.17.0 | 12 | 7 | 7 | 4 | 4 | 5 | 5 "
+                 "| 0 |", "Runde 10 steht in der Tabelle")):
+            with self.subTest(zeile=name):
+                self.assertTrue(any(teil in m for m in meldungen(
+                    KONZEPT_md=konzept.replace(vierte, vierte + "\n" + zeile))),
+                    name)
+
+        # Unsichtbare Zeichen, Referenzlinks und Fußnoten im Fließtext.
+        landing = texte["index.html"]
+        self.assertTrue(any("frische Agenten, die Protokolle nennen 20" in m
+                            for m in meldungen(index_html=landing.replace(
+                                "Zwanzig frische Agenten bekamen",
+                                "Ein&shy;und&shy;zwanzig frische Agenten "
+                                "bekamen"))))
+        for name, ersatz in (
+                ("Referenzlink", "Lauf. [Achtzehn][e2e] frische Agenten"),
+                ("Fußnote", "Lauf. Achtzehn frische Agenten[^1]"),
+                ("weiches Trennzeichen",
+                 "Lauf. Ein\u00adund\u00adzwanzig frische Agenten")):
+            with self.subTest(fliesstext=name):
+                self.assertTrue(any("frische Agenten, die Protokolle nennen"
+                                    in m for m in meldungen(
+                    KONZEPT_md=konzept.replace("Lauf. Zwanzig frische Agenten",
+                                               ersatz))), name)
+        # "keine Verstöße" ist null, ein harter Umbruch trennt nichts.
+        self.assertEqual(meldungen(KONZEPT_md=konzept.replace(
+            "68 Fragen, 0 Verstöße", "68 Fragen, keine Verstöße")), [])
+        self.assertEqual(meldungen(KONZEPT_md=konzept.replace(
+            "21 mit gültiger Quittung und eine Frage\nnach",
+            "21 mit gültiger Quittung und eine Frage\\\nnach")), [])
+
+        # Jede Form des Stapelsatzes in jeder Datei, die Zahlen der Grenzen,
+        # die übrigen Fragen, die Agenten der ersten Runde.
+        for name, datei, alt, neu in (
+                ("Stapel in README-Form", "KONZEPT_md", "Siegel gelten nur",
+                 "Siegel gelten nur. In Runde 2 bis 4 liefen je fünf "
+                 "Sichtungen über drei Stapel. Die"),
+                ("Grenzen", "KONZEPT_md", "ausdrücklich: 68 Fragen",
+                 "ausdrücklich: 64 Fragen"),
+                ("übrige", "KONZEPT_md", "die beiden\nübrigen", "die drei\nübrigen"),
+                ("erste Runde", "KONZEPT_md", "Sieben von acht Agenten",
+                 "Sieben von neun Agenten"),
+                ("LIESMICH", "LIESMICH_md", "68 Fragen, ein Demo-Bestand",
+                 "64 Fragen, ein Demo-Bestand")):
+            with self.subTest(zahl=name):
+                quelle = texte[datei.replace("_", ".")]
+                self.assertEqual(quelle.count(alt), 1, alt)
+                gemeldet = meldungen(**{datei: quelle.replace(alt, neu)})
+                self.assertEqual(len(gemeldet), 1, gemeldet)
+                self.assertIn("Ende-zu-Ende-Summe", gemeldet[0])
+
+        # Eine Riesenzahl ist eine Meldung, kein MemoryError.
+        for alt, neu in (("in Runde 4 zu zehn von zwölf",
+                          "in Runde 999999999999 zu zehn von zwölf"),
+                         ("in Runde 2 bis 4 liefen",
+                          "in Runde 2 bis 999999999999 liefen")):
+            with self.subTest(riesig=neu):
+                gemeldet = meldungen(KONZEPT_md=konzept.replace(alt, neu))
+                self.assertEqual(len(gemeldet), 1, gemeldet)
+
+        # Der Quittungssatz: jede Bedingung einzeln.
+        fuenfte = Stand(stand)
+        for schluessel in [k for k in stand if k.endswith("_4")]:
+            fuenfte[schluessel[:-1] + "5"] = stand[schluessel]
+        self.assertTrue(any("In den ersten drei Runden" in m
+                            for m in meldungen(fuenfte)))
+        ungueltig = Stand(stand, e2e_quittungen_3=(12, 11))
+        self.assertTrue(any("In den ersten drei Runden" in m
+                            for m in meldungen(ungueltig)))
+        self.assertTrue(any("In den ersten drei Runden" in m
+                            for m in meldungen(KONZEPT_md=konzept.replace(
+                                "zu zehn von zwölf", "zu zehn von elf"))))
+
+        # Der Abnahmeblock mit verschiedenen Zahlen an jeder Stelle: Welche
+        # Summe wohin gehört, zeigt sich nur, wenn sie verschieden sind.
+        frei = Stand(stand, e2e_runde_1=(32, 24, 23, 19, 18, 8, 7, 1))
+        block_alt = ("Zwanzig frische Agenten, 68 Fragen, 0 Verstöße · bei 46 "
+                     "von 46 Fragen mit\nerwartetem Claim wurde er gefunden, 36 "
+                     "davon nach verfehltem Ranking · 22 von\n22 Negativfragen "
+                     "korrekt abgelehnt, 21 mit gültiger Quittung und eine "
+                     "Frage")
+        self.assertEqual(konzept.count(block_alt), 1)
+        block_neu = ("Zwanzig frische Agenten, 68 Fragen, 1 Verstöße · bei 45 "
+                     "von 46 Fragen mit erwartetem Claim wurde er gefunden, 35 "
+                     "davon nach verfehltem Ranking · 21 von 22 Negativfragen "
+                     "korrekt abgelehnt, 21 mit gültiger Quittung und keine "
+                     "Frage")
+        tabelle = konzept.replace(
+            "| 1, acht Agenten | v0.12.1 | 32 | 24 | 24 | 19 | 19 | 8 | 8 | 0 |",
+            "| 1, acht Agenten | v0.12.1 | 32 | 24 | 23 | 19 | 18 | 8 | 7 | 1 |")
+        abnahme = [m for m in meldungen(
+            frei, KONZEPT_md=tabelle.replace(block_alt, block_neu))
+            if "KONZEPT.md" in m and "Abnahmeblock" in m]
+        self.assertEqual(abnahme, [])
+        for alt, neu in (("bei 45 von 46", "bei 46 von 45"),
+                         ("und keine Frage", "und eine Frage"),
+                         ("21 von 22 Negativfragen", "22 von 21 Negativfragen")):
+            with self.subTest(abnahme=neu):
+                abnahme = [m for m in meldungen(
+                    frei, KONZEPT_md=tabelle.replace(
+                        block_alt, block_neu.replace(alt, neu)))
+                    if "KONZEPT.md" in m and "Abnahmeblock" in m]
+                self.assertEqual(len(abnahme), 1, abnahme)
+
     def test_published_rows_follow_the_measurement_and_stay_unique(self):
         """check_docs bindet die Messtabelle, und zwar jede Zeile mit dem Namen.
 
@@ -1800,6 +2517,19 @@ class RecallGateTests(unittest.TestCase):
         finally:
             sys.dont_write_bytecode = vorher
 
+        # Zahlwörter im Fließtext, in beide Richtungen.
+        for zahl, wort in ((4, "vier"), (17, "siebzehn"), (20, "zwanzig"),
+                           (21, "einundzwanzig"), (30, "dreißig"),
+                           (99, "neunundneunzig")):
+            self.assertEqual(docs.zahlwort(zahl), wort)
+            self.assertEqual(docs.zahl_aus_wort(wort.capitalize()), zahl)
+        for zahl, wort in ((1, "ersten"), (2, "zweiten"), (3, "dritten"),
+                           (7, "siebten"), (16, "sechzehnten"),
+                           (20, "zwanzigsten")):
+            self.assertEqual(docs.ordnungswort(zahl), wort)
+            self.assertEqual(docs.zahl_aus_wort(wort, ordnung=True), zahl)
+        self.assertIsNone(docs.zahl_aus_wort("viele"))
+
         class Stand(dict):
             def __missing__(self, schluessel):
                 return None
@@ -1808,16 +2538,21 @@ class RecallGateTests(unittest.TestCase):
             f"recall_{gruppe}": werte[:5] for gruppe, werte in MESSUNG.items()})
         protokolle = docs.e2e_stand()
         self.assertEqual(sorted(protokolle), list(range(1, len(protokolle) + 1)))
-        for runde, (zahlen, version) in protokolle.items():
-            stand[f"e2e_runde_{runde}"] = zahlen
-            stand[f"e2e_version_{runde}"] = version
+        stand.update(docs.e2e_eintraege(protokolle))
 
         def messwerte():
             return [m for m in docs.pruefe(stand)
                     if "Messwerte" in m or "Ende-zu-Ende" in m]
 
         self.assertEqual(messwerte(), [])
-        readme, landing = docs.README, docs.LANDING
+        readme, landing, konzept = docs.README, docs.LANDING, docs.KONZEPT
+
+        def zurueck():
+            docs.README, docs.LANDING, docs.KONZEPT = readme, landing, konzept
+
+        def umleiten(datei, ziel):
+            setattr(docs, {"README.md": "README", "index.html": "LANDING",
+                           "KONZEPT.md": "KONZEPT"}[datei], ziel)
         with tempfile.TemporaryDirectory(prefix="skillsafe-docs-") as temp:
             try:
                 docs.README = Path(temp) / "README.md"
@@ -1879,8 +2614,237 @@ class RecallGateTests(unittest.TestCase):
                 self.assertTrue(any(
                     "index.html: Ende-zu-Ende-Runde 1 nicht gefunden"
                     in m for m in meldungen), meldungen)
+                docs.LANDING = landing
+
+                # Eine Zeile gilt so, wie sie gerendert aussieht: anders
+                # notiert ist sie dieselbe Zeile, und eine zweite fällt auf.
+                html = landing.read_text(encoding="utf-8")
+                dritte = ("<tr><td>Runde 3</td><td>12</td><td>7</td>"
+                          "<td>5</td><td>5</td><td>0</td></tr>")
+                self.assertEqual(html.count(dritte), 1)
+                varianten = {
+                    "README ohne Fettdruck": ("README.md", text + (
+                        "\n| Ende zu Ende, Runde 3 | v0.14.0 | 12 | 7 | 6 | 5 "
+                        "| 4 | 5 | 4 | 1 |\n"), ["2-mal", "(12, 7, 6, 5, 4"]),
+                    "README mit Leerraum": ("README.md", text + (
+                        "\n|  Ende zu Ende,  Runde 3 |  v0.14.0 | 12 | 7 | 7 "
+                        "| 5 | 5 | 5 | 5 | **1** |\n"), ["2-mal", "5, 5, 1)"]),
+                    "README klein": ("README.md", text + (
+                        "\n| ende zu ende, runde 3 | v0.14.0 | 12 | 7 | 7 | 5 "
+                        "| 5 | 5 | 5 | **0** |\n"), ["2-mal"]),
+                    "README Komma": ("README.md", text + (
+                        "\n| Ende zu Ende ,Runde 3 | v0.14.0 | 12 | 7 | 7 | 5 "
+                        "| 5 | 5 | 5 | **0** |\n"), ["2-mal"]),
+                    "README ohne Rand": ("README.md", text + (
+                        "\n|Ende zu Ende, Runde 9| v9.9.9 |1|1|1|1|1|0|0|0|\n"),
+                        ["Ende-zu-Ende-Runde 9 steht in der Tabelle"]),
+                    "Landing mit Attribut": ("index.html", html.replace(
+                        dritte, dritte + dritte.replace(
+                            "<td>0</td></tr>", '<td class="rot">1</td></tr>')),
+                        ["2-mal", "(12, 7, 5, 5, 1)"]),
+                }
+                # KONZEPT führt dieselbe Tabelle mit den Agenten in der
+                # Beschriftung.
+                lehre = konzept.read_text(encoding="utf-8")
+                vierte = ("| 4, vier Agenten | v0.15.0 | 12 | 7 | 7 | 4 | 4 "
+                          "| 5 | 5 | 0 |")
+                self.assertEqual(lehre.count(vierte), 1)
+                varianten.update({
+                    "KONZEPT andere Zahl": ("KONZEPT.md", lehre.replace(
+                        vierte, vierte.replace("| 5 | 5 | 0 |", "| 5 | 4 | 0 |")),
+                        ["KONZEPT.md: Ende-zu-Ende-Runde 4 steht auf "
+                         "(12, 7, 7, 4, 4, 5, 4, 0)"]),
+                    "KONZEPT anderer Stand": ("KONZEPT.md", lehre.replace(
+                        vierte, vierte.replace("v0.15.0", "v0.16.0")),
+                        ["KONZEPT.md: Stand der Ende-zu-Ende-Runde 4"]),
+                    "KONZEPT Agenten": ("KONZEPT.md", lehre.replace(
+                        vierte, vierte.replace("vier Agenten", "drei Agenten")),
+                        ["KONZEPT.md: Ende-zu-Ende-Runde 4 nennt 'drei' Agenten"]),
+                    "KONZEPT doppelt": ("KONZEPT.md", lehre.replace(
+                        vierte, vierte + "\n" + vierte.replace(
+                            "| 4, vier", "| 4 , vier")), ["2-mal"]),
+                    "KONZEPT ohne Protokoll": ("KONZEPT.md", lehre.replace(
+                        vierte, vierte + "\n| 9, neun Agenten | v9.9.9 | 1 | 1 "
+                        "| 1 | 1 | 1 | 0 | 0 | 0 |"),
+                        ["KONZEPT.md: Ende-zu-Ende-Runde 9 steht in der "
+                         "Tabelle"]),
+                })
+                for name, (datei, inhalt, erwartet) in varianten.items():
+                    with self.subTest(fall=name):
+                        ziel = Path(temp) / datei
+                        ziel.write_text(inhalt, encoding="utf-8")
+                        umleiten(datei, ziel)
+                        meldungen = messwerte()
+                        for teil in erwartet:
+                            self.assertTrue(
+                                any(teil in m for m in meldungen),
+                                (teil, meldungen))
+                        zurueck()
+
+                # Die Summen im Fließtext hängen an denselben Protokollen.
+                summen = {
+                    "verfehlt": ("README.md", "Alle 36 Fragen, deren Claim",
+                                 "Alle 35 Fragen, deren Claim"),
+                    "negativ": ("README.md", "Alle 22 Negativfragen",
+                                "Alle 21 Negativfragen"),
+                    "quittiert": ("README.md", "abgelehnt: 21 mit",
+                                  "abgelehnt: 22 mit"),
+                    "Befund": ("README.md", "1 mit dem Befund",
+                               "0 mit dem Befund"),
+                    "Agenten README": ("README.md", "Zwanzig frische Agenten",
+                                       "Sechzehn frische Agenten"),
+                    "Stapel README": ("README.md", "In Runde 2 bis 4 liefen",
+                                      "In Runde 2 bis 3 liefen"),
+                    "je README": ("README.md", "je sechs Sichtungen",
+                                  "je fünf Sichtungen"),
+                    "Agenten Landing": ("index.html", "Zwanzig frische Agenten",
+                                        "Zwölf frische Agenten"),
+                    "Runden": ("index.html", "in allen vier Runden",
+                               "in allen drei Runden"),
+                    "Paare": ("index.html", "7 von 7, 7 von 7)",
+                              "7 von 7, 6 von 7)"),
+                    "abgelehnt Landing": ("index.html", "21 von 22 mit",
+                                          "22 von 22 mit"),
+                    "Stapel Landing": ("index.html", "In der zweiten bis vierten",
+                                       "In der dritten bis vierten"),
+                    "Agenten KONZEPT": ("KONZEPT.md",
+                                        "Lauf. Zwanzig frische Agenten",
+                                        "Lauf. Achtzehn frische Agenten"),
+                    "Abnahme Agenten": ("KONZEPT.md",
+                                        "Zwanzig frische Agenten, 68 Fragen",
+                                        "Neunzehn frische Agenten, 68 Fragen"),
+                    "Abnahme Fragen": ("KONZEPT.md", "Agenten, 68 Fragen",
+                                       "Agenten, 64 Fragen"),
+                    "Abnahme Verstöße": ("KONZEPT.md", "Fragen, 0 Verstöße",
+                                         "Fragen, 1 Verstöße"),
+                    "Abnahme gefunden": ("KONZEPT.md", "bei 46 von 46 Fragen",
+                                         "bei 45 von 46 Fragen"),
+                    "Abnahme verfehlt": ("KONZEPT.md", "36 davon nach",
+                                         "35 davon nach"),
+                    "Abnahme abgelehnt": ("KONZEPT.md", "Ranking · 22 von",
+                                          "Ranking · 21 von"),
+                    "Abnahme quittiert": ("KONZEPT.md",
+                                          "21 mit gültiger Quittung und eine",
+                                          "22 mit gültiger Quittung und eine"),
+                    "Abnahme Befund": ("KONZEPT.md", "Quittung und eine Frage",
+                                       "Quittung und zwei Frage"),
+                    "Stapel KONZEPT": ("KONZEPT.md", "in Runde 2 bis 4 liefen",
+                                       "in Runde 2 bis 3 liefen"),
+                    "Quittungen KONZEPT": ("KONZEPT.md",
+                                           "in Runde 4 zu zehn von zwölf",
+                                           "in Runde 4 zu elf von zwölf"),
+                    "Runden KONZEPT": ("KONZEPT.md", "In den ersten drei Runden",
+                                       "In den ersten zwei Runden"),
+                }
+                originale = {"README.md": text, "index.html": html,
+                             "KONZEPT.md": konzept.read_text(encoding="utf-8")}
+                for name, (datei, alt, neu) in summen.items():
+                    with self.subTest(summe=name):
+                        self.assertEqual(originale[datei].count(alt), 1, alt)
+                        ziel = Path(temp) / datei
+                        ziel.write_text(originale[datei].replace(alt, neu),
+                                        encoding="utf-8")
+                        umleiten(datei, ziel)
+                        meldungen = messwerte()
+                        self.assertEqual(len(meldungen), 1, meldungen)
+                        self.assertIn(f"{datei}: Ende-zu-Ende-Summe",
+                                      meldungen[0])
+                        zurueck()
             finally:
-                docs.README, docs.LANDING = readme, landing
+                zurueck()
+
+        # Die Spalten der Landingpage: In den echten Protokollen sind
+        # 'mit Claim' und 'gefunden' gleich, ebenso 'verfehlt' und 'trotzdem
+        # gefunden'. Mit verschiedenen Zahlen zeigt sich, welche Spalte
+        # welche ist.
+        frei = Stand(stand)
+        frei["e2e_runde_1"] = (32, 24, 23, 19, 18, 8, 7, 1)
+        zeile_readme = ("| Ende zu Ende, Runde 1 | v0.12.1 | 32 | 24 | 23 | 19 "
+                        "| 18 | 8 | 7 | **1** |")
+        zeile_landing = ("<tr><td>Runde 1</td><td>32</td><td>23</td>"
+                         "<td>18</td><td>7</td><td>1</td></tr>")
+        zeile_konzept = ("| 1, acht Agenten | v0.12.1 | 32 | 24 | 23 | 19 "
+                         "| 18 | 8 | 7 | 1 |")
+        with tempfile.TemporaryDirectory(prefix="skillsafe-docs-") as temp:
+            try:
+                docs.README = Path(temp) / "README.md"
+                docs.LANDING = Path(temp) / "index.html"
+                docs.KONZEPT = Path(temp) / "KONZEPT.md"
+                docs.README.write_text(zeile_readme + "\n", encoding="utf-8")
+                docs.LANDING.write_text(zeile_landing, encoding="utf-8")
+                docs.KONZEPT.write_text(zeile_konzept + "\n", encoding="utf-8")
+                runde_1 = [m for m in docs.pruefe(frei)
+                           if "Ende-zu-Ende-Runde 1 " in m]
+                self.assertEqual(runde_1, [])
+                # Je eine Spalte aus der Nachbarschaft: 'mit Claim' statt
+                # 'gefunden', 'verfehlt' statt 'trotzdem gefunden', 'negativ'
+                # statt 'abgelehnt'.
+                for falsch in ((32, 24, 18, 7, 1), (32, 23, 19, 7, 1),
+                               (32, 23, 18, 8, 1)):
+                    with self.subTest(spalten=falsch):
+                        docs.LANDING.write_text(
+                            "<tr><td>Runde 1</td>" + "".join(
+                                f"<td>{wert}</td>" for wert in falsch)
+                            + "</tr>", encoding="utf-8")
+                        runde_1 = [m for m in docs.pruefe(frei)
+                                   if "index.html: Ende-zu-Ende-Runde 1 " in m]
+                        self.assertEqual(len(runde_1), 1, runde_1)
+            finally:
+                zurueck()
+
+        # "Alle" heißt alle: Stimmt die Zahl, aber nicht die Aussage, fällt
+        # es ebenso auf. Dazu andere Protokolle bei unverändertem Text.
+        text = readme.read_text(encoding="utf-8")
+        html = landing.read_text(encoding="utf-8")
+        vierte = stand["e2e_runde_4"]
+        self.assertEqual(vierte, (12, 7, 7, 4, 4, 5, 5, 0))
+
+        def protokoll(**aenderungen):
+            neu = Stand(stand)
+            neu.update(aenderungen)
+            return neu
+
+        faelle = {
+            "nicht alle gefunden": (
+                protokoll(e2e_runde_4=(12, 7, 6, 4, 4, 5, 5, 0)),
+                text, html.replace("7 von 7, 7 von 7)", "7 von 7, 6 von 7)"),
+                ["index.html: Ende-zu-Ende-Summe: 'in allen vier Runden",
+                 "KONZEPT.md: Ende-zu-Ende-Summe: Abnahmeblock"]),
+            "nicht alle verfehlten gefunden": (
+                protokoll(e2e_runde_4=(12, 7, 7, 4, 3, 5, 5, 0)), text, html,
+                ["README.md: Ende-zu-Ende-Summe: 'Alle 36' verfehlte",
+                 "KONZEPT.md: Ende-zu-Ende-Summe: Abnahmeblock"]),
+            "nicht alle abgelehnt": (
+                protokoll(e2e_runde_4=(12, 7, 7, 4, 4, 5, 4, 0)),
+                text.replace("1 mit dem Befund", "0 mit dem Befund"),
+                html.replace("1 mit dem Befund", "0 mit dem Befund"),
+                ["README.md: Ende-zu-Ende-Summe: Negativfragen (22, 21, 0)",
+                 "KONZEPT.md: Ende-zu-Ende-Summe: Abnahmeblock"]),
+            "ungültige Quittung": (
+                protokoll(e2e_quittungen_2=(12, 11)), text, html,
+                ["README.md: Ende-zu-Ende-Summe: nicht jede Quittung der "
+                 "Protokolle ist gültig",
+                 "KONZEPT.md: Ende-zu-Ende-Summe: 'In den ersten drei Runden"]),
+        }
+        with tempfile.TemporaryDirectory(prefix="skillsafe-docs-") as temp:
+            try:
+                for name, (protokolle_neu, inhalt, seite, erwartet) in (
+                        faelle.items()):
+                    with self.subTest(fall=name):
+                        docs.README = Path(temp) / "README.md"
+                        docs.LANDING = Path(temp) / "index.html"
+                        docs.README.write_text(inhalt, encoding="utf-8")
+                        docs.LANDING.write_text(seite, encoding="utf-8")
+                        meldungen = [m for m in docs.pruefe(protokolle_neu)
+                                     if "Ende-zu-Ende-Summe" in m]
+                        self.assertEqual(len(meldungen), len(erwartet),
+                                         meldungen)
+                        for teil in erwartet:
+                            self.assertEqual(
+                                sum(teil in m for m in meldungen), 1,
+                                (teil, meldungen))
+            finally:
+                zurueck()
 
         # Die Protokolle selbst: eine Runde doppelt oder ohne 'ergebnis'
         # ist ein lesbarer Abbruch, kein Traceback und kein stilles Ja.
@@ -1938,6 +2902,20 @@ class RecallGateTests(unittest.TestCase):
             gruen = lauf()
             self.assertEqual(gruen.returncode, 0, gruen.stdout + gruen.stderr)
             self.assertIn("0 stille Verfehlungen", gruen.stdout)
+            # Ein Leck im eigenen Tresor ist ein verletztes Gate, auch über
+            # die Kommandozeile.
+            mit_leck = Path(temp) / "leck" / "wissenstresor"
+            shutil.copytree(SOURCE_SKILL, mit_leck)
+            (mit_leck / "notes" / "dead-ends.md").write_text(
+                "Notiz: Wer bezahlt den Klempner?\n", encoding="utf-8")
+            freigabe = subprocess.run(
+                [sys.executable, "-B", "scripts/vault.py", "checksum"],
+                cwd=mit_leck, text=True, stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE, check=False, timeout=120)
+            self.assertEqual(freigabe.returncode, 0, freigabe.stdout)
+            leck = lauf("--vault", str(mit_leck))
+            self.assertEqual(leck.returncode, 1, leck.stdout + leck.stderr)
+            self.assertIn("Goldfrage(n) stehen im Skill-Ordner", leck.stdout)
             self.assertIn("verfehlt, Vollsichtung Pflicht    1", gruen.stdout)
             rot = lauf("--min-recall", "100")
             self.assertEqual(rot.returncode, 1, rot.stdout + rot.stderr)

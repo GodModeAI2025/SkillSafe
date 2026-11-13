@@ -29,7 +29,7 @@ geschützte `dir_fd`-Operationen fail-closed ab.
 📖 **Konzept & Architekturentscheidungen:** [`wissenstresor/KONZEPT.md`](wissenstresor/KONZEPT.md)
 🌐 **Landingpage:** [`index.html`](index.html) (GitHub-Pages-fähig, Source = repo root)
 
-**Aktueller Release: v0.16.0** (Profil `oksv-lite/1.3`) mit Begriffswelten,
+**Aktueller Release: v0.17.0** (Profil `oksv-lite/1.3`) mit Begriffswelten,
 deterministischem Hybrid-Retrieval, geprüften Bild-/PDF-Regionen und einem
 reproduzierbaren `.skill`-Paket für Claude Code und Codex. Der
 Frontmatter-Parser lehnt Verschachtelung fail-closed ab statt sie still
@@ -209,9 +209,9 @@ bleibt `hybrid-local/v4`. Auf `main` meldete v0.12.0 lokal ebenfalls
 „hybrid-local/v2", ein anderes Ranking als das gleichnamige dieser Folge;
 Fingerabdrücke aus beiden sind nicht vergleichbar.
 
-Abnahme: 193 Tests bestanden · 37 manifestierte Dateien · 39 sichere
+Abnahme: 235 Tests bestanden · 37 manifestierte Dateien · 39 sichere
 Paketeinträge · SHA-256
-`9694e8e6cc411893df472cc3e517715d0386989c209e1d302a40b40c908b8ed4`.
+`0db94073cb8e10c9ae4e476984434d869e492be62a8fb2c1aa2700fdf08945a6`.
 Dazu 2 aufgeführte externe Bezugsquellen · 2 Satzanker.
 
 Alles läuft mit der Python-Standardbibliothek, gemessen mit CPython 3.9.6 und

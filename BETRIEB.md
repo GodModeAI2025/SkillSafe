@@ -26,15 +26,18 @@ das WSL; ohne sie bricht `release` fail-closed ab, statt unsicher zu schreiben.
 > `checksum` oder `release` aussagekräftig.**
 
 `tests/test_packaged_vault.py` ruft `doctor`, und `doctor` wird bei jeder
-geänderten manifestierten Datei rot. Gemessen mit v0.14.0: Eine einzige
-angehängte Kommentarzeile in `vault.py` ergibt vier Fehlschläge und einen
-Fehler. Drei Fehlschläge liegen in `tests/test_packaged_vault.py`, einer in
+geänderten manifestierten Datei rot. Gemessen mit v0.15.0: Eine einzige
+angehängte Kommentarzeile in `vault.py` lässt zehn Tests scheitern. Drei
+liegen in `tests/test_packaged_vault.py`, einer in
 `tests/test_vault_retrieval.py` (die Messung des externen Routings liest den
-eingecheckten Skill), und der Fehler ist der Aufbau der Klasse
-`RecallGateTests` in `tests/test_vault_recall.py`: Sie misst ebenfalls den
-eingecheckten Skill, `query` liefert dort `invalid_vault`, und ihre Tests
-laufen dann nicht. Alle übrigen Tests laufen durch und werden berichtet.
-Nach `checksum` ist alles wieder grün.
+eingecheckten Skill), fünf in `tests/test_vault_rangfolge.py` (sie vergleichen
+den eingecheckten Skill mit dem Schnappschuss der Rangfolge), und der zehnte
+ist der Aufbau der Klasse `RecallGateTests` in `tests/test_vault_recall.py`:
+Sie misst ebenfalls den eingecheckten Skill, `query` liefert dort
+`invalid_vault`, und ihre 15 Tests laufen dann nicht. `unittest` meldet dafür
+15 Fehlschläge und 3 Fehler, weil es Teilfälle einzeln zählt. Alle übrigen
+Tests laufen durch und werden berichtet. Nach `checksum` ist alles wieder
+grün.
 
 Wer das nicht weiß, hält ein intaktes Projekt für kaputt und sucht an der
 falschen Stelle.
@@ -75,7 +78,8 @@ cd wissenstresor && python3 scripts/vault.py doctor && python3 scripts/vault.py 
 # 5. Paket bauen und veröffentlichte Zahlen nachziehen
 cd .. && python3 tools/build_skill_package.py
 #    README.md und index.html anpassen (Version, Testzahl, Paket-SHA; nach
-#    einer Änderung am Ranking auch die Messtabelle der Suche), dann:
+#    einer Änderung am Ranking auch die Messtabelle der Suche und den
+#    Schnappschuss der Rangfolge), dann:
 python3 tools/check_docs.py
 
 # 6. Alles gemeinsam committen
@@ -203,7 +207,12 @@ Es stellt jede Frage aus dem Gold einmal an `query` und ordnet den Ausgang ein:
 
 Dazu drei Wächter ohne Bezug zur Güte: Die Vollsichtung muss jeden Claim genau
 einmal vorlegen, das Gold darf nicht im Skill-Ordner liegen, und keine
-Goldfrage darf wörtlich im Bestand stehen.
+Goldfrage darf im Skill-Ordner stehen. Verglichen wird dabei so, wie die
+Engine eine Benennung trifft: ohne Satzzeichen, ohne Groß- und
+Kleinschreibung, Umlaute in Umschrift, in jeder Textdatei gleich welcher
+Endung. Eine Goldfrage als Alias sähe genau so aus. Dieselbe Lesart gilt für
+Dubletten im Gold; eine Frage darf auch nicht zugleich unter `fragen` und
+`negativ` stehen.
 
 **Die zwei Gruppen im Demo-Gold.** `tests/gold/recall-demo.json` führt 28
 Fragen der Gruppe `entwicklung` und 56 der Gruppe `kontrolle`. An der ersten
@@ -211,12 +220,35 @@ wurden Funktionswortliste und Schwellen eingestellt; ihre 67 Prozent sind
 deshalb geschönt. Die zweite schrieb ein Agent, der nur die Claim-Texte kannte.
 Ihre Zahl ist die ehrliche, und sie ist es nur so lange, wie niemand an ihr
 dreht. Die Untergrenzen beider Gruppen stehen als `MIN_RECALL` in
-`tests/test_vault_recall.py`.
+`tests/test_vault_recall.py`, die gemessenen Zahlen selbst als `MESSUNG`
+gleich darunter.
+
+**Der Schnappschuss der Rangfolge.** Die Trefferquote merkt nicht, wenn ein
+Gewicht, eine Schwelle oder ein Zähler verrutscht. `tools/rangfolge_check.py`
+merkt es: Für jede Goldfrage (Limit 1, 3 und 8) und eine Reihe fester
+Abfragen (Begriffe, Kennungen, Grenzfälle der Schwellen) steht in `tests/gold/rangfolge-demo.json`, was `query` ausgibt —
+Zustand, Trefferstärke, Abdeckung, Evidenz mit Punktzahl und je ein Prüfwert
+über die Blöcke `coverage`, `concepts`, `pages`, `evidence` und `fallback`.
+
+```bash
+python3 tools/rangfolge_check.py              # vergleicht, Exit 1 bei Abweichung
+python3 tools/rangfolge_check.py --schreiben  # hält den heutigen Stand fest
+```
+
+Die Suite fährt den Vergleich mit. Wird er rot, nennt die Meldung Frage,
+Limit und Feld. Dann gilt: War es ein Versehen, wird es behoben. War es
+Absicht, ist es eine Entscheidung am Ranking und bekommt die neue
+Profilnummer. `--schreiben` ist nie die Reparatur eines roten Tests, sondern
+der letzte Schritt einer solchen Entscheidung — oder einer Änderung am
+Demo-Bestand, an dem gemessen wird (neue Claims, Titel, Tags, Begriffe).
 
 **Wer am Ranking dreht** — Gewichte, Funktionswörter, Wortform-Regeln,
 Schwellen der Trefferstärke —, hebt die Profilnummer (als Nächstes
-`hybrid-local/v4`), misst neu und zieht die Messtabelle in `README.md` und
-`index.html` nach; `check_docs.py` vergleicht beide mit der echten Ausgabe.
+`hybrid-local/v5`), misst neu, hält den Schnappschuss neu fest
+(`rangfolge_check.py --schreiben`), trägt `MESSUNG` in
+`tests/test_vault_recall.py` nach und zieht die Messtabelle in `README.md`
+und `index.html` nach; `check_docs.py` vergleicht beide mit der echten
+Ausgabe.
 Wer dabei die Gruppe `kontrolle` zum Einstellen benutzt, hat sie verbraucht.
 Dann braucht es einen neuen Kontrollsatz, wieder von jemandem, der weder die
 Engine noch die alten Fragen gesehen hat. Genau so ist am 12. November 2026
@@ -228,7 +260,11 @@ harte Gate wird von ihnen kaum berührt. Die beiden schweren Fehler, die
 `hybrid-local/v3` behoben hat, fand deshalb kein Messlauf, sondern ein
 Review, der sie gezielt nachstellte: zwei kuratierte Begriffe in einer Frage,
 und ein Funktionswort, das über seine Wortform einen Begriff benennt. Beide
-änderten an der Messtabelle nichts. Wer am Ranking arbeitet, braucht also
+änderten an der Messtabelle nichts. Dasselbe gilt für die drei Reste, die
+`hybrid-local/v4` schließt (ein per ID genannter Begriff ohne Platz in der
+Ausgabe, eine unbekannte Kennung mit zufällig getroffenen Ziffern, eine
+Abkürzung als Phrasen-Anker): Gefunden hat sie ein Orakel über zufällig
+erzeugten Beständen. Wer am Ranking arbeitet, braucht also
 beides: die Messung für die Güte und gezielte Tests für jeden Weg, auf dem
 `strong` lügen könnte. Für den zweiten Zweck gibt es in
 `tests/test_vault_recall.py` unter anderem die Reihe über alle Paare von
@@ -238,8 +274,10 @@ Vorzugsbenennungen.
 `none`, ist das zunächst richtig: Die Vollsichtung findet den Claim. Lohnt
 sich der direkte Treffer, bekommt der Bestand ein Wort in der Sprache der
 Fragenden, als Alias einer Begriffswelt oder als Tag der Seite, und danach ein
-Release. Nie wird die Frage selbst eingetragen. Der Wächter fände sie, und die
-Messung wäre wertlos. Beugungsformen brauchen keinen Alias, die gleicht
+Release; der Schnappschuss der Rangfolge wird danach neu festgehalten, weil
+sich der Bestand geändert hat. Nie wird die Frage selbst eingetragen. Der
+Wächter fände sie, auch ohne Fragezeichen und in Umschrift, und die Messung
+wäre wertlos. Beugungsformen brauchen keinen Alias, die gleicht
 `wortform/v1` ab.
 
 **Fragen schreiben.** So, wie jemand ohne Kenntnis der Quelle fragen würde,
@@ -275,24 +313,26 @@ Frage neu ab, fährt jede Quittung erneut gegen die Engine und liest zitierte
 Claim-IDs aus dem Antworttext. Ein Verstoß ist: „Nicht im Bestand" ohne
 vollständige Quittung, eine ausgelassene Pflicht-Vollsichtung, eine ungültige
 Quittung, eine Zeile „Sichtung:" mit anderen Zahlen oder einer fremden
-Kennung, eine erfundene Claim-ID und, wenn das Protokoll `erwartet` führt,
-ein übersehener Claim. Exit 1 bei einem Verstoß, 2 bei unbrauchbarem
+Kennung, eine Angabe „Sichtung:" ohne eingereichte Quittung, eine
+erfundene Claim-ID und, wenn das Protokoll `erwartet` führt, ein
+übersehener Claim. Exit 1 bei einem Verstoß, 2 bei unbrauchbarem
 Protokoll oder falschem Stand.
 
 **Siegel gelten für ihren Stand.** Nach jedem Release sind alte Quittungen
 ungültig. Ein Protokoll, das aufgehoben werden soll, braucht deshalb den
 Block `stand` mit dem Manifest-Digest; nachgerechnet wird gegen den Tresor
-dieses Commits (`git archive <commit> wissenstresor`). Die beiden Messläufe
+dieses Commits (`git archive <commit> wissenstresor`). Die drei Messläufe
 vom 12. November 2026 liegen so unter `tests/e2e/`. Ihre Zahlen stehen in
 `README.md` und `index.html`, und `check_docs.py` bindet sie an den Block
 `ergebnis` der Protokolle.
 
-**Die Anmerkungen sind die halbe Messung.** Die Agenten der beiden Läufe
+**Die Anmerkungen sind die halbe Messung.** Die Agenten der drei Läufe
 sollten zusätzlich in einem Satz sagen, was am Vertrag unklar war. Daraus
-kamen die Korrekturen in v0.13.0 und v0.14.0, darunter ein falscher Satz, den
-erst ein Agent bemerkte. Wer den Vertrag ändert, lässt ihn danach lesen.
+kamen die Korrekturen in v0.13.0, v0.14.0 und v0.15.0, darunter ein falscher
+Satz, den erst ein Agent bemerkte. Wer den Vertrag ändert, lässt ihn danach
+lesen.
 
-**Was diese Messung nicht sagt.** 44 Fragen, ein Bestand mit einem Stapel,
+**Was diese Messung nicht sagt.** 56 Fragen, ein Bestand mit einem Stapel,
 Agenten eines Modells. Sie zeigt, dass das Verfahren befolgbar ist, nicht wie
 sorgfältig ein Modell 189 Stapel liest.
 
@@ -304,13 +344,25 @@ trotzdem nicht. Mit der Zeile der Frage `query` von Hand ausführen und die
 Gründe der Kandidaten lesen; fast immer trägt ein zu weit gefasster Alias oder
 Tag den falschen Anker. *Unter der Untergrenze:* Vergleichen, welche Fragen
 gegenüber dem letzten grünen Stand kippen; meist hat ein Release Tags oder
-Aliase entfernt. *Leck:* Eine Goldfrage steht wörtlich im Skill-Ordner, die
+Aliase entfernt. *Leck:* Eine Goldfrage steht im Skill-Ordner, die
 Meldung nennt die Datei. *Claim wird nicht vorgelegt:* Das Gold nennt eine
 C-ID, die es im Bestand nicht mehr gibt.
+
+**`rangfolge_check.py` oder `test_vault_rangfolge` ist rot.** Die Ausgabe
+von `query` weicht vom festgehaltenen Stand ab; die Meldung nennt Frage, Limit
+und Feld. Zuerst klären, ob das gewollt war. Ein Versehen an Gewicht,
+Schwelle, Zähler oder Nachrück-Regel wird behoben. Eine gewollte Änderung am
+Ranking bekommt eine neue Profilnummer und eine neue Messung, eine Änderung
+am Demo-Bestand einen neuen Schnappschuss; erst dann `--schreiben`. Exit 2
+heißt, dass gar nicht verglichen wurde: Der Tresor ist zwischen Änderung und
+`checksum` gesperrt, oder der Schnappschuss ist unlesbar.
 
 **`antwort_check.py` ist rot.** Exit 2 heißt, dass gar nicht geprüft wurde:
 Das Protokoll ist unbrauchbar, liegt im Skill-Ordner oder ist an einen
 anderen Stand gebunden; dann gegen den Tresor des genannten Commits prüfen.
+Unbrauchbar ist auch eine Frage, die die Engine nicht annimmt
+(Zeilenumbruch, über 1.000 Zeichen, mehrdeutiger Begriff), und ein
+`sweep_args`, das mehr nennt als den Zuschnitt der Sichtung.
 Exit 1 nennt je Antwort den Verstoß. *Quittung nicht gültig:* fast immer eine
 abweichende Schreibung der Frage oder ein fehlendes `sweep_args` im Protokoll
 (`--size`, `--domain`). *Vollsichtung war Pflicht* oder *„Nicht im Bestand"

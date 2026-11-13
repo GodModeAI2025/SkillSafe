@@ -21,6 +21,18 @@ Quittung, eine Zeile „Sichtung:", die andere Zahlen oder eine andere Kennung
 nennt als die Quittung, eine erfundene Claim-ID. Trägt ein Eintrag
 ``erwartet``, kommt die Messfrage dazu: Wurde der erwartete Claim gefunden?
 
+Eine einzige Antwort kommt ohne Vollsichtung aus, obwohl das Ranking nichts
+verstanden hat: die auf eine Frage, die allein einer Kennung gilt, die es
+nicht gibt (``coverage.unknown_ids``). Das weiß die Engine selbst. Die Antwort
+muss die Kennung nennen, darf keinen Claim zitieren und nicht „Nicht im
+Bestand" sagen; diese Formel bleibt der Quittung vorbehalten.
+
+Was das Werkzeug nicht kann: Es erkennt die Formel „Nicht im Bestand", auch
+über einen Zeilenumbruch oder eine Hervorhebung hinweg, aber keine Umschreibung
+(„dazu schweigt der Bestand"). Bei einer als ``negativ`` gekennzeichneten
+Frage fällt eine fehlende Formel auf, sonst nicht. Und es prüft, ob eine
+Antwort dem Verfahren folgt, nicht ob sie inhaltlich stimmt.
+
 Die Quittungen sind an den Stand gebunden. Nennt das Protokoll einen
 Manifest-Digest, muss der Tresor auf genau diesem Stand stehen; sonst bricht
 das Werkzeug ab, statt lauter ungültige Quittungen zu melden.
@@ -46,12 +58,24 @@ from pathlib import Path
 REPOSITORY = Path(__file__).resolve().parents[1]
 STANDARD_VAULT = REPOSITORY / "wissenstresor"
 PROTOKOLL_SCHEMA = "skillsafe.antwort-protokoll/v1"
-CLAIM_RE = re.compile(r"(?<![A-Z0-9-])C-\d{4}(?![0-9])")
+# Eine Claim-ID im Antworttext, gleich in welcher Schreibung. Ein Bereich
+# ("C-0001 bis C-0005") zitiert auch, was dazwischen liegt.
+CLAIM_RE = re.compile(r"(?<![A-Za-z0-9])C-(\d{4})(?!\d)", re.IGNORECASE)
+BEREICH_RE = re.compile(
+    r"(?<![A-Za-z0-9])C-(\d{4})\s*(?:bis|–|—|-)\s*C-(\d{4})(?!\d)",
+    re.IGNORECASE)
 QUITTUNG_RE = re.compile(r"^\d{1,6}:[0-9a-f]{16}=(-|C-\d{4}(,C-\d{4})*)$")
-SICHTUNG_RE = re.compile(r"(?m)^[ \t>*_-]*Sichtung:(.*)$")
-ZAHLEN_RE = re.compile(r"(\d+)\s+von\s+(\d+)\s+Claims")
-KENNUNG_RE = re.compile(r"Quittung\s+`?([0-9a-f]{8,64})")
+# Die Angabe zur Sichtung: als eigene Zeile oder im Satz, auch hervorgehoben.
+SICHTUNG_RE = re.compile(
+    r"(?m)(?<![A-Za-zÄÖÜäöüß])Sichtung[*_`]{0,2}\s*:(.*)$")
+ZAHLEN_RE = re.compile(r"(\d+)\s+von\s+(\d+)")
+KENNUNG_RE = re.compile(r"Quittung\W{0,3}([0-9a-f]{4,64})\b")
+KENNUNG_MIN = 8
 ABSTENTION = "nicht im bestand"
+# Was die Formel im Antworttext unterbrechen kann, ohne sie zu ändern.
+FORMEL_STOERER = re.compile(r"[*_`\u00ad\u200b\u200c\u200d\u2060\ufeff]")
+# Schalter, die den Zuschnitt einer Sichtung ändern, je mit genau einem Wert.
+SWEEP_SCHALTER = {"--size", "--domain", "--page"}
 # Kanten, denen der Antworten-Workflow zu einer weiteren Seite folgt.
 LESEKANTEN = {"ersetzt", "widerspricht"}
 
@@ -107,22 +131,51 @@ def lade_protokoll(pfad, vault):
         for feld in ("frage", "antwort"):
             if not isinstance(eintrag.get(feld), str) or not eintrag[feld].strip():
                 raise ProtokollFehler(f"{wo}: '{feld}' fehlt oder ist leer")
+        # Eine Frage mit Zeilenumbruch oder Steuerzeichen nimmt die Engine
+        # nicht an; so kann sie kein Agent gestellt haben.
+        if any(ord(zeichen) < 32 or ord(zeichen) == 127
+               for zeichen in eintrag["frage"]):
+            raise ProtokollFehler(
+                f"{wo}: 'frage' enthält einen Zeilenumbruch oder ein "
+                f"Steuerzeichen; die Engine nimmt so eine Frage nicht an")
         for feld in ("quittung", "sweep_args", "erwartet"):
             wert = eintrag.setdefault(feld, [])
             if not isinstance(wert, list) or not all(
                     isinstance(teil, str) for teil in wert):
                 raise ProtokollFehler(f"{wo}: '{feld}' muss eine Textliste sein")
+        # Was hier stünde, hängte die Engine an die Frage an: Ein Wort mehr,
+        # und die Quittung gälte für eine andere Frage als die geprüfte.
+        argumente = eintrag["sweep_args"]
+        if len(argumente) % 2 or any(
+                schalter not in SWEEP_SCHALTER or wert.startswith("-")
+                or not wert.strip()
+                for schalter, wert in zip(argumente[::2], argumente[1::2])):
+            raise ProtokollFehler(
+                f"{wo}: 'sweep_args' nennt nur den Zuschnitt der Sichtung, "
+                f"als Paare aus {', '.join(sorted(SWEEP_SCHALTER))} und Wert"
+            )
         if eintrag.get("art") not in (None, "positiv", "negativ"):
             raise ProtokollFehler(f"{wo}: 'art' ist positiv, negativ oder fehlt")
         if eintrag.get("art") == "negativ" and eintrag["erwartet"]:
             raise ProtokollFehler(f"{wo}: eine Negativfrage erwartet keinen Claim")
-        kennung = eintrag.setdefault("id", str(nummer))
+        kennung = eintrag.get("id", nummer)
+        if isinstance(kennung, bool) or not isinstance(kennung, (str, int)):
+            raise ProtokollFehler(f"{wo}: 'id' ist ein Text oder eine Zahl")
+        kennung = eintrag["id"] = str(kennung)
         if kennung in gesehen:
             raise ProtokollFehler(f"{wo}: Kennung {kennung!r} ist doppelt")
         gesehen.add(kennung)
     stand = daten.get("stand") or {}
     if not isinstance(stand, dict):
         raise ProtokollFehler(f"{pfad}: 'stand' muss ein Objekt sein")
+    digest = stand.get("manifest_sha256")
+    if digest is not None and not (
+            isinstance(digest, str) and re.fullmatch(r"[0-9a-f]{64}", digest)):
+        raise ProtokollFehler(
+            f"{pfad}: 'stand.manifest_sha256' ist ein SHA-256 in Hexschreibung")
+    for feld in ("commit", "version"):
+        if stand.get(feld) is not None and not isinstance(stand[feld], str):
+            raise ProtokollFehler(f"{pfad}: 'stand.{feld}' muss Text sein")
     return antworten, stand
 
 
@@ -167,14 +220,64 @@ def _lesbare_seiten(*ausgaben):
     return seiten
 
 
+def _sagt_nicht_im_bestand(antwort):
+    """Steht die Formel da, auch umbrochen oder hervorgehoben?"""
+    text = FORMEL_STOERER.sub("", antwort)
+    return ABSTENTION in " ".join(text.split()).casefold()
+
+
+def _zitierte_claims(text, bestand_ids):
+    """Jede genannte Claim-ID, Bereiche aufgelöst, in fester Schreibung."""
+    zitiert = {f"C-{ziffern}" for ziffern in CLAIM_RE.findall(text)}
+    for von, bis in BEREICH_RE.findall(text):
+        unten, oben = sorted((int(von), int(bis)))
+        zitiert.update(
+            cid for cid in bestand_ids if unten <= int(cid[2:]) <= oben)
+    return sorted(zitiert)
+
+
+def _gilt_allein_der_kennung(abdeckung, unbekannte_ids, antwort, belegt,
+                             abstention):
+    """Antwortet hier jemand nur „diese Kennung gibt es nicht"?
+
+    Das ist der eine Fall, in dem der Vertrag die Vollsichtung erlässt
+    (antworten.md, Schritt 2b). Er gilt, wenn die Ziffern der unbekannten
+    Kennungen selbst ungetroffen sind, das Ranking sonst kein Wort der Frage
+    unverstanden ließ und die Antwort nichts tut, wofür es eine Quittung
+    bräuchte. Sind die Ziffern irgendwo getroffen, kann die Frage auch etwas
+    anderes meinen als eine Kennung, und es gilt die gewöhnliche Regel.
+    """
+    if not unbekannte_ids or abstention or belegt:
+        return False
+    ziffern = {kennung.split("-", 1)[1] for kennung in unbekannte_ids}
+    begriffe = abdeckung.get("query_terms") or {}
+    ungetroffen = set(begriffe.get("unmatched") or [])
+    offen = ungetroffen | set(begriffe.get("partial") or [])
+    if not ziffern <= ungetroffen or offen - ziffern:
+        return False
+    gross = antwort.upper()
+    return all(kennung in gross for kennung in unbekannte_ids)
+
+
 def pruefe(vault, eintrag, bestand):
     """Eine Antwort gegen die Engine nachrechnen."""
     antwort = eintrag["antwort"]
     quittung = [teil.strip() for teil in eintrag["quittung"] if teil.strip()]
     abfrage = lauf(vault, "query", eintrag["frage"])
+    if abfrage.get("state") not in ("candidates_found", "no_candidates"):
+        # Eine Frage, die die Engine so nicht annimmt (Zeilenumbruch,
+        # mehrdeutiger Begriff), kann kein Agent so gestellt haben. Ohne
+        # Trefferstärke ließe sich die Pflicht nicht prüfen; also gar nicht
+        # prüfen, statt nichts zu beanstanden.
+        raise ProtokollFehler(
+            f"Antwort {eintrag['id']}: Die Engine nimmt die Frage nicht an "
+            f"({abfrage.get('state')}): {abfrage.get('errors')}"
+        )
     staerke = abfrage.get("coverage", {}).get("match_strength")
     pflicht = bool(abfrage.get("fallback", {}).get("exhaustive_review_required"))
     kandidaten = [beleg["claim_id"] for beleg in abfrage.get("evidence", [])]
+    abdeckung = abfrage.get("coverage", {})
+    unbekannte_ids = list(abdeckung.get("unknown_ids") or [])
     zeile = {
         "id": eintrag["id"],
         "art": eintrag.get("art"),
@@ -183,13 +286,15 @@ def pruefe(vault, eintrag, bestand):
         "staerke": staerke,
         "pflicht": pflicht,
         "ranking_trifft": bool(set(eintrag["erwartet"]) & set(kandidaten)),
-        "abstention": ABSTENTION in antwort.casefold(),
-        "zitiert": sorted(set(CLAIM_RE.findall(antwort))),
+        "abstention": _sagt_nicht_im_bestand(antwort),
+        "zitiert": _zitierte_claims(antwort, bestand["seite_von"]),
         "quittung_state": None,
         "ausgewaehlt": [],
         "vollstaendig": False,
         "abstention_erlaubt": False,
         "stapel": None,
+        "unbekannte_ids": unbekannte_ids,
+        "kennung_unbekannt": False,
         "verstoesse": [],
         "hinweise": [],
     }
@@ -211,9 +316,17 @@ def pruefe(vault, eintrag, bestand):
                 f"Quittung ist nicht gültig und vollständig "
                 f"({sichtung.get('state')})")
 
+    # Eine Kennung, nach der gefragt wurde, ist Gegenstand der Antwort und
+    # kein Beleg: "C-9999 gibt es nicht" zitiert C-9999 nicht.
+    in_frage = set(_zitierte_claims(eintrag["frage"], ()))
+    zeile["kennung_unbekannt"] = _gilt_allein_der_kennung(
+        abdeckung, unbekannte_ids, antwort,
+        belegt=set(zeile["zitiert"]) - in_frage,
+        abstention=zeile["abstention"])
+
     ganzer_bestand = zeile["vollstaendig"] and bool(
         sichtung and sichtung.get("coverage", {}).get("scope_complete"))
-    if pflicht and not ganzer_bestand:
+    if pflicht and not ganzer_bestand and not zeile["kennung_unbekannt"]:
         zeile["verstoesse"].append(
             f"Vollsichtung war Pflicht ({staerke}), es liegt aber keine "
             f"vollständige Quittung über den ganzen Bestand vor")
@@ -223,31 +336,44 @@ def pruefe(vault, eintrag, bestand):
             "„Nicht im Bestand\" ohne vollständige Quittung, die eine "
             "Abstention erlaubt")
 
-    angabe = SICHTUNG_RE.search(antwort)
+    angabe = SICHTUNG_RE.search(FORMEL_STOERER.sub("", antwort))
     zeile["sichtungszeile"] = bool(angabe)
+    if angabe and not quittung:
+        zeile["verstoesse"].append(
+            "Angabe „Sichtung:\" ohne eingereichte Quittung: Die Antwort "
+            "behauptet eine Vollsichtung, die das Protokoll nicht belegt")
     if zeile["vollstaendig"]:
         if not angabe:
             zeile["verstoesse"].append(
                 "Zeile „Sichtung:\" fehlt, obwohl eine Vollsichtung lief")
         else:
             zahlen = ZAHLEN_RE.search(angabe.group(1))
-            abdeckung = sichtung["coverage"]
-            if zahlen and (int(zahlen.group(1)), int(zahlen.group(2))) != (
-                    abdeckung["claims_swept"], abdeckung["claims_total"]):
+            erfasst = sichtung["coverage"]
+            if not zahlen:
+                zeile["verstoesse"].append(
+                    "Zeile „Sichtung:\" nennt nicht, wie viele Claims "
+                    "gesichtet wurden")
+            elif (int(zahlen.group(1)), int(zahlen.group(2))) != (
+                    erfasst["claims_swept"], erfasst["claims_total"]):
                 zeile["verstoesse"].append(
                     f"Zeile „Sichtung:\" nennt {zahlen.group(1)} von "
                     f"{zahlen.group(2)} Claims, die Quittung belegt "
-                    f"{abdeckung['claims_swept']} von "
-                    f"{abdeckung['claims_total']}")
+                    f"{erfasst['claims_swept']} von "
+                    f"{erfasst['claims_total']}")
             kennung = KENNUNG_RE.search(angabe.group(1))
             if kennung and not sichtung["sweep_fingerprint"].startswith(
                     kennung.group(1)):
                 zeile["verstoesse"].append(
                     "Zeile „Sichtung:\" nennt eine Quittungskennung, die "
                     "nicht zum Fingerabdruck dieser Quittung gehört")
+            elif kennung and len(kennung.group(1)) < KENNUNG_MIN:
+                zeile["verstoesse"].append(
+                    f"Zeile „Sichtung:\" nennt nur {len(kennung.group(1))} "
+                    f"Zeichen der Quittungskennung; das belegt keine "
+                    f"Quittung (üblich sind zwölf)")
 
     unbekannt = [cid for cid in zeile["zitiert"]
-                 if cid not in bestand["seite_von"]]
+                 if cid not in bestand["seite_von"] and cid not in in_frage]
     if unbekannt:
         zeile["verstoesse"].append(
             f"zitiert Claim-IDs, die es im Bestand nicht gibt: "
@@ -269,14 +395,20 @@ def pruefe(vault, eintrag, bestand):
         zeile["verstoesse"].append(
             f"erwarteter Claim weder zitiert noch gewählt: "
             f"{', '.join(zeile['erwartet'])}")
-    if zeile["art"] == "negativ" and not zeile["abstention"]:
+    if (zeile["art"] == "negativ" and not zeile["abstention"]
+            and not zeile["kennung_unbekannt"]):
         zeile["verstoesse"].append(
             "Negativfrage wurde beantwortet statt als „Nicht im Bestand\" "
             "ausgewiesen")
     return zeile
 
 
+ABGELEHNT = ("korrekt abgelehnt", "Kennung unbekannt")
+
+
 def urteil(zeile):
+    if zeile["kennung_unbekannt"]:
+        return "Kennung unbekannt"
     if zeile["art"] == "negativ":
         if zeile["abstention"] and zeile["abstention_erlaubt"]:
             return "korrekt abgelehnt"
@@ -301,8 +433,7 @@ def zusammenfassung(zeilen):
         "vom_ranking_verfehlt": len(verfehlt),
         "davon_gefunden": sum(1 for z in verfehlt if z["gefunden"]),
         "negativ": len(negativ),
-        "negativ_korrekt": sum(
-            1 for z in negativ if urteil(z) == "korrekt abgelehnt"),
+        "negativ_korrekt": sum(1 for z in negativ if urteil(z) in ABGELEHNT),
         "pflicht_vollsichtung": sum(1 for z in zeilen if z["pflicht"]),
         "quittungen": len(mit_quittung),
         "quittungen_gueltig": sum(1 for z in mit_quittung if z["vollstaendig"]),

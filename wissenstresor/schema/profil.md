@@ -297,7 +297,7 @@ kein Negativbefund.
 * `invalid_query`, `invalid_vault`, `vault_busy`, `snapshot_changed` —
   fail-closed, immer ohne Evidenz.
 
-Das Ranking `hybrid-local/v3` verwendet ausschließlich Ganzzahlen:
+Das Ranking `hybrid-local/v4` verwendet ausschließlich Ganzzahlen:
 kontrollierte Begriffe/Aliase, lexikalische Token-Treffer, Wortformen nach
 `wortform/v1` und höchstens einen Graph-Hop. `retrieval_complete` bedeutet
 nur, dass dieser Ranking-Scan alle validierten Claims gesehen hat; es ist
@@ -408,7 +408,14 @@ Das Ranking gibt an, wie viel der Frage es erkannt hat. Gerechnet wird nur
 * `coverage.query_terms.content` — die Fragebegriffe: Inhaltstokens ohne
   Funktionswörter und ohne die Ziffern genannter IDs, sofern es die ID im
   Bestand gibt. Eine vertippte oder fremde ID bleibt als Wort stehen und
-  steht dann unter `unmatched`;
+  steht dann unter `unmatched`; `coverage.unknown_ids` nennt sie zusätzlich
+  im Wortlaut (C- und S-IDs, die es nicht gibt, sowie B-IDs, die es nicht
+  oder nicht in der gewählten Welt gibt). Das ist ein Befund des Scripts,
+  kein Urteil des Rankings; was daraus für die Antwort folgt, regelt
+  `references/antworten.md` in Schritt 2b. Stehen die Ziffern zufällig
+  irgendwo im Bestand („S-2026" und eine Jahreszahl), gelten sie als
+  getroffenes Wort; verstanden ist die Kennung damit nicht, und das
+  Ergebnis ist mit einer unbekannten Kennung nie `strong`;
 * `.matched` — exakt oder als Wortform getroffen, in einem **ausgegebenen**
   Claim, in Titel oder Tags seiner Seite, oder als Teil einer getroffenen
   Benennung, deren Begriff in der Ausgabe **vertreten** ist: durch einen
@@ -425,9 +432,16 @@ Das Ranking gibt an, wie viel der Frage es erkannt hat. Gerechnet wird nur
 
 Ein **Anker** ist ein direkt getroffener und in der Ausgabe vertretener
 Begriff, eine genannte und vorhandene C- oder S-ID an einem ausgegebenen
-Claim, oder die ganze Frage als Phrase in einem Claim, sofern sie mindestens
-ein Inhaltswort hat. Eine Frage nur aus Funktionswörtern („nicht", „und")
-steht wörtlich in vielen Claims und ist deshalb nie `strong`.
+Claim, oder die ganze Frage als Phrase in einem Claim, sofern dabei
+mindestens ein Inhaltswort getroffen ist. Eine Frage nur aus Funktionswörtern
+(„nicht", „und") steht wörtlich in vielen Claims und ist deshalb nie
+`strong`; dasselbe gilt für eine Abkürzung wie „IT", die im Bestand nur als
+englisches „it" einer Fundstelle vorkommt.
+
+Jeder direkt getroffene Begriff unter `concepts.matched` trägt
+`represented`: wahr, wenn ein ausgegebener Claim auf einer seiner Seiten liegt
+oder sein Definitions-Claim ist. Ein Begriff kann unvertreten bleiben, wenn
+das Limit knapp ist und kein reiner Kontext-Kandidat weichen kann.
 
 Zum Text eines Claims zählt beim Abgleich seine Fundstelle. Wer nach „§ 4"
 oder einer Anker-ID fragt, findet so die Claims, die dort belegt sind; ein
@@ -436,8 +450,8 @@ Fragebegriff, der nur in der Fundstelle steht, gilt deshalb als getroffen.
 | `coverage.match_strength` | Bedingung |
 |---|---|
 | `none` | kein Kandidat |
-| `strong` | Abdeckung 100 % |
-| `partial` | ein Anker, oder mindestens zwei getroffene Begriffe bei mindestens 60 % |
+| `strong` | Abdeckung 100 %, jeder direkt getroffene Begriff ist vertreten, und die Frage nennt keine unbekannte Kennung |
+| `partial` | nicht `strong`, aber ein Anker, oder mindestens zwei getroffene Begriffe bei mindestens 60 % |
 | `weak` | alles andere |
 | `null` | nicht bewertet: Fehlerzustand (`invalid_query`, `ambiguous`, `invalid_vault`, `vault_busy`, `snapshot_changed`) |
 
@@ -448,7 +462,11 @@ eingefroren. Ein Fehlerzustand ist kein „kein Kandidat": Dort ist die Stärke
 `null` und die Pflicht-Vollsichtung kein Thema, weil es nichts zu sichten
 gibt, solange der Fehler besteht.
 
-`strong` heißt: das Ranking hat jedes Wort der Frage wiedererkannt. Es heißt
+`strong` heißt: das Ranking hat jedes Wort der Frage wiedererkannt, zeigt zu
+jedem genannten Begriff etwas und kennt jede genannte Kennung. Die beiden
+letzten Bedingungen gelten seit `hybrid-local/v4`; bis v3 konnte ein per ID
+genannter Begriff in der Ausgabe fehlen und eine unbekannte Kennung über ihre
+Ziffern als verstanden gelten. Es heißt
 nicht, dass die Kandidaten die Frage beantworten, und es erlaubt nie ein
 „Nicht im Bestand". Auch eine Frage nach etwas, das der Bestand nicht enthält,
 kann `strong` sein, wenn sie nur bekannte Wörter benutzt.
@@ -460,7 +478,9 @@ seine Seite hereinkam. `coverage.omitted_pages` nennt bis zu 20 Seiten, deren
 direkte Kandidaten dem Limit zum Opfer fielen und die nicht unter `pages`
 stehen, je mit `path`, der Zahl ihrer gekürzten direkten `claims` sowie
 `best_claim` und `best_score` des besten davon; gibt es mehr, ist
-`coverage.omitted_pages_truncated` wahr. Eine leere
+`coverage.omitted_pages_truncated` wahr. Ein unvertretener Begriff steht
+dort mit der Seite seines Definitions-Claims, denn der ist ein direkter
+Kandidat. Eine leere
 Liste bei `omitted_direct` größer null heißt: Jeder gekürzte direkte Kandidat
 liegt auf einer Seite, die ohnehin unter `pages` steht und ganz gelesen wird.
 
@@ -521,11 +541,15 @@ vault.py sweep "<frage>" … --receipt <stapel>:<siegel>=<C-nnnn,…|-> …
 
 * **Plan** (ohne Schalter): `state: plan`, der Umfang in `scope`
   (`domains`, `pages`, `pages_in_scope`, `claims_in_scope`, `claims_total`,
-  `complete`) und je Stapel Nummer, Claim- und Seitenzahl sowie
-  `first_claim` und `last_claim`. Der Plan nennt kein Siegel.
-* **Stapel** (`--batch`): `state: batch`, die Seiten des Stapels mit Titel,
-  Domäne, Status, Stand, Tags und je Claim `claim_id`, `kind`, `source_id`
-  und `text`, dazu `seal`. Ausgegeben werden ausschließlich kuratierte
+  `complete`), dazu `batch_size` und `batches_total`, und je Stapel Nummer,
+  Claim- und Seitenzahl sowie `first_claim` und `last_claim`. Der Plan nennt
+  kein Siegel.
+* **Stapel** (`--batch`): `state: batch`, derselbe Kopf aus `scope`,
+  `batch_size` und `batches_total`, die eigene Nummer in `batch`, die Seiten
+  des Stapels mit Titel, Domäne, Status, Stand, Tags und je Claim
+  `claim_id`, `kind`, `source_id` und `text`, dazu `seal`. Wer die Zahl der
+  Stapel nicht schon aus `fallback.sweep.batches` der Abfrage kennt, liest
+  sie am ersten Stapel ab; der Plan-Aufruf ist dafür nicht nötig. Ausgegeben werden ausschließlich kuratierte
   Claims; Regions-Text, Anker-Text und Alttext bleiben untrusted und
   erscheinen nie.
 * **Quittung** (`--receipt`): je Stapel genau ein Eintrag mit Siegel und
@@ -545,13 +569,16 @@ Manifest-Digest, normalisierte Frage, Stapelgröße, Stapelnummer und die
 Claim-IDs des Stapels. Es bindet damit Stand, Frage und Zuschnitt. Ein neuer
 Release, eine andere Frage oder eine andere Stapelgröße machen es ungültig.
 
-Die Frage wird dafür enger normalisiert als für das Ranking: Unicode-NFC,
-Kleinschreibung, Leerraum zu einem Leerzeichen, und an den Rändern jedes
-Worts fallen Anführungszeichen und die Satzzeichen `. , ; : ! ? …` sowie
-Klammern weg; ein Wort, das nur aus solchen Zeichen besteht, entfällt. Mehr
-nicht. Das Ranking darf „Maßen" und „Massen", `<` und `>=`, „C++" und „C#"
-gleich lesen, weil ein Treffer mehr nur ein Kandidat mehr ist. Das Siegel
-darf es nicht: Es sagt, zu welcher Frage geurteilt wurde.
+Die Frage wird dafür viel enger normalisiert als für das Ranking:
+Unicode-NFC, Kleinschreibung, Leerraum zu einem Leerzeichen, typografische
+Anführungszeichen und Striche zu ihrer einfachen Form (`„ “ ” « » ″` zu `"`;
+`‚ ‘ ’ ‹ › ′`, Gravis und Akut zu `'`; Bindestrich-, Halbgeviert-, Geviert-
+und Minuszeichen zu `-`), und Fragezeichen am Ende fallen weg. Mehr nicht:
+Jedes andere Zeichen bleibt stehen, auch ein Komma oder ein Punkt. Das Ranking darf „Maßen" und „Massen", `<` und `>=`,
+„C++" und „C#" gleich lesen, weil ein Treffer mehr nur ein Kandidat mehr ist.
+Das Siegel darf es nicht: Es sagt, zu welcher Frage geurteilt wurde. Bis
+v0.14.0 fielen Satzzeichen an jedem Wortrand weg; damit teilten sich
+`a != b` und `a = b` ein Siegel, ebenso `.5` und `5`.
 
 Zustände der Quittungsprüfung:
 

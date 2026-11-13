@@ -144,6 +144,27 @@ class AntwortCheckTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1, result.stdout)
         self.assertIn("ohne vollständige Quittung", result.stdout)
         self.assertIn("Vollsichtung war Pflicht", result.stdout)
+        # Abgelehnt ist nicht korrekt abgelehnt: Ohne Deckung zählt die
+        # Antwort auch in der Zusammenfassung nicht mit.
+        self.assertIn("abgelehnt ohne Deckung", result.stdout)
+        self.assertIn("korrekt abgelehnt 0", result.stdout)
+        # Dasselbe mit einer gültigen Quittung über nur einen Teil des
+        # Bestands: Sie erlaubt keine Abstention.
+        teil = json.loads(_cli(
+            self.root, "sweep", NEGATIV, "--domain", "demo-extern",
+            "--batch", "1").stdout)
+        teilweise = self.pruefe([{
+            "id": "N1", "art": "negativ", "frage": NEGATIV,
+            "sweep_args": ["--domain", "demo-extern"],
+            "quittung": [f"1:{teil['seal']}=-"],
+            "antwort": "Nicht im Bestand.\nSichtung: Domäne demo-extern, "
+                       "2 von 28 Claims",
+        }], argumente=["--json"])
+        self.assertEqual(teilweise.returncode, 1, teilweise.stdout)
+        daten = json.loads(teilweise.stdout)
+        self.assertEqual(daten["zeilen"][0]["quittung_state"], "sweep_complete")
+        self.assertFalse(daten["zeilen"][0]["abstention_erlaubt"])
+        self.assertEqual(daten["zusammenfassung"]["negativ_korrekt"], 0)
 
     def test_a_skipped_mandatory_sweep_is_found_even_in_a_right_answer(self):
         """Richtig geraten ist nicht gesichtet: 'weak' verlangt die Quittung."""
@@ -219,6 +240,31 @@ class AntwortCheckTests(unittest.TestCase):
         self.assertIn("die es im Bestand nicht gibt: C-9999", result.stdout)
         self.assertIn("erwarteter Claim weder zitiert noch gewählt: C-0002",
                       result.stdout)
+        # Eine Kennung, nach der gefragt wurde, ist Gegenstand und kein
+        # Zitat: "C-9999 gibt es nicht" erfindet keinen Claim.
+        quittung, leer = self.sichtung("Was steht in C-9999?")
+        erfragt = self.pruefe([{
+            "id": "N2", "art": "negativ", "frage": "Was steht in C-9999?",
+            "quittung": quittung,
+            "antwort": "Nicht im Bestand. Einen Claim C-9999 gibt es nicht.\n"
+                       + self.zeile_sichtung(leer),
+        }])
+        self.assertEqual(erfragt.returncode, 0, erfragt.stdout)
+        # Gefunden ist ein erwarteter Claim auch dann, wenn die Quittung ihn
+        # wählt und der Antworttext ihn nicht beim Namen nennt.
+        gewaehlt, voll = self.sichtung(UMSCHREIBUNG, {"C-0002"})
+        ohne_nennung = self.pruefe([{
+            "id": "P2", "art": "positiv", "frage": UMSCHREIBUNG,
+            "erwartet": ["C-0002"], "quittung": gewaehlt,
+            "antwort": "Der Dateipfad ist die Identität eines Konzepts.\n"
+                       + self.zeile_sichtung(voll),
+        }], argumente=["--json"])
+        self.assertEqual(
+            ohne_nennung.returncode, 0, ohne_nennung.stdout + ohne_nennung.stderr)
+        zeile = json.loads(ohne_nennung.stdout)["zeilen"][0]
+        self.assertEqual(zeile["zitiert"], [])
+        self.assertEqual(zeile["ausgewaehlt"], ["C-0002"])
+        self.assertTrue(zeile["gefunden"])
         # Eine Negativfrage zu beantworten ist ebenfalls ein Verstoß.
         beantwortet = self.pruefe([{
             "id": "N1", "art": "negativ", "frage": NEGATIV,
@@ -227,6 +273,207 @@ class AntwortCheckTests(unittest.TestCase):
         }])
         self.assertEqual(beantwortet.returncode, 1, beantwortet.stdout)
         self.assertIn("Negativfrage wurde beantwortet", beantwortet.stdout)
+
+    def test_an_unknown_identifier_is_answered_without_a_sweep(self):
+        """Dass es C-9999 nicht gibt, weiß die Engine: keine Vollsichtung."""
+        frage = "Was steht in C-9999?"
+        sauber = self.pruefe([{
+            "id": "K1", "art": "negativ", "frage": frage,
+            "antwort": "Die Kennung C-9999 gibt es im Bestand nicht. Falls "
+                       "eine andere gemeint war, bitte nennen.",
+        }], argumente=["--json"])
+        self.assertEqual(sauber.returncode, 0, sauber.stdout + sauber.stderr)
+        daten = json.loads(sauber.stdout)
+        zeile = daten["zeilen"][0]
+        # Das Ranking hat nichts verstanden, die Pflicht stünde also an ...
+        self.assertTrue(zeile["pflicht"])
+        self.assertEqual(zeile["unbekannte_ids"], ["C-9999"])
+        # ... aber die Frage gilt allein der Kennung.
+        self.assertTrue(zeile["kennung_unbekannt"])
+        self.assertEqual(daten["zusammenfassung"]["negativ_korrekt"], 1)
+        self.assertEqual(daten["zusammenfassung"]["quittungen"], 0)
+
+        faelle = {
+            "Formel ohne Quittung": (
+                frage, "Nicht im Bestand: C-9999.",
+                "ohne vollständige Quittung"),
+            "Kennung nicht genannt": (
+                frage, "Diese Kennung gibt es nicht.",
+                "Vollsichtung war Pflicht"),
+            "stützt sich auf einen Claim": (
+                frage, "C-9999 gibt es nicht; gemeint ist wohl C-0001.",
+                "Vollsichtung war Pflicht"),
+            "fragt auch nach einer Sache": (
+                "Was sagt C-9999 zum Urlaubsanspruch in Teilzeit?",
+                "Die Kennung C-9999 gibt es im Bestand nicht.",
+                "Vollsichtung war Pflicht"),
+            # Die Ziffern stehen in einer Fundstelle (A-0007): Dann kann
+            # etwas anderes gemeint sein als eine Kennung.
+            "Ziffern stehen im Bestand": (
+                "S-0007", "Die Kennung S-0007 gibt es im Bestand nicht.",
+                "Vollsichtung war Pflicht"),
+        }
+        for name, (gefragt, antwort, meldung) in faelle.items():
+            with self.subTest(fall=name):
+                result = self.pruefe([{
+                    "id": "K1", "art": "negativ", "frage": gefragt,
+                    "antwort": antwort}])
+                self.assertEqual(result.returncode, 1, result.stdout)
+                self.assertIn(meldung, result.stdout)
+
+    def test_form_does_not_fool_the_tool(self):
+        """Umbruch, Hervorhebung, Doppelpunkt: derselbe Verstoß, andere Form."""
+        quittung, fertig = self.sichtung(NEGATIV)
+        abdruck = fertig["sweep_fingerprint"]
+        ohne_quittung = {
+            "Formel umbrochen": (
+                "Es gibt vier Stufen (C-0305). Wer sie vergibt, ist nicht im"
+                "\nBestand.", "ohne vollständige Quittung"),
+            "Formel hervorgehoben": (
+                "Es gibt vier Stufen (C-0305). Der Rest ist **nicht** im "
+                "_Bestand_.", "ohne vollständige Quittung"),
+            "Formel mit geschütztem Leerzeichen": (
+                "Nicht\u00a0im\u00a0Bestand.", "ohne vollständige Quittung"),
+            "behauptete Sichtung": (
+                "Es gibt vier Stufen (C-0305).\nSichtung: 28 von 28 Claims, "
+                "Quittung 0123456789ab",
+                "ohne eingereichte Quittung"),
+        }
+        for name, (antwort, meldung) in ohne_quittung.items():
+            with self.subTest(fall=name):
+                result = self.pruefe([{
+                    "id": "A1", "frage": BEGRIFF, "antwort": antwort}])
+                self.assertEqual(result.returncode, 1, result.stdout)
+                self.assertIn(meldung, result.stdout)
+
+        mit_quittung = {
+            "Zahlen ohne das Wort Claims": (
+                f"Nicht im Bestand.\nSichtung: 5 von 28, Quittung: {abdruck[:12]}",
+                "nennt 5 von 28 Claims"),
+            "Kennung hinter Doppelpunkt": (
+                "Nicht im Bestand.\nSichtung: 28 von 28 Claims, Quittung: "
+                "ffffffffffff", "nicht zum Fingerabdruck"),
+            "kurze fremde Kennung": (
+                "Nicht im Bestand.\nSichtung: 28 von 28 Claims, Quittung dead",
+                "nicht zum Fingerabdruck"),
+            "kurze eigene Kennung": (
+                f"Nicht im Bestand.\nSichtung: 28 von 28 Claims, Quittung "
+                f"{abdruck[:5]}", "nur 5 Zeichen"),
+            "keine Zahlen": (
+                f"Nicht im Bestand.\nSichtung: vollständig, Quittung "
+                f"{abdruck[:12]}", "nennt nicht, wie viele Claims"),
+        }
+        for name, (antwort, meldung) in mit_quittung.items():
+            with self.subTest(fall=name):
+                result = self.pruefe([{
+                    "id": "N1", "art": "negativ", "frage": NEGATIV,
+                    "quittung": quittung, "antwort": antwort}])
+                self.assertEqual(result.returncode, 1, result.stdout)
+                self.assertIn(meldung, result.stdout)
+
+        # Dieselbe Angabe in erlaubter Form: im Satz, hervorgehoben, im Zitat.
+        angabe = f"28 von 28 Claims, Quittung {abdruck[:12]}"
+        for name, antwort in {
+            "im Satz": f"Nicht im Bestand. Sichtung: {angabe}. Soll ich "
+                       f"eine Quelle aufnehmen?",
+            "fett": f"Nicht im Bestand.\n**Sichtung**: {angabe}",
+            "fett mit Doppelpunkt": f"Nicht im Bestand.\n**Sichtung:** {angabe}",
+            "im Zitat": f"> Nicht im Bestand.\n> Sichtung: {angabe}",
+            "Kennung in Backticks": f"Nicht im Bestand.\nSichtung: 28 von 28 "
+                                    f"Claims, Quittung `{abdruck[:12]}`",
+        }.items():
+            with self.subTest(form=name):
+                result = self.pruefe([{
+                    "id": "N1", "art": "negativ", "frage": NEGATIV,
+                    "quittung": quittung, "antwort": antwort}])
+                self.assertEqual(
+                    result.returncode, 0, result.stdout + result.stderr)
+
+    def test_ranges_and_lowercase_ids_are_citations(self):
+        """„C-0001 bis C-0005" zitiert C-0003, und „c-9998" ist erfunden."""
+        bereich = self.pruefe([{
+            "id": "R1", "frage": "Was ist OKF?", "erwartet": ["C-0003"],
+            "antwort": "OKF v0.1 ist eine Spezifikation von Google (C-0001 "
+                       "bis C-0005); maßgeblich ist v0.2 (C-0301).",
+        }], argumente=["--json"])
+        self.assertEqual(bereich.returncode, 0, bereich.stdout + bereich.stderr)
+        zeile = json.loads(bereich.stdout)["zeilen"][0]
+        self.assertEqual(
+            zeile["zitiert"],
+            ["C-0001", "C-0002", "C-0003", "C-0004", "C-0005", "C-0301"])
+        self.assertTrue(zeile["gefunden"])
+        erfunden = self.pruefe([{
+            "id": "R2", "frage": BEGRIFF, "erwartet": ["C-0305"],
+            "antwort": "Laut Bestand gibt es vier Stufen "
+                       "(C-0305-C-9999, c-9998).",
+        }])
+        self.assertEqual(erfunden.returncode, 1, erfunden.stdout)
+        self.assertIn("die es im Bestand nicht gibt: C-9998, C-9999",
+                      erfunden.stdout)
+
+    def test_the_protocol_cannot_smuggle_another_question(self):
+        """sweep_args nennt den Zuschnitt, sonst nichts.
+
+        Die Engine hängt jedes weitere Wort an die Frage an. Mit freien
+        sweep_args prüfte das Werkzeug die Trefferstärke der einen Frage und
+        die Quittung einer anderen.
+        """
+        lang = NEGATIV.rstrip("?") + " laut OKF?"
+        quittung, fertig = self.sichtung(lang)
+        erste, rest = lang.split(" ", 4)[:4], lang.split(" ", 4)[4]
+        for name, argumente in {
+            "Wörter der Frage": rest.split(),
+            "fremder Schalter": ["--receipt", quittung[0]],
+            "Schalter ohne Wert": ["--size"],
+            "Wert ist ein Schalter": ["--domain", "--batch"],
+        }.items():
+            with self.subTest(fall=name):
+                result = self.pruefe([{
+                    "id": "S1", "art": "negativ", "frage": " ".join(erste),
+                    "sweep_args": argumente, "quittung": quittung,
+                    "antwort": "Nicht im Bestand.\n"
+                               + self.zeile_sichtung(fertig)}])
+                self.assertEqual(result.returncode, 2, result.stdout)
+                self.assertIn("nur den Zuschnitt der Sichtung", result.stdout)
+        # Eine Frage, die die Engine nicht annimmt, wird nicht geprüft und
+        # deshalb auch nicht durchgewinkt.
+        umbruch = self.pruefe([{
+            "id": "L1", "frage": "Wie hoch ist der Urlaubsanspruch\nin "
+                                 "Teilzeit?",
+            "antwort": "30 Tage, anteilig nach Arbeitstagen."}])
+        self.assertEqual(umbruch.returncode, 2, umbruch.stdout)
+        self.assertIn("Zeilenumbruch", umbruch.stdout)
+        zu_lang = self.pruefe([{
+            "id": "L2", "frage": "Wie hoch ist der Urlaubsanspruch? " * 40,
+            "antwort": "30 Tage."}])
+        self.assertEqual(zu_lang.returncode, 2, zu_lang.stdout)
+        self.assertIn("nimmt die Frage nicht an (invalid_query)",
+                      zu_lang.stdout)
+        self.assertIn("Antwort L2", zu_lang.stdout)
+
+    def test_a_partial_scope_never_satisfies_the_mandatory_sweep(self):
+        """Pflicht heißt: der ganze Bestand. Eine Domäne genügt nicht."""
+        teil = json.loads(_cli(
+            self.root, "sweep", UMSCHREIBUNG, "--domain", "demo-okf",
+            "--size", "200", "--batch", "1").stdout)
+        quittung = [f"1:{teil['seal']}=C-0002"]
+        fertig = json.loads(_cli(
+            self.root, "sweep", UMSCHREIBUNG, "--domain", "demo-okf",
+            "--size", "200", "--receipt", *quittung).stdout)
+        self.assertEqual(fertig["state"], "sweep_complete", fertig)
+        self.assertFalse(fertig["abstention"]["allowed"])
+        result = self.pruefe([{
+            "id": "P1", "art": "positiv", "frage": UMSCHREIBUNG,
+            "erwartet": ["C-0002"], "quittung": quittung,
+            "sweep_args": ["--domain", "demo-okf", "--size", "200"],
+            "antwort": "Der Dateipfad ist die Identität (C-0002).\n"
+                       "Sichtung: Domäne demo-okf, 26 von 28 Claims, Quittung "
+                       + fertig["sweep_fingerprint"][:12],
+        }])
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("keine vollständige Quittung über den ganzen Bestand",
+                      result.stdout)
+        self.assertIn("gefunden", result.stdout)
 
     def test_several_batches_and_a_cited_neighbour_page(self):
         """Drei Stapel, und ein Zitat von der Nachfolgeseite ist kein Hinweis."""
@@ -267,10 +514,30 @@ class AntwortCheckTests(unittest.TestCase):
         self.assertIn("liegt im Skill-Ordner", drinnen.stdout)
 
         kaputt = self.basis / "kaputt.json"
+        gut = {"frage": BEGRIFF, "antwort": "Vier Stufen (C-0305)."}
         for inhalt in ('{"schema": "anderes/v1", "antworten": []}',
                        json.dumps({"schema": SCHEMA, "antworten": [
                            {"frage": "x", "antwort": ""}]}),
-                       "kein json"):
+                       "kein json",
+                       # Felder vom falschen Typ sind ein unbrauchbares
+                       # Protokoll, kein Absturz.
+                       json.dumps({"schema": SCHEMA, "antworten": [
+                           dict(gut, id=["A"])]}),
+                       json.dumps({"schema": SCHEMA, "antworten": [
+                           dict(gut, id=None)]}),
+                       json.dumps({"schema": SCHEMA, "antworten": [
+                           dict(gut, id=1), dict(gut, id="1")]}),
+                       json.dumps({"schema": SCHEMA, "antworten": [gut],
+                                   "stand": {"manifest_sha256": 123}}),
+                       json.dumps({"schema": SCHEMA, "antworten": [gut],
+                                   "stand": {"manifest_sha256": "0" * 64,
+                                             "commit": 5}}),
+                       json.dumps({"schema": SCHEMA, "antworten": [
+                           dict(gut, frage="Was ist\u0000 OKF?")]}),
+                       # Eine Negativfrage erwartet keinen Claim: Beides
+                       # zugleich wäre ein Widerspruch im Protokoll.
+                       json.dumps({"schema": SCHEMA, "antworten": [
+                           dict(gut, art="negativ", erwartet=["C-0305"])]})):
             kaputt.write_text(inhalt, encoding="utf-8")
             result = subprocess.run(
                 [sys.executable, "-B", str(TOOL), "--vault", str(self.root),
@@ -315,7 +582,10 @@ class AntwortCheckTests(unittest.TestCase):
         finally:
             sys.dont_write_bytecode = vorher
         dateien = sorted((REPOSITORY / "tests/e2e").glob("runde-*.json"))
-        self.assertGreaterEqual(len(dateien), 2)
+        self.assertGreaterEqual(len(dateien), 3)
+        runden = [json.loads(datei.read_text(encoding="utf-8"))["runde"]
+                  for datei in dateien]
+        self.assertEqual(runden, list(range(1, len(dateien) + 1)))
         for datei in dateien:
             with self.subTest(datei=datei.name):
                 antworten, stand = tool.lade_protokoll(datei, self.root)
@@ -332,6 +602,37 @@ class AntwortCheckTests(unittest.TestCase):
                     1 for eintrag in antworten if eintrag["quittung"]))
                 self.assertEqual(ergebnis["verstoesse"], 0)
                 self.assertEqual(ergebnis["ohne_verstoss"], len(antworten))
+                # Was sich ohne den alten Stand nachzählen lässt, wird
+                # nachgezählt: 'ergebnis' ist sonst nur eine Behauptung, an
+                # die README und Landingpage gebunden sind.
+                gefunden = 0
+                for eintrag in antworten:
+                    gewaehlt = set()
+                    for teil in eintrag["quittung"]:
+                        self.assertRegex(teil, tool.QUITTUNG_RE)
+                        urteil = teil.split("=", 1)[1]
+                        if urteil != "-":
+                            gewaehlt.update(urteil.split(","))
+                    zitiert = set(tool._zitierte_claims(eintrag["antwort"], ()))
+                    if set(eintrag["erwartet"]) & (zitiert | gewaehlt):
+                        gefunden += 1
+                    if eintrag["quittung"]:
+                        self.assertRegex(
+                            eintrag["antwort"], tool.SICHTUNG_RE, eintrag["id"])
+                self.assertEqual(ergebnis["positiv_gefunden"], gefunden)
+                abgelehnt = sum(
+                    1 for eintrag in antworten
+                    if eintrag.get("art") == "negativ"
+                    and tool._sagt_nicht_im_bestand(eintrag["antwort"]))
+                self.assertEqual(ergebnis["negativ_korrekt"], abgelehnt)
+                self.assertEqual(
+                    ergebnis["quittungen_gueltig"], ergebnis["quittungen"])
+                self.assertLessEqual(
+                    ergebnis["vom_ranking_verfehlt"], ergebnis["positiv"])
+                self.assertEqual(
+                    ergebnis["davon_gefunden"], ergebnis["vom_ranking_verfehlt"])
+                self.assertLessEqual(
+                    ergebnis["pflicht_vollsichtung"], len(antworten))
                 # Gegen den heutigen Stand verweigert das Werkzeug die Prüfung,
                 # statt lauter ungültige Quittungen zu melden.
                 result = subprocess.run(

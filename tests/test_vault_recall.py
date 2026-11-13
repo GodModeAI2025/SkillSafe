@@ -28,6 +28,18 @@ GOLD = REPOSITORY / "tests/gold/recall-demo.json"
 # ist die ehrlichere. Ihre Fragen schrieb ein Agent, der nur die Claims
 # kannte, und sie meiden deren Wortlaut mit Absicht.
 MIN_RECALL = {"entwicklung": 60, "kontrolle": 25}
+# Die veröffentlichte Messung, Limit 8: Fragen, direkt gefunden, Pflicht,
+# Hinweis, still, Seite gelesen. README und Landingpage nennen dieselben
+# Zahlen (tools/check_docs.py). Ändert sie eine Entscheidung am Ranking,
+# ändern sich Profilnummer, diese Zeilen und der Schnappschuss der Rangfolge
+# gemeinsam; ein Versehen fällt hier auf.
+MESSUNG = {
+    "entwicklung": (28, 19, 9, 0, 0, 22),
+    "kontrolle": (56, 18, 37, 1, 0, 38),
+}
+# Negativfragen: Anzahl, davon Pflicht-Vollsichtung, davon 'strong'.
+MESSUNG_NEGATIV = (27, 16, 1)
+DOCS_TOOL = REPOSITORY / "tools/check_docs.py"
 
 
 def _cli(root, *args):
@@ -97,6 +109,20 @@ class VaultCase(unittest.TestCase):
     def release(self):
         result = self.run_cli("release", "patch")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def add_concept(self, concept_id, preferred, aliases, definition_claim,
+                    world="BW-0001"):
+        """Einen Begriff in die Begriffswelten der eigenen Kopie eintragen."""
+        pfad = self.root / "schema/begriffswelten.json"
+        daten = json.loads(pfad.read_text(encoding="utf-8"))
+        daten["concepts"].append({
+            "id": concept_id, "world": world, "preferred": preferred,
+            "aliases": list(aliases), "broader": [], "related": [],
+            "definition_claim": definition_claim,
+        })
+        pfad.write_text(
+            json.dumps(daten, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8")
 
     def claim_ids_on_disk(self):
         ids = []
@@ -450,6 +476,58 @@ class QuerySignalTests(VaultCase):
                 scores = [item["score"] for item in payload["evidence"]]
                 self.assertEqual(scores, sorted(scores, reverse=True))
 
+    def test_who_moves_up_and_who_gives_way(self):
+        """Drei Teile der Nachrück-Regel, die sich einzeln verstellen ließen.
+
+        Für einen Begriff rückt sein Definitions-Claim nach, nicht irgendein
+        Claim, der sein Wort trägt. Weichen muss der rangniedrigste reine
+        Kontext-Kandidat, aber nie der letzte gezeigte Claim seiner Seite.
+        Und ein Wort, das eine vertretene Benennung trägt, holt keinen
+        weiteren Träger herein.
+        """
+        _, paar = self.query("Wissensgraph und Trust-Tier")
+        belege = {b["claim_id"]: b["reasons"] for b in paar["evidence"]}
+        self.assertIn("concept-definition:B-0003", belege["C-0002"])
+        self.assertIn("concept-definition:B-0006", belege["C-0305"])
+        self.assertEqual(
+            [b["claim_id"] for b in paar["evidence"]],
+            ["C-0305", "C-0301", "C-0302", "C-0303", "C-0304", "C-0306",
+             "C-0307", "C-0002"])
+
+        # fakten.md steht mit genau einem Claim in der Auswahl. Für "10"
+        # rückt C-0202 nach; weichen muss ein Kontext-Claim einer Seite, die
+        # danach noch vertreten ist, nicht C-0290.
+        _, zehn = self.query("Wissenstresor 10", "--limit", "10")
+        self.assertEqual(
+            [b["claim_id"] for b in zehn["evidence"]],
+            ["C-0005", "C-0001", "C-0002", "C-0003", "C-0004", "C-0104",
+             "C-0101", "C-0102", "C-0290", "C-0202"])
+        self.assertIn("knowledge/demo-okf/fakten.md",
+                      [seite["path"] for seite in zehn["pages"]])
+        self.assertEqual(zehn["coverage"]["query_terms"]["unmatched"], [])
+
+        # Eine Benennung "Vermieter" auf fakten.md; das Wort selbst steht nur
+        # in C-0402 auf einer anderen Seite.
+        self.use_private_vault()
+        self.add_concept("B-0100", "Vermieter", [], "C-0290")
+        fakten = self.root / "knowledge/demo-okf/fakten.md"
+        kopf = fakten.read_text(encoding="utf-8")
+        self.assertEqual(kopf.count("\nconcepts: [B-0002]\n"), 1)
+        fakten.write_text(kopf.replace(
+            "\nconcepts: [B-0002]\n",
+            "\nconcepts: [B-0002, B-0100]\n"), encoding="utf-8")
+        self.release()
+        _, benannt = self.query("Vermieter", "--limit", "2")
+        self.assertEqual(
+            [b["claim_id"] for b in benannt["evidence"]], ["C-0290", "C-0291"])
+        self.assertTrue(benannt["concepts"]["matched"][0]["represented"])
+        self.assertEqual(
+            benannt["coverage"]["query_terms"]["matched"], ["vermieter"])
+        # Der wörtliche Träger ist gekürzt, und das steht da.
+        self.assertEqual(
+            [seite["best_claim"]
+             for seite in benannt["coverage"]["omitted_pages"]], ["C-0402"])
+
     def test_a_filler_word_never_evicts_a_real_hit(self):
         """Der Befund der Kontrollmessung, als Regressionstest.
 
@@ -501,6 +579,37 @@ class QuerySignalTests(VaultCase):
             + zahlen["omitted_context"],
         )
         self.assertGreater(zahlen["omitted_direct"], 0)
+        # Die Zähler im Wortlaut. Vertauscht oder verrutscht sagten sie dem
+        # Modell das Gegenteil: 'direct' sind gekürzte Claims mit eigenem
+        # Treffer, 'context' solche, die nur über ihre Seite Kandidat waren.
+        self.assertEqual(zahlen, {
+            "total": 28, "returned": 1,
+            "omitted_direct": 7, "omitted_context": 20})
+        self.assertEqual(voll["coverage"]["candidates"], {
+            "total": 28, "returned": 20,
+            "omitted_direct": 0, "omitted_context": 8})
+        # Genannt werden nur Seiten, die einen gekürzten eigenen Treffer
+        # tragen und nicht ohnehin unter 'pages' stehen, die beste zuerst.
+        self.assertEqual(knapp["coverage"]["omitted_pages"], [
+            {"path": "knowledge/demo-okf/okf-v02.md", "claims": 4,
+             "best_claim": "C-0301", "best_score": 160},
+            {"path": "knowledge/demo-extern/mietminderung.md", "claims": 1,
+             "best_claim": "C-0401", "best_score": 20},
+        ])
+        self.assertFalse(knapp["coverage"]["omitted_pages_truncated"])
+        self.assertEqual(voll["coverage"]["omitted_pages"], [])
+        # Der Aufwand der Vollsichtung steht auch dann da, wenn es
+        # Kandidaten gibt.
+        self.assertEqual(knapp["fallback"]["sweep"], {
+            "claims": 28, "batch_size": 40, "batches": 1})
+        # Mehrere unverstandene Wörter stehen alle da, nicht nur das erste.
+        _, mehrere = self.query("Wann erscheint OKF v1.0?")
+        self.assertEqual(mehrere["coverage"]["query_terms"], {
+            "content": ["0", "erscheint", "okf", "v1"], "matched": ["okf"],
+            "partial": [], "unmatched": ["0", "erscheint", "v1"]})
+        self.assertEqual(mehrere["coverage"]["candidates"], {
+            "total": 26, "returned": 8,
+            "omitted_direct": 1, "omitted_context": 17})
         # Ein Platz, zwei Themen: die Seite, die dem Limit zum Opfer fiel,
         # wird beim Namen genannt.
         gezeigt = {page["path"] for page in knapp["pages"]}
@@ -530,15 +639,19 @@ class QuerySignalTests(VaultCase):
         Übrig blieb ein Allerweltswort, das irgendwo traf, und das Ergebnis
         hieß 'strong': jedes Wort wiedererkannt.
         """
-        faelle = [("Was steht in C-9999?", "9999"),
-                  ("Was steht laut S-9999?", "9999"),
-                  ("Was steht zu B-9999?", "9999")]
-        for frage, rest in faelle:
+        faelle = [("Was steht in C-9999?", "9999", ["C-9999"]),
+                  ("Was steht laut S-9999?", "9999", ["S-9999"]),
+                  ("Was steht zu B-9999?", "9999", ["B-9999"])]
+        for frage, rest, unbekannt in faelle:
             with self.subTest(frage=frage):
                 _, payload = self.query(frage)
                 begriffe = payload["coverage"]["query_terms"]
                 self.assertIn(rest, begriffe["content"])
                 self.assertIn(rest, begriffe["unmatched"])
+                # Ob es eine Kennung gibt, entscheidet das Script: Das steht
+                # im Wortlaut da, nicht nur als ungetroffene Ziffernfolge.
+                self.assertEqual(
+                    payload["coverage"]["unknown_ids"], unbekannt)
                 self.assertNotEqual(
                     payload["coverage"]["match_strength"], "strong")
                 self.assertTrue(
@@ -547,6 +660,17 @@ class QuerySignalTests(VaultCase):
         _, bekannt = self.query("Was steht in C-0001?")
         self.assertEqual(
             bekannt["coverage"]["query_terms"]["content"], ["steht"])
+        self.assertEqual(bekannt["coverage"]["unknown_ids"], [])
+        # Bekannte und unbekannte Kennung in einer Frage: Die bekannte ist
+        # ein Anker, die unbekannte steht trotzdem da und verhindert 'strong'.
+        _, beide = self.query("Was steht in c-9999 und in C-0001?")
+        self.assertEqual(beide["coverage"]["unknown_ids"], ["C-9999"])
+        self.assertEqual(beide["coverage"]["match_strength"], "partial")
+        self.assertIn("9999", beide["coverage"]["query_terms"]["unmatched"])
+        self.assertEqual(beide["evidence"][0]["claim_id"], "C-0001")
+        _, fehler = self.query("C-9999", "--world", "BW-9999")
+        self.assertEqual(fehler["state"], "invalid_query")
+        self.assertEqual(fehler["coverage"]["unknown_ids"], [])
         self.assertEqual(bekannt["evidence"][0]["claim_id"], "C-0001")
         # Eine B-ID der gewählten Welt bleibt ebenfalls ein Anker.
         _, welt = self.query("B-0001", "--world", "BW-0001")
@@ -598,6 +722,106 @@ class QuerySignalTests(VaultCase):
                             "concepts", []) for pfad in seiten))
                     self.assertTrue(vertreten, (frage, cid))
         self.assertGreater(geprueft, 20)
+
+    def test_strong_needs_every_named_concept_and_every_id(self):
+        """'strong' heißt: nichts an der Frage blieb unverstanden.
+
+        Zwei Wege blieben nach hybrid-local/v3 offen, beide über Dinge, die
+        kein Inhaltswort beisteuern. Ein Begriff, der per ID genannt ist
+        (oder dessen Benennung nur aus Funktionswörtern besteht), fehlte in
+        der Ausgabe, und das Ergebnis hieß trotzdem 'strong'. Und die Ziffern
+        einer Kennung, die es nicht gibt, standen zufällig irgendwo im
+        Bestand.
+        """
+        # B-0004 ist genannt, aber die acht Plätze füllt die Seite der Quelle.
+        _, payload = self.query("S-0004 OKF B-0004")
+        begriffe = {b["id"]: b for b in payload["concepts"]["matched"]}
+        self.assertEqual(begriffe["B-0004"]["match"], "id")
+        self.assertFalse(begriffe["B-0004"]["represented"])
+        self.assertTrue(begriffe["B-0001"]["represented"])
+        self.assertEqual(payload["coverage"]["term_coverage_percent"], 100)
+        self.assertEqual(payload["coverage"]["match_strength"], "partial")
+        # Seine Seite steht dann unter den gekürzten, damit sie gelesen wird.
+        self.assertIn(
+            "knowledge/demo-okf/ontologie-strategie.md",
+            [seite["path"] for seite in payload["coverage"]["omitted_pages"]])
+        _, knapp = self.query("C-0401 B-0004", "--limit", "1")
+        self.assertEqual(
+            [b["claim_id"] for b in knapp["evidence"]], ["C-0401"])
+        self.assertEqual(knapp["coverage"]["match_strength"], "partial")
+        self.assertFalse(knapp["concepts"]["matched"][0]["represented"])
+        # Ist der Begriff vertreten, bleibt es bei 'strong'.
+        _, allein = self.query("B-0004")
+        self.assertTrue(allein["concepts"]["matched"][0]["represented"])
+        self.assertEqual(allein["coverage"]["match_strength"], "strong")
+        self.assertEqual(allein["coverage"]["omitted_pages"], [])
+
+        # Eine Benennung ohne Inhaltswort, in einem eigenen Bestand. Mit
+        # acht Plätzen rückt ihr Definitions-Claim nach; mit einem Platz kann
+        # nichts weichen, und der Begriff bleibt unvertreten.
+        self.use_private_vault()
+        self.add_concept("B-0100", "Soll und Haben", [], "C-0291")
+        fakten = self.root / "knowledge/demo-okf/fakten.md"
+        kopf = fakten.read_text(encoding="utf-8")
+        self.assertEqual(kopf.count("\nconcepts: [B-0002]\n"), 1)
+        fakten.write_text(kopf.replace(
+            "\nconcepts: [B-0002]\n",
+            "\nconcepts: [B-0002, B-0100]\n"), encoding="utf-8")
+        self.release()
+        _, voll = self.query("OKF Soll und Haben")
+        self.assertEqual(
+            {b["id"]: b["represented"] for b in voll["concepts"]["matched"]},
+            {"B-0001": True, "B-0100": True})
+        self.assertIn("C-0291", [b["claim_id"] for b in voll["evidence"]])
+        self.assertEqual(voll["coverage"]["match_strength"], "strong")
+        _, einer = self.query("OKF Soll und Haben", "--limit", "1")
+        self.assertEqual(
+            {b["id"]: b["represented"] for b in einer["concepts"]["matched"]},
+            {"B-0001": True, "B-0100": False})
+        self.assertEqual(einer["coverage"]["query_terms"]["content"], ["okf"])
+        self.assertEqual(einer["coverage"]["term_coverage_percent"], 100)
+        self.assertEqual(einer["coverage"]["match_strength"], "partial")
+        self.assertIn(
+            "knowledge/demo-okf/fakten.md",
+            [seite["path"] for seite in einer["coverage"]["omitted_pages"]])
+
+        # Eine Kennung, die es nicht gibt, deren Ziffern aber irgendwo stehen.
+        seite = fakten
+        text = seite.read_text(encoding="utf-8")
+        self.assertIn("POLE stammt aus", text)
+        seite.write_text(text.replace(
+            "POLE stammt aus", "POLE stammt seit 2026 aus"), encoding="utf-8")
+        self.release()
+        _, datum = self.query("S-2026")
+        self.assertEqual(datum["coverage"]["unknown_ids"], ["S-2026"])
+        self.assertEqual(
+            datum["coverage"]["query_terms"]["matched"], ["2026"])
+        self.assertEqual(datum["coverage"]["term_coverage_percent"], 100)
+        self.assertEqual(datum["coverage"]["match_strength"], "weak")
+        self.assertTrue(datum["fallback"]["exhaustive_review_required"])
+        _, beide = self.query("Was sagt S-2026 zu OKF?")
+        self.assertEqual(beide["coverage"]["unknown_ids"], ["S-2026"])
+        self.assertEqual(beide["coverage"]["match_strength"], "partial")
+
+    def test_a_phrase_made_of_a_function_word_is_no_anchor(self):
+        """"IT" ist als Abkürzung ein Inhaltswort der Frage, im Bestand aber
+        nur das englische "it" einer Fundstelle ("How it works")."""
+        _, payload = self.query("IT")
+        self.assertEqual(
+            payload["coverage"]["query_terms"],
+            {"content": ["it"], "matched": [], "partial": [],
+             "unmatched": ["it"]})
+        self.assertIn("exact:claim", payload["evidence"][0]["reasons"])
+        self.assertEqual(payload["coverage"]["match_strength"], "weak")
+        self.assertTrue(payload["fallback"]["exhaustive_review_required"])
+        # Eine Wortfolge mit getroffenem Inhaltswort bleibt ein Anker.
+        _, phrase = self.query("unverzüglich anzuzeigen und zu beheben")
+        self.assertEqual(
+            phrase["coverage"]["query_terms"]["unmatched"], ["beheben"])
+        _, anker = self.query("dem Vermieter nach dem Beispielhandbuch")
+        self.assertIn("exact:claim", anker["evidence"][0]["reasons"])
+        self.assertEqual(anker["evidence"][0]["claim_id"], "C-0402")
+        self.assertEqual(anker["coverage"]["match_strength"], "strong")
 
     def test_a_function_word_never_names_a_concept(self):
         """'sich' ist nicht 'Sicherung', 'seit' nicht 'Seite'.
@@ -788,7 +1012,7 @@ class QuerySignalTests(VaultCase):
             "query", "Wie werden Bestätigungen und Vertrauensstufen geprüft?")
         self.assertEqual(erster.returncode, 0, erster.stdout + erster.stderr)
         self.assertEqual(
-            json.loads(erster.stdout)["retrieval"], "hybrid-local/v3")
+            json.loads(erster.stdout)["retrieval"], "hybrid-local/v4")
         for _ in range(5):
             wieder = self.run_cli(
                 "query", "Wie werden Bestätigungen und Vertrauensstufen geprüft?")
@@ -955,6 +1179,23 @@ class SweepTests(VaultCase):
             ("Gilt das bei -5 Grad?", "Gilt das bei 5 Grad?"),
             ("Was kostet das: 5 €?", "Was kostet das: 5 %?"),
             ("?", "!"),
+            # Bis v0.14.0 fielen Satzzeichen an jedem Wortrand weg. Diese
+            # Paare teilten sich deshalb ein Siegel, und die Quittung der
+            # einen Frage galt für ihr Gegenteil.
+            ("Gilt die Regel bei a != b?", "Gilt die Regel bei a = b?"),
+            ("Gilt das bei !aktiv?", "Gilt das bei aktiv?"),
+            ("Welcher Faktor gilt: .5?", "Welcher Faktor gilt: 5?"),
+            ("Was ergibt 5!?", "Was ergibt 5?"),
+            ("Was bedeutet ? in einem Pfad?", "Was bedeutet ! in einem Pfad?"),
+            ("Was liefert f()?", "Was liefert f?"),
+            ("Wie breit sind 5'?", 'Wie breit sind 5"?'),
+            ("Was ist a := b?", "Was ist a = b?"),
+            ("Was gilt bei x<5?", "Was gilt bei x 5?"),
+            ("Was ist OKF?", "Was ist OKF!"),
+            # Auch ein Komma oder ein Punkt bleibt stehen: Das Siegel rät
+            # nicht, welches Satzzeichen nichts bedeutet.
+            ("Was ist OKF, und wozu?", "Was ist OKF und wozu?"),
+            ("Gilt Version 1.5?", "Gilt Version 15?"),
         ]
         for eine, andere in paare:
             with self.subTest(frage=eine):
@@ -966,14 +1207,25 @@ class SweepTests(VaultCase):
                     andere, "--receipt", f"1:{erste['seal']}=-")
                 self.assertEqual(erschlichen["state"], "invalid_receipt")
                 self.assertFalse(erschlichen["abstention"]["allowed"])
-        # Was zwischen zwei Aufrufen derselben Frage wirklich schwankt, bleibt
-        # gleich: Groß-/Kleinschreibung, Leerraum, Anführungs- und Satzzeichen
-        # am Wortrand.
-        gleich = ['Was ist "OKF"?', "was ist okf", "  Was   ist OKF ?  ",
-                  "Was ist »OKF«!", "Was ist ‚OKF‘ …"]
-        siegel = {
-            self.sweep(frage, "--batch", "1")[1]["seal"] for frage in gleich}
-        self.assertEqual(len(siegel), 1, siegel)
+        # Was zwischen zwei Aufrufen derselben Frage schwankt, ohne etwas zu
+        # bedeuten, bleibt gleich: Groß-/Kleinschreibung, Leerraum, die Art
+        # der Anführungszeichen und Striche, das Fragezeichen am Ende.
+        gruppen = [
+            ["Was ist OKF?", "was ist okf", "  Was   ist OKF ?  ",
+             "WAS IST OKF??"],
+            ['Was bedeutet "Trust-Tier" genau?',
+             "Was bedeutet „Trust-Tier“ genau?",
+             "was bedeutet »Trust‑Tier« genau"],
+            ["Wie geht's weiter – und wozu?", "Wie geht’s weiter - und wozu"],
+        ]
+        alle = set()
+        for gleich in gruppen:
+            with self.subTest(frage=gleich[0]):
+                siegel = {self.sweep(frage, "--batch", "1")[1]["seal"]
+                          for frage in gleich}
+                self.assertEqual(len(siegel), 1, siegel)
+                alle |= siegel
+        self.assertEqual(len(alle), len(gruppen))
 
     def test_repeated_receipt_switches_are_collected(self):
         """Je Stapel ein eigenes --receipt, wie beim Einsammeln von Subagenten."""
@@ -1062,6 +1314,82 @@ class SweepTests(VaultCase):
         self.assertNotEqual(result.returncode, 0, result.stdout)
         self.assertIn("den das Manifest ausnimmt", result.stdout)
         self.assertNotEqual(self.run_cli("release", "patch").returncode, 0)
+
+    def test_side_fields_say_what_was_swept(self):
+        """Plan, Stapel, Zähler und Fingerabdruck: was profil.md zusagt."""
+        plan, gelesen = self.stapel(self.FRAGE, "--size", "10")
+        for eintrag in plan["batches"]:
+            ids = gelesen[eintrag["batch"]][1]
+            self.assertEqual(
+                (eintrag["first_claim"], eintrag["last_claim"],
+                 eintrag["claims"]),
+                (ids[0], ids[-1], len(ids)))
+        _, stapel = self.sweep(self.FRAGE, "--size", "10", "--batch", "1")
+        self.assertEqual(
+            (stapel["batches_total"], stapel["batch_size"], stapel["batch"]),
+            (3, 10, 1))
+        for seite in stapel["pages"]:
+            # Was das Modell zum Urteilen braucht, steht am Stapel selbst.
+            self.assertRegex(seite["stand"], r"^\d{4}-\d{2}-\d{2}$")
+            self.assertTrue(seite["tags"])
+            self.assertTrue(seite["title"])
+            self.assertIn(seite["status"], {"aktiv", "veraltet"})
+            self.assertTrue(seite["domain"])
+
+        # Unvollständig: gezählt wird, was quittiert ist, nicht der Umfang.
+        gut = [f"{n}:{siegel}=-" for n, (siegel, _) in sorted(gelesen.items())]
+        _, teil = self.sweep(self.FRAGE, "--size", "10", "--receipt", *gut[:2])
+        self.assertEqual(teil["coverage"]["batches_confirmed"], 2)
+        self.assertEqual(teil["coverage"]["batches_total"], 3)
+        self.assertEqual(
+            teil["coverage"]["claims_swept"],
+            len(gelesen[1][1]) + len(gelesen[2][1]))
+        self.assertLess(teil["coverage"]["claims_swept"], 28)
+        self.assertEqual(teil["coverage"]["claims_total"], 28)
+        self.assertEqual(teil["coverage"]["semantic_coverage"], "not_assessed")
+
+        # Der Fingerabdruck steht in der Antwort als Beleg der Sichtung. Er
+        # bindet deshalb alles, worin sich zwei Sichtungen unterscheiden
+        # können: Auswahl, Frage, Stapelgröße und Umfang.
+        _, leer = self.sweep(self.FRAGE, "--size", "10", "--receipt", *gut)
+        mit = [f"{n}:{siegel}=" + ("C-0002" if "C-0002" in ids else "-")
+               for n, (siegel, ids) in sorted(gelesen.items())]
+        _, gewaehlt = self.sweep(self.FRAGE, "--size", "10", "--receipt", *mit)
+        abdruecke = [leer["sweep_fingerprint"], gewaehlt["sweep_fingerprint"]]
+        for argumente in (("Was ist OKF?", "--size", "10"),
+                          (self.FRAGE, "--size", "7"),
+                          (self.FRAGE, "--size", "10", "--domain", "demo-okf")):
+            _, andere = self.stapel(*argumente)
+            quittung = [f"{n}:{s}=-" for n, (s, _) in sorted(andere.items())]
+            _, fertig = self.sweep(*argumente, "--receipt", *quittung)
+            self.assertEqual(fertig["state"], "sweep_complete", fertig)
+            abdruecke.append(fertig["sweep_fingerprint"])
+        for abdruck in abdruecke:
+            self.assertRegex(abdruck, r"^[0-9a-f]{64}$")
+        self.assertEqual(len(set(abdruecke)), 5)
+
+    def test_scope_is_counted_and_filters_unite(self):
+        """'complete' zählt Claims, und --domain und --page vereinigen."""
+        beide = ("--domain", "demo-okf", "--domain", "demo-extern")
+        plan, gelesen = self.stapel(self.FRAGE, *beide)
+        self.assertTrue(plan["scope"]["complete"])
+        self.assertEqual(plan["scope"]["claims_in_scope"], 28)
+        quittung = [f"{n}:{s}=-" for n, (s, _) in sorted(gelesen.items())]
+        _, fertig = self.sweep(self.FRAGE, *beide, "--receipt", *quittung)
+        self.assertEqual(fertig["state"], "sweep_complete", fertig)
+        # Zwei Filter, die zusammen alles treffen, sind der ganze Bestand.
+        self.assertTrue(fertig["coverage"]["scope_complete"])
+        self.assertTrue(fertig["abstention"]["allowed"])
+
+        gemischt = ("--domain", "demo-extern",
+                    "--page", "knowledge/demo-okf/fakten.md")
+        plan, gelesen = self.stapel(self.FRAGE, *gemischt)
+        self.assertEqual(plan["scope"]["pages_in_scope"], 2)
+        self.assertEqual(plan["scope"]["claims_in_scope"], 4)
+        self.assertFalse(plan["scope"]["complete"])
+        self.assertEqual(
+            sorted(cid for _, ids in gelesen.values() for cid in ids),
+            ["C-0290", "C-0291", "C-0401", "C-0402"])
 
     def test_partial_scope_never_licenses_not_in_vault(self):
         plan, gelesen = self.stapel(self.FRAGE, "--domain", "demo-extern")
@@ -1159,10 +1487,13 @@ class RecallGateTests(unittest.TestCase):
         finally:
             sys.dont_write_bytecode = vorher
         cls.fragen, cls.negativ = cls.tool.lade_gold(GOLD, SOURCE_SKILL)
-        cls.zeilen, cls.negativ_zeilen = cls.tool.messe(
-            SOURCE_SKILL, cls.fragen, cls.negativ)
         cls.sichtung = cls.tool.sichtung_pruefen(
             SOURCE_SKILL, cls.fragen[0]["frage"])
+        # Wie das Werkzeug selbst misst: mit der Zuordnung Claim zu Seite,
+        # damit auch der Seitentreffer gezählt ist.
+        cls.zeilen, cls.negativ_zeilen = cls.tool.messe(
+            SOURCE_SKILL, cls.fragen, cls.negativ, 8,
+            cls.sichtung["seite_von"])
 
     def test_no_miss_is_silent(self):
         """Das eine harte Gate. Güte darf schwanken, Ehrlichkeit nicht."""
@@ -1220,12 +1551,361 @@ class RecallGateTests(unittest.TestCase):
                 self.tool.lade_gold(drinnen, vault)
             drinnen.unlink()
             # Eine Goldfrage als Alias einzutragen wäre der bequeme Weg zu
-            # 100 %. Der Wächter findet sie.
+            # 100 %. Der Wächter findet sie; in welchen Schreibungen, zeigt
+            # test_leak_guard_reads_like_the_engine.
             frage = self.fragen[0]["frage"]
             (vault / "notes" / "dead-ends.md").write_text(
                 f"Notiz: {frage}\n", encoding="utf-8")
             lecks = self.tool.leck_suche(vault, alle)
             self.assertEqual(lecks, [(frage, "notes/dead-ends.md")])
+
+    def test_measurement_is_the_published_one(self):
+        """Die Zahlen der Tabelle, nicht nur ihre Untergrenzen."""
+        for gruppe, erwartet in sorted(MESSUNG.items()):
+            with self.subTest(gruppe=gruppe):
+                zahl = self.tool.zusammenfassung(
+                    [z for z in self.zeilen if z["gruppe"] == gruppe])
+                self.assertEqual(
+                    (zahl["gesamt"], zahl["treffer"], zahl["pflicht"],
+                     zahl["hinweis"], zahl["still"], zahl["seite"]),
+                    erwartet)
+        self.assertEqual(
+            (len(self.negativ_zeilen),
+             sum(1 for z in self.negativ_zeilen if z["pflicht"]),
+             sum(1 for z in self.negativ_zeilen if z["staerke"] == "strong")),
+            MESSUNG_NEGATIV)
+        # Ein Treffer ist der Claim unter den Kandidaten, nicht bloß seine
+        # Seite: Diese Frage zeigt die Seite, nicht den Claim.
+        zeile = next(z for z in self.zeilen if z["frage"].startswith(
+            "Ab wann ist ein Eintrag abgelaufen"))
+        self.assertTrue(zeile["seite_gefunden"])
+        self.assertIsNone(zeile["rang"])
+        self.assertNotEqual(zeile["ausgang"], "treffer")
+        # Negativfragen werden wirklich abgefragt: Die eine, die 'strong'
+        # aussieht, nennt einen kuratierten Begriff.
+        stark = [z["frage"] for z in self.negativ_zeilen
+                 if z["staerke"] == "strong"]
+        self.assertEqual(stark, ["Wie groß ist das Open Knowledge Format?"])
+        probe = self.tool.lauf(SOURCE_SKILL, "query", stark[0])
+        self.assertEqual(probe["coverage"]["match_strength"], "strong")
+        self.assertFalse(probe["fallback"]["exhaustive_review_required"])
+
+    def test_the_silent_miss_gate_can_fire(self):
+        """Positivkontrolle für das eine harte Gate.
+
+        Am Demo-Gold erreichen nur zwei Fragen 'strong', und beide treffen:
+        Das Gate schlug dort noch nie an. Hier bekommt eine 'strong'-Frage
+        absichtlich den falschen Claim.
+        """
+        falsch = [{"frage": "Welche Vertrauensstufen gibt es?",
+                   "erwartet": ["C-0402"], "gruppe": "probe"}]
+        zeilen, _ = self.tool.messe(SOURCE_SKILL, falsch, [])
+        self.assertEqual(zeilen[0]["staerke"], "strong")
+        self.assertEqual(zeilen[0]["ausgang"], "still")
+        verletzt = self.tool.gates(zeilen, self.sichtung, [], 0, None)
+        self.assertEqual(len(verletzt), 1, verletzt)
+        self.assertIn("1 stille Verfehlung", verletzt[0])
+        with tempfile.TemporaryDirectory(prefix="skillsafe-gold-") as temp:
+            gold = Path(temp) / "gold.json"
+            gold.write_text(json.dumps({
+                "schema": "skillsafe.recall-gold/v1", "fragen": falsch,
+            }, ensure_ascii=False), encoding="utf-8")
+            result = subprocess.run(
+                [sys.executable, "-B", str(RECALL_TOOL), "--gold", str(gold)],
+                cwd=REPOSITORY, text=True, stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE, check=False, timeout=120,
+            )
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("VERFEHLT, STILL", result.stdout)
+        self.assertIn("1 stille Verfehlung", result.stdout)
+        self.assertNotIn("🟢", result.stdout)
+
+    def test_each_gate_fires_on_its_own(self):
+        """Jedes Gate einzeln, mit Eingaben, die nur dieses eine verletzen."""
+        def zeile(ausgang, erwartet="C-0001"):
+            return {"frage": "x", "erwartet": [erwartet], "gruppe": "g",
+                    "ausgang": ausgang, "rang": None, "seite_gefunden": False,
+                    "staerke": "weak", "abdeckung": 0, "ungetroffen": []}
+
+        sauber = {"claims_total": 2, "geliefert": ["C-0001", "C-0002"],
+                  "seite_von": {}, "stapel": 1, "vollstaendig": True}
+        treffer = [zeile("treffer"), zeile("treffer"), zeile("pflicht")]
+        self.assertEqual(self.tool.gates(treffer, sauber, [], 0, None), [])
+        # Abgerundet: zwei von drei sind 66 %, nicht 67.
+        self.assertEqual(
+            self.tool.zusammenfassung(treffer)["recall_prozent"], 66)
+        self.assertEqual(self.tool.gates(treffer, sauber, [], 66, None), [])
+        faelle = {
+            "Untergrenze": (
+                (treffer, sauber, [], 67, None), "unter der Untergrenze 67 %"),
+            "Hinweis": (
+                ([zeile("treffer"), zeile("hinweis")], sauber, [], 0, 0),
+                "1 Verfehlungen nur mit Hinweis, erlaubt sind 0"),
+            "still": (
+                ([zeile("still")], sauber, [], 0, None),
+                "1 stille Verfehlung"),
+            "doppelt vorgelegt": (
+                (treffer, dict(sauber, geliefert=["C-0001", "C-0002",
+                                                  "C-0002"]), [], 0, None),
+                "nicht jeden Claim genau einmal"),
+            "nicht alles vorgelegt": (
+                (treffer, dict(sauber, claims_total=3), [], 0, None),
+                "nicht jeden Claim genau einmal"),
+            "erwarteter Claim fehlt": (
+                ([zeile("treffer", "C-0009")], sauber, [], 0, None),
+                "legt C-0009 nicht vor"),
+            "Leck": (
+                (treffer, sauber, [("x", "notes/a.md")], 0, None),
+                "1 Goldfrage(n) stehen im Skill-Ordner"),
+        }
+        for name, (argumente, meldung) in faelle.items():
+            with self.subTest(gate=name):
+                verletzt = self.tool.gates(*argumente)
+                self.assertEqual(len(verletzt), 1, verletzt)
+                self.assertIn(meldung, verletzt[0])
+        # Ohne --max-hinweis ist eine Verfehlung mit Hinweis kein Gate.
+        self.assertEqual(self.tool.gates(
+            [zeile("treffer"), zeile("hinweis")], sauber, [], 0, None), [])
+
+    def test_sweep_check_counts_against_the_plan_not_the_delivery(self):
+        """Fehlt ein Claim in den Stapeln, darf die Soll-Zahl nicht mitfallen.
+
+        Die Soll-Zahl kommt aus dem Plan der Engine. Nähme das Werkzeug
+        stattdessen die Länge dessen, was es bekam, wäre der Wächter blind.
+        """
+        echt = self.tool.lauf
+
+        def ein_claim_fehlt(vault, *argv):
+            ausgabe = echt(vault, *argv)
+            if "--batch" in argv:
+                ausgabe["pages"][0]["claims"] = ausgabe["pages"][0]["claims"][1:]
+            return ausgabe
+
+        self.tool.lauf = ein_claim_fehlt
+        try:
+            sichtung = self.tool.sichtung_pruefen(SOURCE_SKILL, "Was ist OKF?")
+        finally:
+            self.tool.lauf = echt
+        self.assertEqual(sichtung["claims_total"], 28)
+        self.assertEqual(len(sichtung["geliefert"]), 27)
+        verletzt = self.tool.gates([], sichtung, [], 0, None)
+        self.assertEqual(len(verletzt), 1, verletzt)
+        self.assertIn("nicht jeden Claim genau einmal", verletzt[0])
+
+    def test_gold_rejects_one_question_in_two_spellings(self):
+        def gold(fragen, negativ=()):
+            return {"schema": "skillsafe.recall-gold/v1",
+                    "fragen": [{"frage": f, "erwartet": ["C-0305"]}
+                               for f in fragen],
+                    "negativ": list(negativ)}
+
+        faelle = {
+            "wörtlich doppelt": gold(["Was ist OKF?", "Was ist OKF?"]),
+            "andere Schreibung": gold(
+                ["Welche Vertrauensstufen gibt es?",
+                 "welche  vertrauensstufen gibt es"]),
+            "Umschrift": gold(["Wie groß ist das?", "Wie gross ist das"]),
+            "positiv und negativ": gold(
+                ["Was ist OKF?"], ["was ist okf"]),
+            "negativ doppelt": gold(
+                ["Was ist OKF?"], ["Gibt es Hunde?", "Gibt es Hunde ?"]),
+        }
+        with tempfile.TemporaryDirectory(prefix="skillsafe-gold-") as temp:
+            datei = Path(temp) / "gold.json"
+            for name, inhalt in faelle.items():
+                with self.subTest(fall=name):
+                    datei.write_text(
+                        json.dumps(inhalt, ensure_ascii=False),
+                        encoding="utf-8")
+                    with self.assertRaises(self.tool.GoldFehler) as fehler:
+                        self.tool.lade_gold(datei, SOURCE_SKILL)
+                    self.assertIn("doppelt", str(fehler.exception))
+            datei.write_text(json.dumps(gold(
+                ["Was ist OKF?", "Was ist OKF v0.2?"], ["Gibt es Hunde?"]),
+                ensure_ascii=False), encoding="utf-8")
+            fragen, negativ = self.tool.lade_gold(datei, SOURCE_SKILL)
+            self.assertEqual((len(fragen), len(negativ)), (2, 1))
+
+    def test_leak_guard_reads_like_the_engine(self):
+        """Eine Goldfrage als Alias sähe aus wie ein Alias.
+
+        Ohne Fragezeichen, in Umschrift, in anderer Großschreibung: genau
+        so, wie die Engine eine Benennung trifft. Der Wächter liest deshalb
+        mit derselben Normalisierung, in jeder Datei des Skill-Ordners.
+        """
+        engine = load_engine(SOURCE_SKILL)
+        for probe in ("Wie groß ist „OKF“?", "Füße & Öl — ÄRGER", "A\u0308pfel",
+                      "ｖｏｌｌｂｒｅｉｔ", "C-0001 / §5.1", "  viel   Raum\n"):
+            self.assertEqual(
+                self.tool._norm(probe), engine._retrieval_norm(probe), probe)
+
+        frage = next(e["frage"] for e in self.fragen if "ä" in e["frage"]
+                     or "ö" in e["frage"] or "ü" in e["frage"])
+        self.assertTrue(frage.endswith("?"))
+        nackt = frage.rstrip("?")
+        umschrift = (nackt.replace("ä", "ae").replace("ö", "oe")
+                     .replace("ü", "ue").replace("ß", "ss"))
+        alle = [eintrag["frage"] for eintrag in self.fragen]
+        nfd = __import__("unicodedata").normalize("NFD", frage)
+        varianten = {
+            "ohne Fragezeichen": ("notes/a.md", f"Alias: {nackt}\n"),
+            "Umschrift": ("notes/a.md", f"- {umschrift}\n"),
+            "Großschreibung": ("notes/a.md", nackt.upper() + "\n"),
+            "Umbruch im Zitat": (
+                "notes/a.md",
+                "> " + nackt.replace(" ", "\n> ", 3) + "\n"),
+            "Hervorhebung": (
+                "notes/a.md", nackt.replace(" ", " *", 1).replace(
+                    " ", "* ", 2) + "\n"),
+            "zerlegte Umlaute": ("notes/a.md", nfd + "\n"),
+            "Endung groß": ("notes/FRAGEN.MD", frage + "\n"),
+            "ohne Endung": ("notes/FRAGEN", frage + "\n"),
+            "Textdatei": ("notes/fragen.txt", frage + "\n"),
+            "JSON mit Escape": (
+                "schema/extra.json",
+                json.dumps({"aliases": [nackt]}, ensure_ascii=True)),
+        }
+        with tempfile.TemporaryDirectory(prefix="skillsafe-gold-") as temp:
+            for name, (ort, inhalt) in varianten.items():
+                with self.subTest(variante=name):
+                    vault = Path(temp) / name.replace(" ", "-") / "wt"
+                    shutil.copytree(SOURCE_SKILL, vault)
+                    (vault / ort).write_text(inhalt, encoding="utf-8")
+                    self.assertEqual(
+                        self.tool.leck_suche(vault, alle), [(frage, ort)])
+            # Kein Fehlalarm: ein Teil der Frage ist nicht die Frage, und
+            # eine Binärdatei wird nicht als Text gelesen.
+            vault = Path(temp) / "sauber" / "wt"
+            shutil.copytree(SOURCE_SKILL, vault)
+            (vault / "notes/a.md").write_text(
+                " ".join(nackt.split()[:-1]) + "\n", encoding="utf-8")
+            (vault / "notes/bild.bin").write_bytes(
+                b"\x00\x01" + frage.encode("utf-8"))
+            self.assertEqual(self.tool.leck_suche(vault, alle), [])
+
+    def test_published_rows_follow_the_measurement_and_stay_unique(self):
+        """check_docs bindet die Messtabelle, und zwar jede Zeile mit dem Namen.
+
+        Geprüft wird hier nur dieser Teil: Die übrigen Werte (Testzahl,
+        Paket-SHA) rechnet check_docs selbst aus, und dafür fährt es diese
+        Suite.
+        """
+        spec = importlib.util.spec_from_file_location(
+            "skillsafe_check_docs", DOCS_TOOL)
+        docs = importlib.util.module_from_spec(spec)
+        vorher = sys.dont_write_bytecode
+        sys.dont_write_bytecode = True
+        try:
+            spec.loader.exec_module(docs)
+        finally:
+            sys.dont_write_bytecode = vorher
+
+        class Stand(dict):
+            def __missing__(self, schluessel):
+                return None
+
+        stand = Stand({
+            f"recall_{gruppe}": werte[:5] for gruppe, werte in MESSUNG.items()})
+        protokolle = docs.e2e_stand()
+        self.assertEqual(sorted(protokolle), list(range(1, len(protokolle) + 1)))
+        for runde, (zahlen, version) in protokolle.items():
+            stand[f"e2e_runde_{runde}"] = zahlen
+            stand[f"e2e_version_{runde}"] = version
+
+        def messwerte():
+            return [m for m in docs.pruefe(stand)
+                    if "Messwerte" in m or "Ende-zu-Ende" in m]
+
+        self.assertEqual(messwerte(), [])
+        readme, landing = docs.README, docs.LANDING
+        with tempfile.TemporaryDirectory(prefix="skillsafe-docs-") as temp:
+            try:
+                docs.README = Path(temp) / "README.md"
+                docs.README.write_text(
+                    readme.read_text(encoding="utf-8")
+                    + "\n| Jetzt, blinde Kontrolle | 56 | 50 | 6 | 0 | **0** |\n",
+                    encoding="utf-8")
+                meldungen = messwerte()
+                self.assertTrue(any("2-mal" in m for m in meldungen), meldungen)
+                self.assertTrue(
+                    any("(56, 50, 6, 0, 0)" in m for m in meldungen), meldungen)
+                docs.README = readme
+                docs.LANDING = Path(temp) / "index.html"
+                docs.LANDING.write_text(
+                    landing.read_text(encoding="utf-8").replace(
+                        "<td>Jetzt, eigene Fragen</td><td>28</td><td>19</td>",
+                        "<td>Jetzt, eigene Fragen</td><td>28</td><td>20</td>"),
+                    encoding="utf-8")
+                meldungen = messwerte()
+                self.assertEqual(len(meldungen), 1, meldungen)
+                self.assertIn("index.html: Messwerte 'entwicklung'", meldungen[0])
+                docs.LANDING = landing
+
+                # Ende zu Ende: der Stand einer Runde, eine Zeile ohne
+                # Protokoll, eine Zahl neben dem Protokoll.
+                text = readme.read_text(encoding="utf-8")
+                zeile = "| Ende zu Ende, Runde 2 | v0.13.0 | 12 | 8 | 8 |"
+                self.assertEqual(text.count(zeile), 1)
+                faelle = {
+                    "anderer Stand": (
+                        text.replace(zeile, zeile.replace("v0.13.0", "v0.14.0")),
+                        "Stand der Ende-zu-Ende-Runde 2"),
+                    "andere Zahl": (
+                        text.replace(zeile, zeile.replace("| 12 | 8 | 8 |",
+                                                          "| 12 | 8 | 7 |")),
+                        "Ende-zu-Ende-Runde 2 steht auf (12, 8, 7,"),
+                    "Runde ohne Protokoll": (
+                        text + "\n| Ende zu Ende, Runde 9 | v9.9.9 | 1 | 1 | 1 "
+                               "| 1 | 1 | 0 | 0 | **0** |\n",
+                        "Ende-zu-Ende-Runde 9 steht in der Tabelle"),
+                }
+                for name, (inhalt, meldung) in faelle.items():
+                    with self.subTest(fall=name):
+                        docs.README = Path(temp) / "README.md"
+                        docs.README.write_text(inhalt, encoding="utf-8")
+                        meldungen = messwerte()
+                        self.assertEqual(len(meldungen), 1, meldungen)
+                        self.assertIn(meldung, meldungen[0])
+                docs.README = readme
+                docs.LANDING = Path(temp) / "index.html"
+                docs.LANDING.write_text(
+                    landing.read_text(encoding="utf-8").replace(
+                        "<td>Runde 1</td>", "<td>Runde 7</td>"),
+                    encoding="utf-8")
+                meldungen = messwerte()
+                self.assertTrue(any(
+                    "index.html: Ende-zu-Ende-Runde 7 steht in der Tabelle"
+                    in m for m in meldungen), meldungen)
+                self.assertTrue(any(
+                    "index.html: Ende-zu-Ende-Runde 1 nicht gefunden"
+                    in m for m in meldungen), meldungen)
+            finally:
+                docs.README, docs.LANDING = readme, landing
+
+        # Die Protokolle selbst: eine Runde doppelt oder ohne 'ergebnis'
+        # ist ein lesbarer Abbruch, kein Traceback und kein stilles Ja.
+        ordner = docs.E2E_ORDNER
+        with tempfile.TemporaryDirectory(prefix="skillsafe-docs-") as temp:
+            try:
+                docs.E2E_ORDNER = Path(temp)
+                erste = json.loads(
+                    (ordner / "runde-1.json").read_text(encoding="utf-8"))
+                for name in ("runde-1.json", "runde-1-kopie.json"):
+                    (Path(temp) / name).write_text(
+                        json.dumps(erste), encoding="utf-8")
+                with self.assertRaises(SystemExit) as doppelt:
+                    docs.e2e_stand()
+                self.assertIn("Runde 1 liegt doppelt", str(doppelt.exception))
+                (Path(temp) / "runde-1-kopie.json").unlink()
+                del erste["ergebnis"]
+                (Path(temp) / "runde-1.json").write_text(
+                    json.dumps(erste), encoding="utf-8")
+                with self.assertRaises(SystemExit) as unvollstaendig:
+                    docs.e2e_stand()
+                self.assertIn("kein vollständiges Protokoll",
+                              str(unvollstaendig.exception))
+            finally:
+                docs.E2E_ORDNER = ordner
 
     def test_tool_exit_code_follows_the_gates(self):
         """Das Werkzeug als Prozess, mit einem kleinen eigenen Gold.
@@ -1328,6 +2008,22 @@ class RecallGateTests(unittest.TestCase):
             self.assertEqual(result.returncode, 1, result.stdout)
             self.assertIn("recall-check:", result.stdout)
             self.assertNotIn("Traceback", result.stdout + result.stderr)
+        # Eine Frage, die die Engine nicht annimmt, ist ein Fehler im Gold
+        # und wird so gemeldet, auch unter den Negativfragen: Dort zählte
+        # sie sonst still als "keine Vollsichtung verlangt".
+        zu_lang = "Wie hoch ist der Urlaubsanspruch? " * 40
+        for fragen, negativ in (([{"frage": zu_lang, "erwartet": ["C-0001"]}],
+                                 []),
+                                (self.fragen[:1], [zu_lang])):
+            with self.assertRaises(self.tool.MessFehler) as unbrauchbar:
+                self.tool.messe(SOURCE_SKILL, fragen, negativ)
+            self.assertIn("nimmt eine Frage des Golds nicht an",
+                          str(unbrauchbar.exception))
+            self.assertNotIn("doctor", str(unbrauchbar.exception))
+        with self.assertRaises(self.tool.MessFehler) as plan:
+            self.tool.sichtung_pruefen(SOURCE_SKILL, zu_lang)
+        self.assertIn("nimmt eine Frage des Golds nicht an",
+                      str(plan.exception))
 
 
 if __name__ == "__main__":

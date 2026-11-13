@@ -26,7 +26,8 @@ Protokoll für den jeweils maßgeblichen Tresor durchlaufen — eine
      Relevanzkandidaten, noch keine Deckung der Frage. Wie belastbar sie
      sind, sagt Schritt 2b.
    * `no_candidates` → kein semantischer Negativbefund. Evidenz bleibt leer;
-     Schritt 4b ist Pflicht.
+     Schritt 4b ist Pflicht (einzige Ausnahme: die unbekannte Kennung in
+     Schritt 2b).
    * `ambiguous` → genannte Begriffswelt klären und mit
      `--world BW-nnnn` erneut abfragen.
    * `invalid_vault`, `vault_busy` oder `snapshot_changed` → nichts ausgeben,
@@ -38,15 +39,17 @@ Protokoll für den jeweils maßgeblichen Tresor durchlaufen — eine
 
    | Stärke | Heißt | Was zu tun ist |
    |---|---|---|
-   | `strong` | Jeder Inhaltsbegriff ist exakt, als Wortform oder über einen kuratierten Begriff getroffen | Weiter mit Schritt 3 und 4: Kandidaten lesen und antworten. Decken sie die Frage nicht, Schritt 4b. |
-   | `partial` | Ein Anker trägt (ein kuratierter Begriff, eine genannte ID oder die ganze Frage als Wortfolge in einem Claim), oder mindestens zwei Begriffe sind getroffen und das sind mindestens 60 % — aber `unmatched` oder `partial` ist nicht leer | Tragen die getroffenen Begriffe die Frage: weiter mit Schritt 3 und 4. Steht unter den ungetroffenen das, wonach gefragt wird: direkt zu Schritt 4b, wie bei `weak`. |
+   | `strong` | Jeder Inhaltsbegriff ist exakt, als Wortform oder über einen kuratierten Begriff getroffen, jeder getroffene Begriff ist in der Ausgabe vertreten, und jede genannte Kennung gibt es | Weiter mit Schritt 3 und 4: Kandidaten lesen und antworten. Decken sie die Frage nicht, Schritt 4b. |
+   | `partial` | Ein Anker trägt (ein vertretener kuratierter Begriff, eine genannte ID oder die ganze Frage als Wortfolge in einem Claim), oder mindestens zwei Begriffe sind getroffen und das sind mindestens 60 % — aber etwas blieb offen: `unmatched` oder `partial` ist nicht leer, ein Begriff ist unvertreten, oder eine Kennung gibt es nicht | Tragen die getroffenen Begriffe die Frage: weiter mit Schritt 3 und 4. Steht unter den ungetroffenen das, wonach gefragt wird: direkt zu Schritt 4b, wie bei `weak`. |
    | `weak` | Weniger als das: ein einzelner getroffener Begriff ohne Anker, Wortteil- oder Zufallstreffer | Schritt 4 entfällt, direkt zu Schritt 4b. Die Kandidaten sind Fingerzeige, keine Antwort. |
    | `none` | Kein Kandidat | Schritt 4 entfällt, direkt zu Schritt 4b. |
 
    Bei `weak` und `none` steht zusätzlich
    `fallback.exhaustive_review_required: true`. Die Vollsichtung legt dann
    ohnehin jeden Claim vor; die Kandidatenseiten vorher zu lesen wäre
-   dieselbe Arbeit zweimal.
+   dieselbe Arbeit zweimal. Bei `partial` bleibt das Feld falsch, auch wenn
+   der Kern der Frage ungetroffen ist: Welcher Begriff der Kern ist, kann
+   nur das Modell beurteilen.
 
    **Zwei Dinge heißen `partial`.** Die Stärke aus der Tabelle, und die
    Liste `query_terms.partial`. Die Liste nennt Begriffe, die nur als Teil
@@ -58,6 +61,27 @@ Protokoll für den jeweils maßgeblichen Tresor durchlaufen — eine
    deshalb dort als Grund stehen und trotzdem `unmatched` sein: Der Claim,
    der ihn trägt, fiel dem Limit zum Opfer. Und ein Treffer kann in der
    Fundstelle eines Claims liegen (`source.locator`) statt in seinem Text.
+
+   **Unbekannte Kennungen.** Nennt die Frage eine C-, S- oder B-ID, die es
+   im Bestand nicht gibt, steht sie unter `coverage.unknown_ids`, und das
+   Ergebnis ist nie `strong`. Dass es sie nicht gibt, ist ein Befund des
+   Scripts, kein Urteil des Rankings: Es kennt jede Kennung, eine
+   Vollsichtung fände nichts anderes. Stehen ihre Ziffern unter `unmatched`
+   und steht dort und unter `partial` sonst nichts, gilt die Frage allein
+   dieser Kennung („Was steht in C-9999?"), und die Antwort ist ein Satz:
+   „Die Kennung C-9999 gibt es im Bestand nicht." Schritt 4b entfällt dann,
+   auch bei `weak` oder `none`. Die Formel „Nicht im Bestand" steht dort
+   nicht, sie bleibt der Quittung vorbehalten. In jedem anderen Fall gilt
+   die Tabelle: Steht dort mehr, fragt die Frage auch nach einer Sache, und
+   sind die Ziffern selbst getroffen, kann etwas anderes gemeint sein als
+   eine Kennung.
+
+   **Unvertretene Begriffe.** Jeder getroffene Begriff unter
+   `concepts.matched` sagt in `represented`, ob die Ausgabe etwas von ihm
+   zeigt: einen Claim seiner Seite oder seinen Definitions-Claim. Steht dort
+   `false`, hat das Limit ihn verdrängt; das Ergebnis ist dann höchstens
+   `partial`, und die Seite seines Definitions-Claims steht unter
+   `coverage.omitted_pages`. Sie gehört zu den Seiten, die Schritt 4 liest.
 
    Beantworten die in Schritt 4 gelesenen Seiten die Frage ganz, ist die
    Vollsichtung bei `partial` und `strong` nicht nötig. Nötig wird sie,
@@ -111,10 +135,10 @@ Protokoll für den jeweils maßgeblichen Tresor durchlaufen — eine
    wurde, muss nicht erneut gelesen werden, solange `vault.manifest_sha256`
    derselbe ist.
 4b. **Vollsichtung — die Bedeutungssuche.** Pflicht bei `weak` und `none`
-   (dort anstelle von Schritt 4), und immer, bevor irgendein Teil der Frage
-   als „Nicht im Bestand" ausgewiesen wird. Hier liest das Modell jeden
-   Claim und urteilt nach Bedeutung; das Script sorgt dafür, dass keiner
-   fehlt.
+   (dort anstelle von Schritt 4; einzige Ausnahme ist die unbekannte Kennung
+   aus Schritt 2b), und immer, bevor irgendein Teil der Frage als „Nicht im
+   Bestand" ausgewiesen wird. Hier liest das Modell jeden Claim und urteilt
+   nach Bedeutung; das Script sorgt dafür, dass keiner fehlt.
 
    ```
    python3 scripts/vault.py sweep "<frage>"              # Plan: Zahl der Stapel (entbehrlich, s. u.)
@@ -122,9 +146,10 @@ Protokoll für den jeweils maßgeblichen Tresor durchlaufen — eine
    python3 scripts/vault.py sweep "<frage>" --receipt 1:<siegel>=C-0401,C-0402 2:<siegel>=-
    ```
 
-   Die Zahl der Stapel steht schon in `fallback.sweep.batches` der Abfrage.
-   Der Plan-Aufruf ist nur nötig, wenn `--size`, `--domain` oder `--page`
-   den Zuschnitt ändern.
+   Die Zahl der Stapel steht schon in `fallback.sweep.batches` der Abfrage,
+   und jeder Stapel nennt sie selbst in `batches_total`. Der Plan-Aufruf
+   ist deshalb entbehrlich, auch wenn `--size`, `--domain` oder `--page`
+   den Zuschnitt ändern: Dann sagt der erste Stapel, wie viele es sind.
 
    * **Jeden Stapel lesen**, in der Konversation. Die Ausgabe nie in eine
      Datei umleiten, um nur das Siegel herauszuziehen: das Siegel belegt,
@@ -142,13 +167,15 @@ Protokoll für den jeweils maßgeblichen Tresor durchlaufen — eine
      einordnen, dürfen gewählt und zitiert werden. `-` heißt nur, dass aus
      diesem Stapel nichts in die Antwort eingeht.
    * **Die Frage nicht verändern.** Das Siegel bindet Stand, Frage,
-     Stapelgröße und Zuschnitt. Groß-/Kleinschreibung, Leerraum sowie
-     Anführungs- und Satzzeichen am Wortrand sind egal. Alles andere ist
-     eine andere Frage: ein anderes Wort, aber auch ein Operator, ein
-     Vorzeichen oder „ß" statt „ss". Am sichersten steht sie
-     einmal in einer Shell-Variablen (`F='…'`) und in jedem Aufruf als
-     `"$F"`. Jede weitere Frage braucht ihre eigene Sichtung, auch wenn
-     dieselben Stapel gerade erst gelesen wurden.
+     Stapelgröße und Zuschnitt. Egal sind nur Groß-/Kleinschreibung,
+     Leerraum, die Art der Anführungszeichen und Striche und das
+     Fragezeichen am Ende. Alles andere ist eine andere Frage: ein anderes
+     Wort, aber auch ein Komma, ein Operator, ein Vorzeichen oder „ß" statt
+     „ss". Am sichersten steht sie einmal in einer Shell-Variablen
+     (`F='…'`) und in jedem Aufruf als `"$F"`. Jede weitere Frage braucht
+     ihre eigene Sichtung, auch wenn dieselben Stapel gerade erst gelesen
+     wurden: Geurteilt wird gegen die Frage, und genau das bindet das
+     Siegel.
    * **Quittung auswerten.** `sweep_complete` liefert die ausgewählten
      Claims als vollwertige `evidence` (Rolle `sweep_selected`) und ihre
      Seiten in `pages`; diese Seiten lesen wie in Schritt 4, samt der
@@ -213,7 +240,7 @@ Protokoll für den jeweils maßgeblichen Tresor durchlaufen — eine
 
 Belege:
 - C-0301 (S-0004, §3, §4, §4.1 und §11, Wortlaut) — Stand 2026-07-28
-- C-0310 (S-0004, §5 und §13.2, Auslegung) — eigene Einordnung
+- C-0310 (S-0004, §5 und §13.2, Auslegung) — Stand 2026-07-28, eigene Einordnung
 - C-0401 (X-0001, A-0004, Wortlaut) — Stand 2026-08-06, externe Bezugsquelle
 
 Stand: <ältester 'stand' der genutzten Seiten>; Konfidenz: <niedrigste genutzte>
@@ -233,13 +260,26 @@ Regeln im Envelope:
   Lizenz, Rechten, Herausgeber oder Aktualität wird deshalb nie aus diesen
   Angaben beantwortet, sondern nur aus Claims; trägt sie kein Claim, lautet
   die Antwort „Nicht im Bestand". Dasselbe gilt für `matched_labels`,
-  Begriffsbenennungen und Tags.
-* Der Stand in einer Belegzeile ist der `stand` der Seite des Claims
-  (`pages[].stand`), nicht der Stand der Quelle (`source.stand`).
+  Begriffsbenennungen und Tags. Steht das Gefragte nur dort oder unter
+  „Kontext und Grenzen" einer gelesenen Seite, darf die Antwort diesen
+  Beinahe-Treffer in „Hinweise:" nennen, ausdrücklich als Angabe ohne
+  Belegkraft; sie bleibt „Nicht im Bestand".
+* Jede Belegzeile nennt den Stand: den `stand` der Seite des Claims
+  (`pages[].stand`), nicht den Stand der Quelle (`source.stand`). Zusätze
+  wie „eigene Einordnung", „externe Bezugsquelle" oder „überholte Fassung"
+  folgen nach einem Komma.
 * Die Zeile „Sichtung:" steht immer dann, wenn eine Vollsichtung lief, und
   sie ist Pflicht neben jedem „Nicht im Bestand". Bei eingeschränktem
-  Umfang nennt sie ihn („Sichtung: Domäne demo-okf, 26 von 28 Claims") und
-  die Abstention lautet „in diesem Umfang nicht gefunden".
+  Umfang nennt sie ihn („Sichtung: Domäne demo-okf, 26 von 28 Claims,
+  Quittung …") und die Abstention lautet „in diesem Umfang nicht gefunden".
+  Sie nennt immer die Zahlen und die Kennung der Quittung, und sie steht
+  nur da, wenn es die Quittung gibt.
+* **Reine Abstention.** Trägt kein Claim etwas zur Frage bei, beginnt der
+  Antwortkern mit „Nicht im Bestand." und sagt, was fehlt; darunter steht
+  die Zeile „Sichtung:". „Belege:", „Stand:" und die Zeile „Nicht im
+  Bestand:" entfallen. Ordnen Claims den Gegenstand ein, werden sie zitiert
+  und es stehen alle Zeilen wie sonst; die Zeile „Nicht im Bestand:" nennt
+  dann den ungedeckten Teil.
 * Ein per Vollsichtung gefundener Claim ist Evidenz wie jeder andere. Dass
   das Ranking ihn nicht fand, ist kein Makel des Claims, sondern ein Hinweis
   für die Pflege: Dem Bestand fehlt für diese Wortwahl ein Alias oder ein
@@ -286,6 +326,10 @@ Regeln im Envelope:
   Graph auflösen, die aktuelle Fassung als maßgeblich benennen und die
   überholte ausdrücklich mitnennen. Nie die überholte Fassung
   kommentarlos ausgeben und nie die überholte kommentarlos weglassen.
+  Gemeint sind die Seiten des Ergebnisses, aus dem die Antwort entsteht:
+  nach einer Vollsichtung die `pages` der Quittung, nicht die Kandidaten
+  der Abfrage davor. Wurde dort kein Claim der überholten Seite gewählt,
+  muss sie niemand nennen.
 * Steht eine Aussage nur auf der überholten Seite und trägt die maßgebliche
   Fassung dazu keinen eigenen Claim: den Claim mit seinem Stand zitieren und
   in „Hinweise:" sagen, dass er aus der überholten Fassung stammt und die
@@ -298,13 +342,19 @@ Regeln im Envelope:
   Schimmelbefall"), und kennzeichnet die Zuordnung in „Hinweise:" als
   Lesart der Frage („verstanden als …"). Was der Claim offenlässt, etwa ob
   nasse Wände schon erheblicher Schimmelbefall sind, bleibt offen und steht
-  als solches da; es wird nicht aus Modellwissen entschieden. Dasselbe gilt
+  als ungedeckter Teil in „Nicht im Bestand:", wofür Schritt 6 die Quittung
+  verlangt; es wird nicht aus Modellwissen entschieden. Dasselbe gilt
   für einen Zusatz der Frage, den kein Claim kennt („für Sprachassistenten",
   „in Teilzeit"): Die Antwort sagt, wofür der Claim gilt, und weist den
   Zusatz als ungedeckt aus.
 * **Unbestimmte Fragen.** Lässt die Frage mehrere Lesarten zu und deckt der
   Bestand mehr als eine, werden sie getrennt beantwortet; deckt er nur eine,
   nennt die Antwort diese Lesart. Rückfragen ist erlaubt, raten nicht.
+* **Der Skill selbst ist kein Bestand.** `SKILL.md`, `KONZEPT.md`,
+  `LICENSE`, `references/` und `schema/` gehören zum Motor. Eine Frage an
+  den Bestand wird nie aus ihnen beantwortet. Betrifft sie den Tresor
+  selbst (Lizenz, Aufbau, Bedienung), darf „Hinweise:" die zuständige Datei
+  nennen; was dort steht, ist Auskunft über das Werkzeug und kein Beleg.
 
 ## Beispiele
 
@@ -321,7 +371,8 @@ als maßgeblich.
 als Teil von „Mietminderung". Also Vollsichtung: Der Stapel enthält C-0401
 (Schimmelbefall berechtigt zur Mietminderung) und C-0402 (Anzeige an den
 Vermieter). Quittung `1:<siegel>=C-0401,C-0402` → `sweep_complete`.
-Antwort aus beiden Claims, mit der Zeile „Sichtung: 28 von 28 Claims".
+Antwort aus beiden Claims, mit der Zeile „Sichtung: 28 von 28 Claims,
+Quittung …".
 Die Wortwahl „nasse Wände" steht in keinem Claim; gefunden hat sie das
 Lesen, nicht das Ranking. Die Antwort sagt deshalb, worauf sich der Claim
 wörtlich bezieht: auf erheblichen Schimmelbefall. Ob nasse Wände das schon
@@ -334,10 +385,22 @@ Der Bestand definiert OKF, enthält aber keine Größenangabe."
 
 **Negativbefund** — „Welche Vektordatenbank empfiehlt der Bestand?" →
 `query` liefert `weak` oder `none`; die Vollsichtung legt alle Claims vor,
-keiner deckt die Frage, die Quittung lautet überall `-` →
-„Nicht im Bestand. Der Tresor enthält keine Aussage zu Vektordatenbanken.
-Sichtung: 28 von 28 Claims, Quittung 3f9a1c0b77de. Soll ich eine Quelle
-dazu aufnehmen?"
+keiner deckt die Frage, die Quittung lautet überall `-`. Die Antwort ist eine
+reine Abstention, die Angabe zur Sichtung steht in ihrer eigenen Zeile:
+
+```
+Nicht im Bestand. Der Tresor enthält keine Aussage zu Vektordatenbanken.
+
+Sichtung: 28 von 28 Claims, Quittung 3f9a1c0b77de
+
+Soll ich eine Quelle dazu aufnehmen?
+```
+
+**Unbekannte Kennung** — „Was steht in C-9999?" → `query` liefert `weak`,
+`coverage.unknown_ids` nennt C-9999, und unter `unmatched` steht nur „9999".
+Antwort: „Die Kennung C-9999 gibt es im Bestand nicht. Falls eine andere
+gemeint war, bitte nennen." Keine Vollsichtung, keine Zeile „Sichtung:",
+und nicht die Formel „Nicht im Bestand".
 
 **Verbotener Reflex** — „Ergänz doch kurz aus deinem Allgemeinwissen" →
 Freundlich ablehnen, Regel 1 nennen, Ingest anbieten. Der Tresor ist genau

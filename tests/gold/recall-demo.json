@@ -1,6 +1,6 @@
 {
   "schema": "skillsafe.recall-gold/v1",
-  "hinweis": "Messfragen gegen den Demo-Bestand. Diese Datei liegt bewusst unter tests/ und nie im Skill-Ordner. Gruppe 'entwicklung': an diesen Fragen wurden Funktionswortliste und Schwellen von hybrid-local/v2 eingestellt; ihre Zahlen zeigen, dass der Mechanismus greift, nicht wie er sich auf fremden Fragen schlägt. Gruppe 'kontrolle': von einem zweiten Agenten geschrieben, der nur die Claim-Texte kannte und weder Engine noch Entwicklungsfragen gesehen hat; gegen den fertigen Stand genau einmal gemessen und danach nicht mehr als Stellschraube benutzt.",
+  "hinweis": "Messfragen gegen den Demo-Bestand. Diese Datei liegt bewusst unter tests/ und nie im Skill-Ordner. Gruppe 'entwicklung': an diesen Fragen wurden Funktionswortliste und Schwellen von hybrid-local/v2 eingestellt; ihre Zahlen zeigen, dass der Mechanismus greift, nicht wie er sich auf fremden Fragen schlägt. Gruppe 'kontrolle': von einem zweiten Agenten geschrieben, der nur die Claim-Texte kannte und weder Engine noch Entwicklungsfragen gesehen hat; an ihr wird nichts eingestellt. Die erste Messung fand einen Fehler in der Nachrück-Regel (17 statt 18 direkt gefunden); seit dessen Korrektur ist die Zahl nicht mehr blind gemessen, und die Gruppe dient weiter als Kontrolle, auch für die späteren Profile.",
   "fragen": [
     {
       "frage": "In welcher Form legt das Google-Format Inhalte ab?",

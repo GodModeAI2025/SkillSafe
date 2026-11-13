@@ -82,11 +82,22 @@ def e2e_stand():
     """
     werte = {}
     for datei in sorted(E2E_ORDNER.glob("runde-*.json")):
-        daten = json.loads(datei.read_text(encoding="utf-8"))
-        ergebnis = daten["ergebnis"]
-        werte[int(daten["runde"])] = tuple(ergebnis[feld] for feld in (
-            "antworten", "positiv", "positiv_gefunden", "vom_ranking_verfehlt",
-            "davon_gefunden", "negativ", "negativ_korrekt", "verstoesse"))
+        try:
+            daten = json.loads(datei.read_text(encoding="utf-8"))
+            runde = int(daten["runde"])
+            zahlen = tuple(int(daten["ergebnis"][feld]) for feld in (
+                "antworten", "positiv", "positiv_gefunden",
+                "vom_ranking_verfehlt", "davon_gefunden", "negativ",
+                "negativ_korrekt", "verstoesse"))
+            version = str(daten["stand"]["version"])
+        except (OSError, UnicodeError, ValueError, KeyError, TypeError) as exc:
+            raise SystemExit(
+                f"{datei} ist kein vollständiges Protokoll (runde, stand, "
+                f"ergebnis): {exc!r}") from exc
+        if runde in werte:
+            raise SystemExit(
+                f"{datei}: Runde {runde} liegt doppelt unter {E2E_ORDNER}")
+        werte[runde] = (zahlen, version)
     if not werte:
         raise SystemExit(f"Unter {E2E_ORDNER} liegt kein Protokoll runde-*.json")
     return werte
@@ -149,8 +160,9 @@ def ist_stand():
     )
     for gruppe, werte in recall_stand().items():
         stand[f"recall_{gruppe}"] = werte
-    for runde, werte in e2e_stand().items():
-        stand[f"e2e_runde_{runde}"] = werte
+    for runde, (zahlen, version) in e2e_stand().items():
+        stand[f"e2e_runde_{runde}"] = zahlen
+        stand[f"e2e_version_{runde}"] = version
     return stand
 
 
@@ -208,15 +220,24 @@ def pruefe(stand):
     # Hinweis, still verfehlt. Die Zeile "Vorher" steht bewusst nicht hier:
     # sie ist ein einmaliger Messwert des abgelösten Rankings.
     def verlange_zeile(text, muster, name, erwartet, datei):
-        gefunden = re.search(muster, text)
-        if not gefunden:
+        treffer = list(re.finditer(muster, text))
+        if not treffer:
             abweichungen.append(f"{datei}: {name} nicht gefunden (Muster {muster!r})")
             return
-        ist = tuple(int(wert) for wert in gefunden.groups())
-        if ist != tuple(erwartet):
+        # Jede Zeile mit dieser Beschriftung zählt. Sonst stünde hinter der
+        # richtigen unbemerkt eine zweite, falsche.
+        if len(treffer) > 1:
             abweichungen.append(
-                f"{datei}: {name} steht auf {ist!r}, echt ist {tuple(erwartet)!r}"
+                f"{datei}: {name} steht {len(treffer)}-mal da, erwartet ist "
+                f"genau eine Zeile"
             )
+        for gefunden in treffer:
+            ist = tuple(int(wert) for wert in gefunden.groups())
+            if ist != tuple(erwartet):
+                abweichungen.append(
+                    f"{datei}: {name} steht auf {ist!r}, echt ist "
+                    f"{tuple(erwartet)!r}"
+                )
 
     zahlen = r" \| (\d+) \| (\d+) \| (\d+) \| (\d+) \| \*\*(\d+)\*\* \|"
     zellen = "".join([r"<td>(\d+)</td>"] * 5)
@@ -232,16 +253,32 @@ def pruefe(stand):
     # korrekt abgelehnt, Verstöße. Dort heißt die Zeile nur "Runde n", damit
     # die Tabelle auf einem Telefon nicht umbricht.
     acht = (r" \| v[0-9.]+" + r" \| (\d+)" * 7 + r" \| \*\*(\d+)\*\* \|")
-    for schluessel in sorted(key for key in stand if key.startswith("e2e_runde_")):
-        runde = schluessel.rsplit("_", 1)[1]
-        werte = stand[schluessel]
+    runden = sorted(
+        key.rsplit("_", 1)[1] for key in stand if key.startswith("e2e_runde_"))
+    for runde in runden:
+        werte = stand[f"e2e_runde_{runde}"]
         beschriftung = f"Ende zu Ende, Runde {runde}"
         verlange_zeile(readme, r"\| " + re.escape(beschriftung) + acht,
                        f"Ende-zu-Ende-Runde {runde}", werte, "README.md")
+        # Der Stand, an dem die Runde lief, steht im Protokoll.
+        verlange(readme, r"\| " + re.escape(beschriftung) + r" \| v([0-9.]+) \|",
+                 f"Stand der Ende-zu-Ende-Runde {runde}",
+                 stand.get(f"e2e_version_{runde}"), "README.md")
         verlange_zeile(landing, f"<td>Runde {runde}</td>" + zellen,
                        f"Ende-zu-Ende-Runde {runde}",
                        (werte[0], werte[2], werte[4], werte[6], werte[7]),
                        "index.html")
+    # Umgekehrt: keine Zeile ohne Protokoll. Eine Runde, zu der nichts unter
+    # tests/e2e/ liegt, ist eine Behauptung ohne Beleg.
+    for datei, text, muster in (
+            ("README.md", readme, r"\| Ende zu Ende, Runde (\d+) \|"),
+            ("index.html", landing, r"<td>Runde (\d+)</td>")):
+        ohne = sorted(set(re.findall(muster, text)) - set(runden), key=int)
+        if ohne:
+            abweichungen.append(
+                f"{datei}: Ende-zu-Ende-Runde {', '.join(ohne)} steht in der "
+                f"Tabelle, aber kein Protokoll unter tests/e2e/ belegt sie"
+            )
     return abweichungen
 
 

@@ -29,7 +29,7 @@ geschützte `dir_fd`-Operationen fail-closed ab.
 📖 **Konzept & Architekturentscheidungen:** [`wissenstresor/KONZEPT.md`](wissenstresor/KONZEPT.md)
 🌐 **Landingpage:** [`index.html`](index.html) (GitHub-Pages-fähig, Source = repo root)
 
-**Aktueller Release: v0.14.0** (Profil `oksv-lite/1.3`) mit Begriffswelten,
+**Aktueller Release: v0.15.0** (Profil `oksv-lite/1.3`) mit Begriffswelten,
 deterministischem Hybrid-Retrieval, geprüften Bild-/PDF-Regionen und einem
 reproduzierbaren `.skill`-Paket für Claude Code und Codex. Der
 Frontmatter-Parser lehnt Verschachtelung fail-closed ab statt sie still
@@ -60,7 +60,7 @@ liest der Tresor ausschließlich Ziele, die namentlich in
 etwas, das dort nicht aufgeführt ist.
 
 Neu in v0.12.0 ist die **Bedeutungssuche ohne Bedeutungsindex**. Das Ranking
-(`hybrid-local/v2`, seit v0.14.0 `v3`) kennt Wortformen und sagt bei jeder
+(`hybrid-local/v2`, seit v0.14.0 `v3`, seit v0.15.0 `v4`) kennt Wortformen und sagt bei jeder
 Abfrage, welche Wörter der Frage es nicht erkannt hat. Hat es zu wenig
 erkannt, legt `sweep` dem Modell jeden Claim vor und prüft die Quittung;
 „Nicht im Bestand" gibt es nur noch mit vollständiger Quittung. Für
@@ -104,9 +104,41 @@ oder in „ß" gegen „ss" unterscheiden. Und mit `tools/antwort_check.py` läs
 sich nachrechnen, ob ein Agent dem Antworten-Vertrag wirklich gefolgt ist;
 die Protokolle der Messläufe liegen unter `tests/e2e/`.
 
-Abnahme: 157 Tests bestanden · 37 manifestierte Dateien · 39 sichere
+v0.15.0 arbeitet dreierlei nach. Erstens einen zweiten Review der Änderungen
+aus v0.14.0. Er fand drei Reste desselben Fehlers, `strong`, obwohl etwas
+unverstanden blieb: einen per Kennung genannten Begriff, von dem die Ausgabe
+nichts zeigte; eine Kennung, die es nicht gibt, deren Ziffern aber zufällig
+im Bestand standen; und die Abkürzung „IT", die als englisches „it" einer
+Fundstelle zum Anker wurde. Das Ranking `hybrid-local/v4` verlangt für
+`strong` jetzt auch, dass jeder getroffene Begriff in der Ausgabe vertreten
+ist (`concepts.matched[].represented`) und dass die Frage keine unbekannte
+Kennung nennt (`coverage.unknown_ids`). Rangfolge und Punktzahlen sind
+dieselben wie in v3; Fingerabdrücke aus v3 gelten trotzdem nicht mehr, weil
+sie den Profilnamen tragen. Derselbe Review zeigte, dass das Siegel der
+Vollsichtung „a != b" und „a = b" gleich las: Seit v0.15.0 bleibt an der
+Frage jedes Zeichen stehen außer dem Fragezeichen am Ende; nur die Art der
+Anführungszeichen und Striche wird vereinheitlicht.
+
+Zweitens die dritte Abnahmerunde: Gilt eine Frage allein einer Kennung, die
+es nicht gibt, braucht sie keine Vollsichtung mehr, denn das weiß das Script
+selbst. Der Antworten-Vertrag sagt genauer, wie eine reine Abstention
+aussieht, dass jede Belegzeile den Stand trägt und dass der Plan-Aufruf der
+Vollsichtung auch bei eigener Stapelgröße entbehrlich ist.
+
+Drittens die Absicherung der Messung selbst. Ein Review hatte Dutzende
+kleiner Fehler in Ranking und Messwerkzeug eingebaut, und die Hälfte blieb
+grün. Seither hält ein Schnappschuss fest, was `query` für jede Goldfrage
+ausgibt (`tools/rangfolge_check.py`), der Leck-Wächter liest eine Goldfrage
+so, wie die Engine sie träfe, das harte Gate hat eine Positivkontrolle, und
+`tools/antwort_check.py` lässt sich nicht mehr über die Form einer Antwort
+täuschen (umbrochene Formel, behauptete Sichtung ohne Quittung, eine andere
+Frage in den Schaltern der Sichtung). Gegengeprüft mit 117 gezielt gewählten
+Einzelfehlern: 116 fallen jetzt auf, der verbleibende ist gleichwertig. Das
+zeigt, dass die bekannten Lücken zu sind, nicht dass es keine weiteren gibt.
+
+Abnahme: 181 Tests bestanden · 37 manifestierte Dateien · 39 sichere
 Paketeinträge · SHA-256
-`f5fafde10f3000c6456f10711915934435971c1455aa599cabcef1a6baffa939`.
+`0ce136cb794e78268a997a0e8f9b2fe33e2b8e8eac9e5fb7614a1c4688357b7f`.
 Dazu 2 aufgeführte externe Bezugsquellen · 2 Satzanker.
 
 Alles läuft mit der Python-Standardbibliothek, gemessen mit CPython 3.9.6 und
@@ -118,6 +150,7 @@ python3 -m unittest discover -s tests -t .
 cd wissenstresor && python3 scripts/vault.py doctor
 cd .. && python3 tools/build_skill_package.py && python3 tools/check_docs.py
 python3 tools/recall_check.py --kurz
+python3 tools/rangfolge_check.py
 ```
 
 Wie man am Projekt arbeitet, freigibt und Störfälle behebt, steht in
@@ -236,11 +269,13 @@ als eigene Tests da, darunter alle 72 Paarfragen aus je zwei
 Vorzugsbenennungen: `strong` gibt es nur, wenn beide Begriffe in der Ausgabe
 vertreten sind. An der Tabelle hat das nichts geändert, und das ist der
 Punkt: Eine Zahl, die einen Fehler nie maß, bleibt gleich, wenn er behoben
-ist.
+ist. Ein zweiter Review fand mit zufällig erzeugten Beständen drei Reste
+derselben Art (siehe oben, v0.15.0); auch sie haben keine Zahl der Tabelle
+bewegt.
 
 ### Ende zu Ende: Folgt ein Modell dem Verfahren?
 
-Das misst kein Gold. Zwölf frische Agenten bekamen je einen entpackten
+Das misst kein Gold. Sechzehn frische Agenten bekamen je einen entpackten
 Skill-Ordner und Nutzerfragen im Wortlaut, ohne Erklärung des Verfahrens.
 Ausgewertet hat ein Werkzeug, das dem Agenten nichts glaubt: Es liest aus dem
 Protokoll nur Frage, Antworttext und Quittungseinträge und fährt jede Quittung
@@ -250,6 +285,7 @@ erneut gegen die Engine.
 |---|---|---|---|---|---|---|---|---|---|
 | Ende zu Ende, Runde 1 | v0.12.1 | 32 | 24 | 24 | 19 | 19 | 8 | 8 | **0** |
 | Ende zu Ende, Runde 2 | v0.13.0 | 12 | 8 | 8 | 8 | 8 | 4 | 4 | **0** |
+| Ende zu Ende, Runde 3 | v0.14.0 | 12 | 7 | 7 | 5 | 5 | 5 | 5 | **0** |
 
 *mit Claim:* Fragen, zu denen ein Claim im Bestand steht · *Ranking verfehlt:*
 davon solche, deren Claim das Ranking nicht lieferte · *negativ:* Fragen, die
@@ -257,11 +293,16 @@ der Bestand nicht beantwortet · *Verstöße:* „Nicht im Bestand" ohne
 vollständige Quittung, ausgelassene Pflicht-Vollsichtung, ungültige Quittung,
 erfundene Claim-ID, übersehener Claim.
 
-Alle 27 Fragen, deren Claim das Ranking verfehlte, wurden über die
-Vollsichtung gefunden; alle 12 Negativfragen wurden mit gültiger Quittung
-abgelehnt. In Runde 2 liefen sechs Sichtungen über drei Stapel. Was das nicht
-zeigt: wie sorgfältig ein Modell einen Bestand mit 189 Stapeln liest. Die
-Messung gilt für 28 Claims und Agenten eines Modells.
+Alle 32 Fragen, deren Claim das Ranking verfehlte, wurden über die
+Vollsichtung gefunden; alle 17 Negativfragen wurden mit gültiger Quittung
+abgelehnt. In Runde 2 und 3 liefen je sechs Sichtungen über drei Stapel. Was
+das nicht zeigt: wie sorgfältig ein Modell einen Bestand mit 189 Stapeln
+liest. Die Messung gilt für 28 Claims und Agenten eines Modells.
+
+Jede Runde lief am Stand davor und fand, was am Vertrag unklar war; daraus
+kamen die Korrekturen des jeweils nächsten Release. Runde 3 fragte zusätzlich
+nach zwei kuratierten Begriffen in einer Frage und nach einer Kennung, die es
+nicht gibt.
 
 Die Protokolle liegen in [`tests/e2e/`](tests/e2e/LIESMICH.md). Ihre Siegel
 gelten für den Stand, an den sie gebunden sind, und lassen sich dort
@@ -295,13 +336,22 @@ python3 tools/recall_check.py --vault <tresor> --gold <gold.json>
 
 Hart ist nur ein Gate: null stille Verfehlungen. Die Trefferquote ist eine
 Gütezahl mit einstellbarer Untergrenze (`--min-recall`). Das Gold liegt nie im
-Skill-Ordner, das Werkzeug weigert sich sonst; und steht eine Goldfrage
-wörtlich im Bestand, bricht es ab. Ein Gold, das der Bestand kennt, misst nur
-noch, ob er sich selbst wiederfindet. Was eine Verfehlung behebt, ist ein
+Skill-Ordner, das Werkzeug weigert sich sonst; und steht eine Goldfrage im
+Skill-Ordner, bricht es ab, auch wenn sie dort ohne Fragezeichen oder in
+Umschrift steht, wie ein Alias eben aussähe. Ein Gold, das der Bestand kennt,
+misst nur noch, ob er sich selbst wiederfindet. Was eine Verfehlung behebt, ist ein
 Alias oder ein Tag in der Sprache der Fragenden, nie die Frage selbst — siehe
 [`references/begriffswelten.md`](wissenstresor/references/begriffswelten.md).
 
-Ob ein Agent mit dem eigenen Bestand dem Verfahren folgt, prüft das zweite
+Wer am Ranking arbeitet oder wissen will, ob ein Update es verändert hat,
+hält die Ausgabe für den eigenen Fragensatz fest und vergleicht später:
+
+```bash
+python3 tools/rangfolge_check.py --vault <tresor> --gold <gold.json> --stand <stand.json> --schreiben
+python3 tools/rangfolge_check.py --vault <tresor> --gold <gold.json> --stand <stand.json>
+```
+
+Ob ein Agent mit dem eigenen Bestand dem Verfahren folgt, prüft das dritte
 Werkzeug. Es braucht ein Protokoll mit Frage, Antworttext und den an
 `--receipt` übergebenen Einträgen; das Format steht in
 [`tests/e2e/LIESMICH.md`](tests/e2e/LIESMICH.md):

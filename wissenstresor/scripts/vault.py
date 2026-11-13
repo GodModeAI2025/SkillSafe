@@ -166,7 +166,7 @@ QUERY_SCHEMA = "skillsafe.query/v1"
 ANCHORS_SCHEMA = "skillsafe.anchors/v1"
 ORCHESTRATOR_SCHEMA = "skillsafe.orchestrator/v1"
 BINDING_SCHEMA = "skillsafe.bindung/v1"
-RETRIEVAL_PROFILE = "hybrid-local/v3"
+RETRIEVAL_PROFILE = "hybrid-local/v4"
 EXTERN_RETRIEVAL_PROFILE = "extern-zweistufig/v1"
 SEGMENTATION_PROFILE = "satzsegmentierung/v1"
 # Wortform ist kein Bedeutungsmodell: nur Flexion, Umlaut-Plural, -ung und
@@ -179,9 +179,14 @@ SWEEP_STANDARD_GROESSE = 40
 SWEEP_MIN_GROESSE = 5
 SWEEP_MAX_GROESSE = 200
 SWEEP_SIEGEL_LAENGE = 16
-# Zeichen, die am Rand eines Frageworts nichts bedeuten: Anführungszeichen
-# und Satzzeichen. Bewusst nicht dabei: + - # < > = % und Währungszeichen.
-SWEEP_FRAGE_RAND = "\"'`´„“”‚‘’«»‹›.,;:!?…()[]{}"
+# Was zwischen zwei Aufrufen derselben Frage schwankt, ohne dass sich die
+# Frage ändert: die Art der Anführungszeichen und Striche. Sie werden
+# vereinheitlicht, nicht entfernt: 5' und 5" bleiben verschieden.
+SWEEP_ZEICHEN_GLEICH = str.maketrans({
+    **{zeichen: '"' for zeichen in "„“”«»″"},
+    **{zeichen: "'" for zeichen in "‚‘’‹›′`´"},
+    **{zeichen: "-" for zeichen in "‐‑‒–—−"},
+})
 SWEEP_QUITTUNG_RE = re.compile(
     r"^(\d{1,6}):([0-9a-f]{16})=(-|C-\d{4}(?:,C-\d{4})*)$"
 )
@@ -2977,6 +2982,7 @@ def _query_base(query, state, *, manifest_digest=None, version=None,
             },
             "omitted_pages": [],
             "omitted_pages_truncated": False,
+            "unknown_ids": [],
         },
         "fallback": {
             "exhaustive_review_required": False,
@@ -3559,6 +3565,12 @@ def build_query_result(snapshot, world=None, limit=8):
            and (world is None or concepts[value]["world"] == world)}
     )
     id_ziffern = {value.split("-")[1] for value in bekannte_ids}
+    # Ob es eine genannte Kennung gibt, entscheidet das Script, nicht das
+    # Lesen: Das gehört ausdrücklich in die Ausgabe, nicht nur als
+    # ungetroffene Ziffernfolge.
+    unbekannte_ids = sorted(
+        (query_claim_ids | query_source_ids | query_concept_ids)
+        - bekannte_ids)
     terms = sorted({
         token for token in _inhaltstokens(query) if token not in id_ziffern
     })
@@ -3922,19 +3934,30 @@ def build_query_result(snapshot, world=None, limit=8):
     getroffen = [term for term in terms if term_stand[term] >= 2]
     teilgetroffen = [term for term in terms if term_stand[term] == 1]
     ungetroffen = [term for term in terms if term_stand[term] == 0]
-    # Die ganze Frage als Wortfolge ist nur ein Anker, wenn sie ein
-    # Inhaltswort hat: "nicht" oder "und" stehen wörtlich in vielen Claims.
+    # Die ganze Frage als Wortfolge ist nur ein Anker, wenn dabei ein
+    # Inhaltswort getroffen ist: "nicht" oder "und" stehen wörtlich in
+    # vielen Claims, und die Abkürzung "IT" stünde sonst als englisches
+    # "it" in der Fundstelle "How it works".
     anker = bool(vertretene) or any(
-        (reason == "exact:claim" and bool(terms)) or reason.startswith("id:")
+        (reason == "exact:claim" and bool(getroffen))
+        or reason.startswith("id:")
         for k in gezeigt for reason in k["reasons"]
     )
+    # 'strong' heißt: nichts an der Frage blieb unverstanden. Ein direkt
+    # getroffener Begriff, von dem die Ausgabe nichts zeigt, ist unverstanden,
+    # auch wenn seine Benennung kein Inhaltswort beisteuert (ein per ID
+    # genannter Begriff, eine Benennung wie "Soll und Haben"). Dasselbe gilt
+    # für eine Kennung, die es nicht gibt: Ihre Ziffern können zufällig
+    # irgendwo stehen ("S-2026" und ein Datum), verstanden ist sie damit
+    # nicht.
+    unvertretene = [cid for cid in direct if cid not in vertretene]
     if terms:
         abdeckung = 100 * len(getroffen) // len(terms)
     else:
         abdeckung = 100 if anker else 0
     if not evidence:
         staerke = "none"
-    elif abdeckung == 100:
+    elif abdeckung == 100 and not unvertretene and not unbekannte_ids:
         staerke = "strong"
     elif anker or (len(getroffen) >= 2 and abdeckung >= 60):
         staerke = "partial"
@@ -3943,6 +3966,9 @@ def build_query_result(snapshot, world=None, limit=8):
 
     gezeigte_seiten = set(page_paths)
     verdeckt = {}
+    # Ein unvertretener Begriff steht hier immer mit seiner Definitionsseite:
+    # Sein Definitions-Claim ist ein direkter Kandidat, und das Limit hat
+    # ihn abgeschnitten.
     for k in gekuerzt:
         if not k["direkt"] or k["path"] in gezeigte_seiten:
             continue
@@ -3966,6 +3992,7 @@ def build_query_result(snapshot, world=None, limit=8):
             "preferred": concepts[cid]["preferred"],
             "matched_labels": matched_labels[cid],
             "match": concept_modes.get(cid, "exact"),
+            "represented": cid in vertretene,
         }
         for cid in direct
     ]
@@ -4028,6 +4055,7 @@ def build_query_result(snapshot, world=None, limit=8):
             },
             "omitted_pages": omitted_pages[:MAX_OMITTED_PAGES],
             "omitted_pages_truncated": len(omitted_pages) > MAX_OMITTED_PAGES,
+            "unknown_ids": unbekannte_ids,
         },
         "fallback": {
             "exhaustive_review_required": schwach,
@@ -4144,20 +4172,23 @@ def _sweep_umfang(snapshot, domaenen, seiten):
 def _sweep_frage_norm(frage):
     """Die Frage, wie Siegel und Quittung sie binden.
 
-    Enger als die Normalisierung des Rankings. Dort dürfen "Maßen" und
+    Viel enger als die Normalisierung des Rankings. Dort dürfen "Maßen" und
     "Massen", "<" und ">=", "C++" und "C#" zusammenfallen, weil ein Treffer
     mehr nur ein Kandidat mehr ist. Ein Siegel dagegen sagt: Zu genau dieser
     Frage wurde geurteilt. Gleich bleibt deshalb nur, was zwischen zwei
-    Aufrufen derselben Frage wirklich schwankt: Groß-/Kleinschreibung,
-    Leerraum, Anführungszeichen und Satzzeichen am Wortrand. Operatoren,
-    Vorzeichen, ß und Umlaute bleiben stehen.
+    Aufrufen derselben Frage schwankt, ohne etwas zu bedeuten:
+    Groß-/Kleinschreibung, Leerraum, die Art der Anführungszeichen und
+    Striche und das Fragezeichen am Ende. Jedes andere Zeichen bleibt
+    stehen, auch Satzzeichen im Inneren.
+
+    Bis v0.14.0 fielen Satzzeichen an jedem Wortrand weg. Damit teilten sich
+    "a != b" und "a = b" ein Siegel, ebenso ".5" und "5" oder "!aktiv" und
+    "aktiv": Die Quittung der einen Frage galt für ihr Gegenteil.
     """
     text = unicodedata.normalize("NFC", str(frage)).lower()
-    woerter = [wort.strip(SWEEP_FRAGE_RAND) for wort in text.split()]
-    woerter = [wort for wort in woerter if wort]
-    # Eine Frage nur aus Satzzeichen bleibt, was sie ist: sonst teilten sich
-    # "?" und "!" ein Siegel.
-    return " ".join(woerter) if woerter else " ".join(text.split())
+    text = " ".join(text.translate(SWEEP_ZEICHEN_GLEICH).split())
+    # Eine Frage nur aus Fragezeichen bleibt, was sie ist.
+    return text.rstrip("? ") or text
 
 
 def _sweep_siegel(snapshot, groesse, nummer, claim_ids):

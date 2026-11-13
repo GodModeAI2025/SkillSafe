@@ -4,7 +4,7 @@ title: LLM-Wiki-Muster (Karpathy) und Praxisregeln
 domain: demo-okf
 status: aktiv
 confidence: mittel
-version: 1.0.0
+version: 1.0.1
 stand: 2026-07-04
 sources: [S-0002]
 tags: [llm-wiki, karpathy, ingest, lint, kompression, map-first]
@@ -21,8 +21,8 @@ kuratierten Wiki-Schicht, die das Modell anstelle der Rohdokumente liest;
 Kernoperationen sind Ingest, Query und Lint mit grep-barem Log. Aus den
 Praxisberichten im Kommentarbereich folgen zwei harte Regeln dieses Tresors:
 Seiten lohnen nur, wenn sie Fakten aus vielen Quellen verdichten und zur
-Abfragezeit als vertrauenswürdig gelten (Kompressionsregel) — und Relevanz
-wird über die Map entschieden, nie durch Lesen von Seitenkörpern (Map-first).
+Abfragezeit als vertrauenswürdig gelten (Kompressionsregel) — und die
+Map-first-Regel als zweite verbindliche Vorgabe.
 Konfidenz dieser Seite ist "mittel", weil die Quelle ein lebendes Dokument
 mit Trust-Stufe T3 ist.
 

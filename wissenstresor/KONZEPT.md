@@ -428,7 +428,7 @@ und `BETRIEB.md`.
 **Entscheidung:** Der Tresor bekommt eine Bedeutungssuche, aber keinen
 Bedeutungsindex. Drei Bausteine tragen sie gemeinsam:
 
-1. **Das Ranking wird ehrlich.** `hybrid-local/v3` weist aus, welche
+1. **Das Ranking wird ehrlich.** `hybrid-local/v4` weist aus, welche
    Fragebegriffe es erkannt hat (`coverage.match_strength`,
    `coverage.query_terms`), meldet jede Kürzung durch das Limit und macht bei
    `weak` und `none` die Vollsichtung zur Pflicht.
@@ -509,8 +509,50 @@ Inhaltswort ist nie `strong`; der Fingerzeig liegt bei 10. An den Messzahlen
 ändert das nichts (19 und 18 direkt, 0 still), und genau das ist die Lehre:
 Die Zahlen maßen diese Fehler nie. Jeder ist jetzt ein eigener Test.
 
+**Ein zweiter Review, derselbe Ort.** Die Änderungen von v0.14.0 wurden
+wieder unabhängig geprüft, diesmal mit zufällig erzeugten Beständen und einem
+Orakel, das die zugesagten Eigenschaften je Abfrage nachrechnet. Es fand drei
+Reste desselben Fehlers: `strong`, obwohl etwas an der Frage unverstanden
+blieb. Ein per ID genannter Begriff (oder einer, dessen Benennung nur aus
+Funktionswörtern besteht) steuert kein Inhaltswort bei; fehlte er in der
+Ausgabe, blieb die Abdeckung bei 100 %. Die Ziffern einer Kennung, die es
+nicht gibt, standen zufällig im Bestand („S-2026" und eine Jahreszahl). Und
+die Abkürzung „IT" traf als ganze Frage das englische „it" einer Fundstelle
+und galt als Anker. `hybrid-local/v4` schließt alle drei: `strong` verlangt
+zusätzlich, dass jeder direkt getroffene Begriff vertreten ist
+(`concepts.matched[].represented`) und dass die Frage keine unbekannte
+Kennung nennt; die ganze Frage als Wortfolge ist nur mit getroffenem
+Inhaltswort ein Anker. Rangfolge und Punktzahlen sind dieselben wie in v3,
+die Messzahlen ebenfalls. Derselbe Review fand, dass das Siegel der
+Vollsichtung „a != b" und „a = b" gleich las, weil Satzzeichen am Wortrand
+wegfielen; seit v0.15.0 bleibt jedes Zeichen stehen außer dem Fragezeichen am
+Ende, und nur die Art der Anführungszeichen und Striche wird vereinheitlicht.
+
+**Und was die Tests nicht zeigten.** Ein vierter Durchgang prüfte nicht den
+Code, sondern seine Absicherung: 86 Einzelfehler in der Engine und 17 im
+Messwerkzeug, je einer zur Zeit, am Stand v0.12.0. Die Hälfte blieb grün,
+darunter die Schwellen der Trefferstärke, vertauschte Kürzungszähler, jedes
+Gewicht der veröffentlichten Tabelle und das entfernte Gate für stille
+Verfehlungen, das am Demo-Gold noch nie angeschlagen hatte. Der Leck-Wächter
+fand eine Goldfrage nur in wörtlicher Schreibung, nicht ohne Fragezeichen
+und nicht in Umschrift, also gerade nicht so, wie ein Alias sie trüge. Seit
+v0.15.0 hält ein Schnappschuss fest, was `query` für jede Goldfrage bei Limit
+1, 3 und 8 und für eine Reihe fester Abfragen ausgibt
+(`tools/rangfolge_check.py`, `tests/gold/rangfolge-demo.json`): Zustand,
+Stärke, Abdeckung, Evidenz mit Punktzahl und je ein Prüfwert über die übrigen
+Blöcke. Jedes Gate des Messwerkzeugs hat einen Test, der es auslöst, die
+Messzahlen selbst stehen als Soll in der Suite, und der Leck-Wächter liest
+mit der Normalisierung der Engine. Ein Schnappschuss beweist keine
+Richtigkeit, er macht Bewegung sichtbar: Wer am Ranking dreht, sieht jede
+Folge und entscheidet sie, statt sie zu übersehen. Gegengeprüft mit einer
+eigenen Probe am Stand v0.15.0: Von 117 gezielt gewählten Einzelfehlern in
+Engine und Werkzeugen fallen 116 auf, der verbleibende ist gleichwertig (das
+Siegel ohne Stapelnummer; die Claim-IDs unterscheiden die Stapel ohnehin).
+Die Probe ist selbst gebaut. Sie zeigt, dass die bekannten Lücken geschlossen
+sind, nicht dass es keine weiteren gibt.
+
 **Ende zu Ende gemessen.** Ob ein Modell dem Vertrag tatsächlich folgt, zeigt
-weder das Gold noch ein Review, sondern nur ein Lauf. Zwölf frische Agenten
+weder das Gold noch ein Review, sondern nur ein Lauf. Sechzehn frische Agenten
 bekamen je einen entpackten Skill-Ordner und Nutzerfragen, sonst nichts: keine
 Erklärung des Verfahrens, kein Hinweis auf die Messung. Ausgewertet hat
 `tools/antwort_check.py`, das dem Agenten nichts glaubt: Aus dem Protokoll
@@ -521,9 +563,11 @@ erneut gegen die Engine.
 |---|---|---|---|---|---|---|---|---|---|
 | 1, acht Agenten | v0.12.1 | 32 | 24 | 24 | 19 | 19 | 8 | 8 | 0 |
 | 2, vier Agenten | v0.13.0 | 12 | 8 | 8 | 8 | 8 | 4 | 4 | 0 |
+| 3, vier Agenten | v0.14.0 | 12 | 7 | 7 | 5 | 5 | 5 | 5 | 0 |
 
-In beiden Runden reichte jeder Agent zu jeder Frage eine gültige, vollständige
-Quittung ein; in Runde 2 liefen sechs davon über drei Stapel. Kein „Nicht im
+In allen drei Runden reichte jeder Agent zu jeder Frage eine gültige,
+vollständige Quittung ein; in Runde 2 und 3 liefen je sechs davon über drei
+Stapel. Kein „Nicht im
 Bestand" stand ohne Quittung da, keine Negativfrage wurde beantwortet, kein
 Agent veränderte seine Kopie. Die Protokolle liegen unter `tests/e2e/`; ihre
 Siegel gelten nur für den Stand, an den sie gebunden sind.
@@ -539,11 +583,17 @@ Ausgabe zu lesen ist; die Ausgabe selbst zu berichtigen ist eine eigene
 Arbeit und nicht Teil dieses Stands. Und sie fanden in v0.13.0 einen Satz,
 der falsch war, weil er
 ungeprüft in den Vertrag geschrieben wurde (ein Netzabruf schreibe nichts in
-den Skill-Ordner; er schreibt eine Zeile nach `log.md`).
+den Skill-Ordner; er schreibt eine Zeile nach `log.md`). Runde 3 lief am
+Stand v0.14.0 und brachte kleinere Unklarheiten: ob die Frage nach einer
+Kennung, die es nicht gibt, eine Vollsichtung braucht (seit v0.15.0 nicht
+mehr, das weiß das Script selbst), wie eine reine Abstention aussieht, ob die
+Belegzeile einer Auslegung den Stand trägt, und einen Satz unter „Kontext
+und Grenzen" einer Demo-Seite, der mehr behauptete, als ein Claim trug.
 
-Grenzen dieser Messung, ausdrücklich: 44 Fragen, ein Demo-Bestand, in dem die
+Grenzen dieser Messung, ausdrücklich: 56 Fragen, ein Demo-Bestand, in dem die
 Vollsichtung ein einziger Stapel ist, Agenten desselben Modells, und die
-Fragen stammen aus dem Gold, sind also Fragen, die zu einem Claim gehören.
+Fragen stammen bis auf zwei aus dem Gold: Die mit erwartetem Claim sind
+also Fragen, die zu einem Claim gehören.
 Das zeigt, dass das Verfahren befolgbar ist und befolgt wurde. Es zeigt
 nicht, wie sorgfältig ein Modell 189 Stapel liest.
 
@@ -769,7 +819,7 @@ statt übermischt · Ziel im Tresor, in `.claude`/`.codex` oder mit fremdem
 Inhalt bricht ab · `stats` läuft auch auf einem roten Bestand ohne Traceback.
 
 **Auffindbarkeit und Vollsichtung (seit v0.12.0, gemessen am 2026-11-12 mit
-`hybrid-local/v3`):**
+`hybrid-local/v4`):**
 `tools/recall_check.py` gegen `tests/gold/recall-demo.json`, Limit 8 ·
 Gruppe „entwicklung" (28 Fragen): 19 direkt gefunden, 9 in der
 Pflicht-Vollsichtung, 0 still · Gruppe „kontrolle" (56 blind geschriebene
@@ -778,19 +828,23 @@ Fragen): 18 direkt gefunden, bei 38 steht die Seite des Claims unter `pages`,
 bei 16 verlangt das Signal die Vollsichtung, 10 sind `partial`, 1 ist
 `strong`; kein Feld der Abfrage erlaubt eine Abstention, und dass auch die
 übrigen 11 in der Vollsichtung enden, ist Vertragsregel und nur am Agenten
-messbar · Ende zu Ende mit zwölf frischen Agenten, ausgewertet mit
-`tools/antwort_check.py`: 44 Fragen, 0 Verstöße, 32 von 32 erwarteten Claims
-gefunden (27 davon nach verfehltem Ranking), 12 von 12 Negativfragen mit
+messbar · Ende zu Ende mit sechzehn frischen Agenten, ausgewertet mit
+`tools/antwort_check.py`: 56 Fragen, 0 Verstöße, 39 von 39 erwarteten Claims
+gefunden (32 davon nach verfehltem Ranking), 17 von 17 Negativfragen mit
 gültiger Quittung abgelehnt · 72 Paarfragen aus je zwei Vorzugsbenennungen:
-`strong` nur, wenn beide Begriffe in der Ausgabe vertreten sind · ein
+`strong` nur, wenn beide Begriffe in der Ausgabe vertreten sind · ein per ID
+genannter Begriff, den die Ausgabe nicht zeigt, verhindert `strong` und
+steht mit `represented: false` da · ein
 Funktionswort benennt keinen Begriff („sich" nicht „Sicherung") · eine
-unbekannte ID bleibt als unverstandenes Wort stehen · die Vollsichtung legt bei
+unbekannte ID steht unter `coverage.unknown_ids` und verhindert `strong`,
+auch wenn ihre Ziffern zufällig im Bestand stehen · die Vollsichtung legt bei
 Stapelgrößen 5, 7, 40 und 200 jeden der 28 Claims genau einmal vor ·
 falsches Siegel, fehlender, doppelter oder fremder Stapel, andere Frage,
 andere Stapelgröße und neuer Release machen die Quittung ungültig und liefern
 keine Evidenz · ein eingeschränkter Umfang quittiert vollständig und erlaubt
 trotzdem keine Abstention · das Siegel unterscheidet Fragen, die sich nur
-in einem Operator, einem Vorzeichen oder in ß gegen ss unterscheiden ·
+in einem Operator, einem Vorzeichen, einem Satzzeichen oder in ß gegen ss
+unterscheiden („a != b" gegen „a = b", „.5" gegen „5") ·
 mehrfaches `--receipt` wird gesammelt, widersprüchliche Einträge zum selben
 Stapel machen die Quittung ungültig · eine Seite außerhalb des Manifests
 (`knowledge/__pycache__/`) stoppt den Release · Regions-Text und Alttext

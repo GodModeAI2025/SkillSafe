@@ -17,8 +17,11 @@ Zwei Zahlen zählen, und nur eine davon ist ein Gate:
 
 Dazu drei Wächter, die nichts mit Güte zu tun haben: Die Vollsichtung muss
 jeden Claim genau einmal vorlegen, das Gold darf nicht im Skill liegen, und
-keine Goldfrage darf wörtlich im Bestand stehen. Ein Gold, das der Bestand
-kennt, misst nur noch, ob er sich selbst wiederfindet.
+keine Goldfrage darf im Skill-Ordner stehen. Ein Gold, das der Bestand
+kennt, misst nur noch, ob er sich selbst wiederfindet. Verglichen wird so,
+wie die Engine Benennungen trifft: ohne Satzzeichen, ohne Groß- und
+Kleinschreibung, Umlaute in Umschrift. Eine Goldfrage als Alias sähe genau so
+aus.
 
 Read-only, nur Standardbibliothek. Aus der Repository-Wurzel:
 
@@ -34,6 +37,7 @@ import os
 import re
 import subprocess
 import sys
+import unicodedata
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -43,7 +47,8 @@ STANDARD_VAULT = REPOSITORY / "wissenstresor"
 STANDARD_GOLD = REPOSITORY / "tests" / "gold" / "recall-demo.json"
 GOLD_SCHEMA = "skillsafe.recall-gold/v1"
 CLAIM_RE = re.compile(r"^C-\d{4}$")
-TEXT_SUFFIXE = {".md", ".json", ".yaml", ".py"}
+# Größere Dateien sind Medien oder Rohquellen und werden nicht durchsucht.
+LECK_MAX_BYTES = 5 * 1024 * 1024
 
 
 class GoldFehler(ValueError):
@@ -91,12 +96,21 @@ def lade_gold(pfad, vault):
             raise GoldFehler(
                 f"{pfad}: Frage {nummer} braucht 'erwartet' als Liste von C-nnnn"
             )
-        if frage in gesehen:
+        # Verglichen wird, wie die Engine vergleicht: dieselbe Frage in
+        # anderer Schreibung zählte sonst doppelt und schönte die Quote.
+        if _norm(frage) in gesehen:
             raise GoldFehler(f"{pfad}: Frage {nummer} ist doppelt: {frage!r}")
-        gesehen.add(frage)
+        gesehen.add(_norm(frage))
     if (not isinstance(negativ, list)
             or not all(isinstance(f, str) and f.strip() for f in negativ)):
         raise GoldFehler(f"{pfad}: 'negativ' muss eine Liste von Fragen sein")
+    for nummer, frage in enumerate(negativ, 1):
+        if _norm(frage) in gesehen:
+            raise GoldFehler(
+                f"{pfad}: Negativfrage {nummer} steht doppelt im Gold oder "
+                f"zugleich unter 'fragen': {frage!r}"
+            )
+        gesehen.add(_norm(frage))
     return fragen, negativ
 
 
@@ -125,23 +139,71 @@ def lauf(vault, *argv):
 
 
 def _norm(text):
-    return re.sub(r"\s+", " ", text.casefold()).strip()
+    """Dieselbe Normalisierung wie ``_retrieval_norm`` der Engine.
+
+    Bewusst nachgebaut und nicht importiert: Das Werkzeug ruft die Engine nur
+    als Prozess. Dass beide Fassungen dasselbe liefern, hält ein Test fest.
+    """
+    text = unicodedata.normalize("NFKC", str(text)).casefold()
+    text = (text.replace("ä", "ae").replace("ö", "oe")
+            .replace("ü", "ue").replace("ß", "ss"))
+    text = "".join(zeichen if zeichen.isalnum() else " " for zeichen in text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _zeichenketten(wert):
+    """Jede Zeichenkette eines JSON-Dokuments, Schlüssel eingeschlossen."""
+    if isinstance(wert, str):
+        yield wert
+    elif isinstance(wert, dict):
+        for schluessel, inhalt in wert.items():
+            yield str(schluessel)
+            yield from _zeichenketten(inhalt)
+    elif isinstance(wert, list):
+        for inhalt in wert:
+            yield from _zeichenketten(inhalt)
+
+
+def _lesbarer_text(pfad):
+    """Was an einer Datei Text ist; leer bei Binär- und Riesendateien.
+
+    Ohne Blick auf die Endung: ``FRAGEN.MD`` oder eine Datei ohne Endung
+    enthält eine Goldfrage genauso wie ``notes/fragen.md``. JSON wird
+    zusätzlich geparst, sonst versteckte ``\\u00e4`` einen Umlaut.
+    """
+    try:
+        if pfad.stat().st_size > LECK_MAX_BYTES:
+            return ""
+        roh = pfad.read_bytes()
+    except OSError:
+        return ""
+    if b"\x00" in roh[:8192]:
+        return ""
+    text = roh.decode("utf-8", errors="ignore")
+    if pfad.suffix.lower() == ".json":
+        try:
+            text += "\n" + "\n".join(_zeichenketten(json.loads(text)))
+        except ValueError:
+            pass
+    return text
 
 
 def leck_suche(vault, fragen):
-    """Goldfragen, die wörtlich im Skill-Ordner stehen."""
+    """Goldfragen, die im Skill-Ordner stehen, in der Lesart der Engine."""
+    vault = Path(vault)
     korpus = []
-    for pfad in sorted(Path(vault).rglob("*")):
-        if pfad.is_file() and pfad.suffix in TEXT_SUFFIXE:
-            try:
-                korpus.append((pfad, _norm(pfad.read_text(encoding="utf-8"))))
-            except (OSError, UnicodeError):
-                continue
+    for pfad in sorted(vault.rglob("*")):
+        if pfad.is_file():
+            text = _norm(_lesbarer_text(pfad))
+            if text:
+                korpus.append((pfad, f" {text} "))
     lecks = []
     for frage in fragen:
         nadel = _norm(frage)
+        if not nadel:
+            continue
         for pfad, text in korpus:
-            if nadel in text:
+            if f" {nadel} " in text:
                 lecks.append((frage, str(pfad.relative_to(vault))))
     return lecks
 
@@ -149,6 +211,11 @@ def leck_suche(vault, fragen):
 def sichtung_pruefen(vault, frage):
     """Legt die Vollsichtung jeden Claim genau einmal vor?"""
     plan = lauf(vault, "sweep", frage)
+    if plan.get("state") == "invalid_query":
+        raise MessFehler(
+            f"Die Engine nimmt eine Frage des Golds nicht an "
+            f"(invalid_query): {plan.get('errors')}\nFrage: {frage[:120]!r}"
+        )
     if plan.get("state") != "plan":
         raise MessFehler(
             f"sweep ist nicht bereit ({plan.get('state')}): "
@@ -193,13 +260,25 @@ def messe(vault, fragen, negativ, limit=8, seite_von=None):
     """
     seite_von = seite_von or {}
 
-    def eine_frage(eintrag):
-        antwort = lauf(vault, "query", eintrag["frage"], "--limit", str(limit))
+    def abfrage(frage):
+        antwort = lauf(vault, "query", frage, "--limit", str(limit))
+        if antwort["state"] in {"invalid_query", "ambiguous"}:
+            # Nicht der Tresor ist kaputt, sondern die Frage unbrauchbar:
+            # zu lang, mit Zeilenumbruch, oder mehrdeutig über Begriffswelten.
+            raise MessFehler(
+                f"Die Engine nimmt eine Frage des Golds nicht an "
+                f"({antwort['state']}): {antwort.get('errors')}\n"
+                f"Frage: {frage[:120]!r}"
+            )
         if antwort["state"] not in {"candidates_found", "no_candidates"}:
             raise MessFehler(
                 f"query ist nicht bereit ({antwort['state']}): "
                 f"{antwort.get('errors')}\nErst 'vault.py doctor' grün bekommen."
             )
+        return antwort
+
+    def eine_frage(eintrag):
+        antwort = abfrage(eintrag["frage"])
         coverage = antwort["coverage"]
         ids = [item["claim_id"] for item in antwort["evidence"]]
         rang = next(
@@ -233,7 +312,7 @@ def messe(vault, fragen, negativ, limit=8, seite_von=None):
         }
 
     def eine_negativfrage(frage):
-        antwort = lauf(vault, "query", frage, "--limit", str(limit))
+        antwort = abfrage(frage)
         return {
             "frage": frage,
             "staerke": antwort["coverage"]["match_strength"],
@@ -299,7 +378,7 @@ def bericht(zeilen, negativ_zeilen, sichtung, lecks, limit, ausfuehrlich):
           f"{sichtung['claims_total']} Claims vorgelegt (Stapel: "
           f"{sichtung['stapel']}), {doppelt} doppelt, {fehlend} fehlend")
     for frage, datei in lecks:
-        print(f"Leck: {frage!r} steht wörtlich in {datei}")
+        print(f"Leck: {frage!r} steht in {datei}")
 
 
 def gates(zeilen, sichtung, lecks, min_recall, max_hinweis):
@@ -332,7 +411,7 @@ def gates(zeilen, sichtung, lecks, min_recall, max_hinweis):
         verletzt.append("Die Vollsichtung legt nicht jeden Claim genau einmal vor")
     if lecks:
         verletzt.append(
-            f"{len(lecks)} Goldfrage(n) stehen wörtlich im Skill-Ordner"
+            f"{len(lecks)} Goldfrage(n) stehen im Skill-Ordner"
         )
     return verletzt
 

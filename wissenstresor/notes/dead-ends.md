@@ -159,3 +159,16 @@ statt 'weak' und schalteten die Pflicht-Vollsichtung genau dort ab, wo die
 Antwort auf einer anderen, nicht gezeigten Seite stehen kann. Die enge
 Rechnung ist die vorsichtige. Ersatz: Der Unterschied steht im Vertrag, und
 ein Fragebegriff aus concepts.partial steht jetzt auch in query_terms.partial.
+
+## [2026-11-12] Siegel ohne Stapelausgabe, wenn die Claims schon im Kontext stehen — verworfen
+In der dritten Abnahmerunde stoerte mehrere Agenten, dass jede weitere Frage
+dieselben Stapel erneut ausgibt, obwohl sie bei unveraendertem Manifest schon
+im Kontext stehen. Erwogen wurde ein Schalter, der nur die Siegel liefert.
+Verworfen: Das Siegel belegt genau, dass der Stapel fuer diese Frage
+ausgegeben wurde. Ein Aufruf, der es ohne Ausgabe hergibt, waere die
+eingebaute Fassung der Abkuerzung, die der Vertrag verbietet (Ausgabe
+umleiten, Siegel herausziehen), und die Engine kann nicht pruefen, was in
+einem Kontext steht. Die Kosten bleiben: Jede Frage, die eine Vollsichtung
+braucht, liest den Bestand einmal. Ersatz: Der Vertrag nennt den Grund, und
+eine Frage, die allein einer unbekannten Kennung gilt, braucht seit v0.15.0
+keine Vollsichtung mehr.

@@ -50,7 +50,9 @@ Diese sechs Regeln gelten in jedem Workflow und stechen jede Bequemlichkeit:
    `coverage.query_terms.unmatched` nennen, was es an der Frage nicht
    verstanden hat. Bei `weak` oder `none` ist die **Vollsichtung** Pflicht
    (`vault.py sweep`): Sie legt jeden Claim in Stapeln vor, das Modell
-   urteilt nach Bedeutung, und das Script prüft die Quittung. „Nicht im
+   urteilt nach Bedeutung, und das Script prüft die Quittung. Einzige
+   Ausnahme: Die Frage gilt allein einer Kennung, die es laut
+   `coverage.unknown_ids` nicht gibt; das weiß das Script selbst. „Nicht im
    Bestand" darf ausschließlich nach einer Quittung mit
    `state: sweep_complete` und `abstention.allowed: true` stehen — nie
    nach einem Router-, Lexik- oder Top-k-Fehlschlag, und auch nicht nach

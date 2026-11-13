@@ -4,7 +4,7 @@ title: Open Knowledge Format (OKF)
 domain: demo-okf
 status: veraltet
 confidence: hoch
-version: 1.2.1
+version: 1.2.2
 stand: 2026-07-28
 sources: [S-0001]
 tags: [okf, format, google, markdown, frontmatter]
@@ -39,8 +39,8 @@ Stand der Quelle ist die Ankündigung vom 2026-06-12.
 
 Diese Seite beschreibt v0.1 und ist überholt: seit 2026-07-24 gilt
 [Open Knowledge Format v0.2](okf-v02.md), das v0.1 nach eigener Aussage
-ablöst. Die Claims C-0001 bis C-0005 bleiben gültig, sie tragen ihren
-Versionsbezug im Text und werden von v0.2 inhaltlich bestätigt. Wer nach dem
-aktuellen Stand fragt, wird auf die Nachfolgeseite verwiesen; welche Fassung
-gilt, entscheidet der Antwort-Workflow anhand der `ersetzt`-Relation und
-benennt beide.
+ablöst. Die Claims C-0001 bis C-0005 geben wieder, was die Ankündigung zu
+v0.1 sagt. Ob eine dieser Aussagen unter v0.2 fortgilt, belegt nur ein
+Claim der Nachfolgeseite. Wer nach dem aktuellen Stand fragt, wird auf die
+Nachfolgeseite verwiesen; welche Fassung gilt, entscheidet der
+Antwort-Workflow anhand der `ersetzt`-Relation und benennt beide.

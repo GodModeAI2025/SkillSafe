@@ -2,12 +2,16 @@
 """Abnahme für Begriffswelten, Medienfundstellen und lokalen Query-Vertrag."""
 
 import hashlib
+import importlib.util
 import json
 import os
+import random
+import re
 import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -24,6 +28,14 @@ class VaultRetrievalTests(unittest.TestCase):
 
     def tearDown(self):
         self.tempdir.cleanup()
+
+    def load_vault(self, suffix):
+        """Die Engine dieses Wegwerf-Tresors im Prozess laden."""
+        spec = importlib.util.spec_from_file_location(
+            f"vault_retrieval_test_{suffix}", self.root / "scripts/vault.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
 
     def run_cli(self, *args, extra_env=None):
         env = os.environ.copy()
@@ -1038,14 +1050,14 @@ Das Bild zeigt eine grüne Produktionsfreigabe.
 
     @staticmethod
     def fingerprint_nach_rezept(wurzeln, frage_norm, treffer):
-        """Das Rezept von extern-zweistufig/v1, hier ein zweites Mal ausgeschrieben.
+        """Das Rezept von extern-zweistufig/v2, hier ein zweites Mal ausgeschrieben.
 
         Bewusst dupliziert: aendert jemand in der Engine, was in den
         Fingerprint eingeht, muss dieser Test rot werden — sonst waere
         "bytegleich zum alten Stand" eine Behauptung ohne Waechter.
         """
         return hashlib.sha256(json.dumps(
-            {"algorithm": "extern-zweistufig/v1",
+            {"algorithm": "extern-zweistufig/v2",
              "roots": sorted(wurzeln),
              "query": frage_norm,
              "hits": [[t["source_id"], t["document"], t["sentence_index"],
@@ -1059,8 +1071,8 @@ Das Bild zeigt eine grüne Produktionsfreigabe.
         Eine Quelle, fuer die die Suche geoeffnet wurde, geht mit ihrem
         Katalogstand in den Fingerprint ein — auch wenn am Ende kein Dokument
         aus ihr lesbar war. So war es vor der Trennung von "nicht gelesen" und
-        "nichts gefunden", und so bleibt es: das Rezept zu aendern hiesse, die
-        Nummer extern-zweistufig/v1 zu aendern.
+        "nichts gefunden", und so bleibt es in v2: v2 hat die Nummer wegen
+        Stoppwort und Vorauswahl gewechselt, nicht wegen des Rezepts.
         """
         wurzel = self.install_extern_fixture()
         zweite = Path(self.tempdir.name) / "extern-zweites-handbuch"
@@ -1116,8 +1128,9 @@ Das Bild zeigt eine grüne Produktionsfreigabe.
         """README, KONZEPT und Landingpage nennen diese Zahlen woertlich.
 
         60 gegen 78 in Stufe 1, 460 gegen 152 in Stufe 2: aendert sich die
-        Rechenvorschrift, sind die veroeffentlichten Zahlen falsch und
-        extern-zweistufig/v1 ist nicht mehr dasselbe Ranking.
+        Rechenvorschrift, sind die veroeffentlichten Zahlen falsch. v2 laesst
+        sie bewusst unveraendert — die Anfrage enthaelt kein Stoppwort, und
+        der Beispielbaum war schon vorher vollstaendig geoeffnet.
         """
         if not (self.root / "sources/derived/X-0001__orchestrator.json").exists():
             self.skipTest("Demo-Bestand ohne externen Katalog")
@@ -1137,13 +1150,13 @@ Das Bild zeigt eine grüne Produktionsfreigabe.
         )
         self.assertEqual([h["score"] for h in block["hits"]], [460, 152])
 
-    def test_documents_the_prefilter_never_opened_are_named_as_a_gap(self):
-        """Was Stufe 1 nicht oeffnet, hat Stufe 2 nie gesehen.
+    def test_local_source_is_read_completely_even_with_a_useless_catalog(self):
+        """Lokal faellt kein Dokument einem schwachen Katalogtext zum Opfer.
 
-        Passt der Katalogtext auf keine Anfrage, oeffnet die Vorauswahl die
-        alphabetisch ersten Dokumente. Steht der Begriff nur in einem
-        spaeteren, bleibt es bei 'nichts gefunden' — aber der Grund sagt,
-        dass der Befund nur fuer die geoeffneten Dokumente gilt.
+        In v1 oeffnete Stufe 1 auch lokal nur 24 Dokumente. Passte der
+        Katalogtext auf keine Anfrage, waren das schlicht die alphabetisch
+        ersten — der Treffer im dreissigsten blieb ungelesen. v2 liest eine
+        lokale Quelle vollstaendig; der Katalog ordnet dort nur.
         """
         anzahl = 30
         inhalt = {
@@ -1168,21 +1181,169 @@ Das Bild zeigt eine grüne Produktionsfreigabe.
         payload = self.extern_payload("Schimmelbefall")
         block = payload["external"]
         gelesen = payload["fallback"]["external_document_paths"]
-        ungeoeffnet = anzahl - len(gelesen)
-        self.assertGreater(ungeoeffnet, 0, "Die Vorauswahl hat nichts begrenzt")
-        self.assertNotIn(f"X-0001:d{anzahl - 1:02d}.md", gelesen)
+        self.assertEqual(len(gelesen), anzahl)
+        self.assertEqual(block["state"], "external_candidates_found")
+        self.assertEqual(block["hits"][0]["document"], f"d{anzahl - 1:02d}.md")
+        self.assertEqual(block["hits"][0]["score_catalog"], 0)
+        # Vollstaendig gelesen: kein Vorbehalt, keine Luecke.
+        self.assertIsNone(block["reason"])
+
+    def test_local_read_budget_names_what_it_cut_off(self):
+        """Das Lesebudget der Abfrage ist gezaehlt — und eine benannte Luecke."""
+        wurzel = self.install_extern_fixture()
+        self.bind_extern(wurzel)
+        self.build_katalog()
+        self.release()
+        vault = self.load_vault("lesebudget")
+        # Ein Byte reicht fuer das erste Dokument; danach ist das Budget weg.
+        vault.MAX_EXTERN_BYTES_GESAMT = 1
+        snapshot, fehler = vault._load_released_query_snapshot("himmel")
+        self.assertIsNone(fehler, fehler)
+        block = vault.build_external_result(snapshot, "himmel")
         self.assertEqual(block["state"], "no_external_candidates")
-        self.assertIn(f"gelesen: {len(gelesen)}", block["reason"])
-        self.assertIn(
-            f"{ungeoeffnet} von {anzahl} katalogisierten Dokumenten nicht geöffnet",
-            block["reason"],
-        )
+        self.assertEqual(block["documents_read"], ["X-0001:handbuch/miete.md"])
+        self.assertIn("gelesen: 1", block["reason"])
+        self.assertIn("1 Dokument(e) nicht geöffnet", block["reason"])
+        self.assertIn("höchstens 1 Byte je Abfrage", block["reason"])
         self.assertIn("gilt nur für die gelesenen Dokumente", block["reason"])
 
-        # Auch ein Treffer aus der Vorauswahl verschweigt den Rest nicht.
-        treffer = self.extern_payload("Fuelltext")["external"]
-        self.assertEqual(treffer["state"], "external_candidates_found")
-        self.assertIn("nicht geöffnet", treffer["reason"])
+    def test_stopword_fuer_counts_after_normalisation(self):
+        """In v1 wurde das rohe 'für' mit dem Token 'fuer' verglichen."""
+        vault = self.load_vault("stoppwort")
+        for frage in ("Lizenz für OKF", "Lizenz fuer OKF", "LIZENZ FÜR OKF"):
+            with self.subTest(frage=frage):
+                self.assertEqual(vault._retrieval_tokens(frage), ("lizenz", "okf"))
+        result, payload = self.query("Was kostet eine Lizenz für OKF?")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(payload["retrieval"], "hybrid-local/v2")
+        self.assertEqual(payload["external"]["algorithm"], "extern-zweistufig/v2")
+        gruende = [g for seite in payload["pages"] for g in seite["reasons"]]
+        gruende += [g for item in payload["evidence"] for g in item["reasons"]]
+        self.assertTrue(gruende)
+        self.assertFalse([g for g in gruende if "fuer" in g], gruende)
+
+    def test_question_without_a_searchable_term_reads_nothing_externally(self):
+        """Nur Stoppwoerter: kein Befund ueber eine Frage, die keine ist."""
+        wurzel = self.install_extern_fixture()
+        self.bind_extern(wurzel)
+        self.build_katalog()
+        self.release()
+        payload = self.extern_payload("der die das")
+        block = payload["external"]
+        self.assertEqual(block["state"], "invalid_query", block)
+        self.assertIn("keinen suchbaren Begriff", block["reason"])
+        self.assertIn("kein Negativbefund", block["reason"])
+        self.assertFalse(block["live"])
+        self.assertFalse(payload["fallback"]["external_live_lookup_used"])
+        self.assertEqual(payload["fallback"]["external_document_paths"], [])
+
+    def test_unusable_local_query_does_not_trigger_the_external_lookup(self):
+        """Eine unbekannte Begriffswelt ist kein Anlass fuer Schritt 4c."""
+        wurzel = self.install_extern_fixture()
+        self.bind_extern(wurzel)
+        self.build_katalog()
+        self.release()
+        result = self.run_cli(
+            "query", "--extern", "--world", "BW-9999", "Schimmelbefall")
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["state"], "invalid_query")
+        self.assertEqual(result.returncode, 2, result.stdout)
+        block = payload["external"]
+        self.assertEqual(block["state"], "invalid_query", block)
+        self.assertIn("lokale Abfrage", block["reason"])
+        self.assertIn("kein Negativbefund", block["reason"])
+        self.assertEqual(block["hits"], [])
+        self.assertFalse(payload["fallback"]["external_live_lookup_used"])
+        self.assertEqual(payload["fallback"]["external_document_paths"], [])
+
+    def test_one_matched_term_counts_even_in_a_long_question(self):
+        """Bei mehr als 100 Begriffen rundete die Abdeckung einen Treffer auf 0 %."""
+        wurzel = self.install_extern_fixture()
+        self.bind_extern(wurzel)
+        self.build_katalog()
+        self.release()
+        frage = "Schimmelbefall " + " ".join(f"q{nummer}" for nummer in range(120))
+        self.assertLess(len(frage), 1000)
+        block = self.extern_payload(frage)["external"]
+        self.assertEqual(block["state"], "external_candidates_found", block)
+        self.assertEqual(block["hits"][0]["document"], "handbuch/miete.md")
+        self.assertEqual(block["hits"][0]["coverage_percent"], 0)
+
+    @staticmethod
+    def alte_satzzerlegung(vault, text):
+        """satzsegmentierung/v1, wie sie bis v0.11.14 implementiert war.
+
+        Bewusst hier ein zweites Mal ausgeschrieben: die schnelle Fassung muss
+        bytegleich bleiben, sonst wandern Satzindizes und Anker brechen.
+        """
+        def ist_satzende(kopf):
+            letztes = re.split(r"[\s(]", kopf)[-1].strip("„»‚'\"")
+            if letztes.lower() in vault.SATZ_ABKUERZUNGEN or len(letztes) == 1:
+                return False
+            if letztes.isdigit() or re.fullmatch(r"[§]?\d+", letztes):
+                return False
+            return not re.search(r"\d$", letztes)
+
+        ergebnis, index = [], 0
+        for art, inhalt in vault._bloecke(text):
+            pos = 0
+            for treffer in vault.SATZENDE_RE.finditer(inhalt):
+                kopf = inhalt[pos:treffer.start()]
+                if not ist_satzende(kopf):
+                    continue
+                satz = vault._satz_norm(kopf + treffer.group(1))
+                if satz:
+                    index += 1
+                    ergebnis.append((index, art, satz))
+                pos = treffer.end()
+            rest = vault._satz_norm(inhalt[pos:])
+            if rest:
+                index += 1
+                ergebnis.append((index, art, rest))
+        return ergebnis
+
+    def test_sentence_segmentation_matches_the_reference_algorithm(self):
+        """Linear gemacht, aber Satz fuer Satz dasselbe Ergebnis."""
+        vault = self.load_vault("satzreferenz")
+        texte = [
+            pfad.read_text(encoding="utf-8")
+            for pfad in sorted(REPOSITORY.rglob("*.md"))
+            if ".git" not in pfad.parts
+        ]
+        zufall = random.Random(20261113)
+        vokabel = [
+            "Das", "z.", "B.", "a.", "u.", "§", "536", "Abs.", "2", "BGB.",
+            "v0.2", "3.14", "(", "(Fn.", "„Zitat.", "Ende.", "Dr.", "x", "?",
+            "!", "…", "\u00a0", "\u2009", "\u3000", "\t", "\n", "\n\n", "- ",
+            "> ", "| a. | b |", "# Titel.", "```", "1)", "Ü.", "ß.", "e.g.",
+            "'Wort.'", "»Satz!«", "12.", "§12.", "Nr.", "etc.", "Satz.",
+            "Frage?", "x.y.", "1.2.0.", "A.", ")", "(a.", "\u2028", "\u0085",
+        ]
+        for _ in range(1500):
+            teile = [zufall.choice(vokabel) for _ in range(zufall.randint(1, 50))]
+            texte.append("".join(
+                teil + zufall.choice([" ", " ", "", "\n", "  ", "\u00a0"])
+                for teil in teile))
+        for nummer, text in enumerate(texte):
+            with self.subTest(text=nummer):
+                self.assertEqual(vault._saetze(text),
+                                 self.alte_satzzerlegung(vault, text))
+
+    def test_sentence_segmentation_stays_linear_on_a_pathological_paragraph(self):
+        """Ein Absatz aus lauter Abkuerzungen brauchte quadratische Zeit.
+
+        Gemessen mit der alten Fassung: 60 KiB in 21 s, hochgerechnet ueber
+        eine Stunde fuer 1 MiB. 120 KiB brauchen jetzt Sekundenbruchteile;
+        die Grenze ist absichtlich grosszuegig, damit nur ein Rueckfall in
+        quadratische Laufzeit sie reisst.
+        """
+        vault = self.load_vault("satzlaufzeit")
+        text = "a. " * 40000
+        start = time.perf_counter()
+        saetze = vault._saetze(text)
+        dauer = time.perf_counter() - start
+        self.assertEqual(len(saetze), 1)
+        self.assertLess(dauer, 15, f"{dauer:.1f} s fuer 120 KiB")
 
     def test_catalog_hashes_only_where_they_can_stay_true(self):
         """Netzkatalog ohne Pruefsummen, lokaler Katalog mit — beide Richtungen.

@@ -74,3 +74,21 @@ Profils und ausdruecklich NICHT durch den alten Eintrag mitverworfen. Eine
 Uebernahme als optionales Feld gueltig_bis bleibt offen; sie braucht dann ein
 Bezugsdatum als Eingabe (kein impliziter Vergleich gegen "heute"), weil die
 Query-Ausgabe sonst tagesabhaengig wird und die Determinismus-Zusage bricht.
+
+## [2026-11-13] Katalog-Vorauswahl auch fuer lokale Quellen — verworfen
+extern-zweistufig/v1 oeffnete bei jeder Quelle nur die 24 besten
+Katalogeintraege. Passte der Katalogtext nicht zur Frage, waren das die
+alphabetisch ersten, und ein Treffer im fuenfundzwanzigsten Dokument blieb
+ungelesen — ein stiller Fehltreffer. Lokal ist Lesen billig und
+deterministisch; der Prefilter sparte dort fast nichts. Ersatz in v2: lokale
+Quellen vollstaendig lesen, begrenzt ueber gezaehlte 64 MiB je Abfrage mit
+benannter Luecke. Fuer Netzquellen bleibt der Prefilter, weil dort jedes
+geoeffnete Dokument ein Abruf ist. Ebenfalls geprueft und zurueckgestellt:
+ein voller Token-Index im Katalog — das waere ein neues Katalogschema fuer
+ein Problem, das sich lokal durch Lesen loest.
+
+## [2026-11-13] Weiterleitungen von urllib folgen lassen und danach pruefen — verworfen
+Die Pruefung der End-URL nach dem Lesen kam zu spaet: das fremde Ziel hatte
+die Anfrage da schon gesehen. Ersatz: ein Opener ohne automatische
+Weiterleitung; das Ziel wird aufgeloest und an Pfadgrenzen gegen das Praefix
+geprueft, bevor die naechste Anfrage hinausgeht.

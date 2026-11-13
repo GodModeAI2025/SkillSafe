@@ -1,4 +1,4 @@
-# Wissenstresor — Konzept (Profil oksv-lite/1.2)
+# Wissenstresor — Konzept (Profil oksv-lite/1.3)
 
 Ein lokaler, evidenzgebundener Wissensspeicher als **purer Skill**: Der
 Skill-Ordner selbst ist das Wissensartefakt. Kein Server, keine Datenbank,
@@ -305,8 +305,8 @@ könnte nach generiertem Code klingen. Er ist `.json`, wird von
 `parse_orchestrators` gelesen und von nichts ausgeführt; `ARTEFAKT_SUFFIXE`
 und die zweite Allowlist im Paketbau bleiben deshalb unverändert — das ist der
 Beleg, nicht die Behauptung. Ein fremder Tresor wird ebenso als Daten gelesen:
-sein Manifest rechnet diese Engine selbst nach, sein `scripts/vault.py` ist
-eine Datei mit einer Prüfsumme. **Restrisiko außerhalb der Prozessgrenze:** Ein
+sein Manifest rechnet diese Engine selbst nach, gelesen wird nur, was es pinnt,
+und sein `scripts/vault.py` ist eine Datei mit einer Prüfsumme. **Restrisiko außerhalb der Prozessgrenze:** Ein
 fremder Baum kann eine `SKILL.md` enthalten, die ein Agent nebenher lädt. Das
 kann `vault.py` nicht verhindern; es gehört beim Binden bedacht und steht so
 in `references/externe-quellen.md`.
@@ -355,8 +355,10 @@ nicht als Negativbefund. Diese Asymmetrie ist eine Entscheidung.
 
 **Entscheidung:** Für einen externen Markdown-Baum entsteht ein Katalog als
 `.json` (`skillsafe.orchestrator/v1`), den die Engine liest. Das Ranking
-`extern-zweistufig/v1` nutzt ihn nur als Prefilter und rechnet Stufe 2 gegen
-den jetzt gelesenen Text. Ein Dokument ohne einen einzigen Anfragebegriff
+`extern-zweistufig/v2` rechnet Stufe 2 immer gegen den jetzt gelesenen Text.
+Den Katalog nutzt es bei einer Netzquelle als Prefilter, weil dort jedes
+geöffnete Dokument ein Abruf ist; eine lokale Quelle wird vollständig gelesen,
+der Katalog ordnet sie nur. Ein Dokument ohne einen einzigen Anfragebegriff
 fällt heraus, unabhängig vom Katalog-Score. Bleibt nichts übrig, kommt nichts
 zurück.
 
@@ -377,9 +379,21 @@ im Grund wörtlich, dass dies kein Negativbefund ist. Ein leeres Ergebnis ohne
 gelesenes Dokument wäre derselbe plausible Fehltreffer mit umgekehrtem
 Vorzeichen: „durchsucht und nichts gefunden", wo nichts durchsucht wurde.
 
+Warum lokal kein Prefilter mehr (v2): In v1 öffnete Stufe 1 auch bei einer
+lokalen Quelle nur die 24 besten Katalogeinträge. Passte der Katalogtext auf
+keine Anfrage, waren das schlicht die alphabetisch ersten, und ein Treffer im
+fünfundzwanzigsten blieb ungelesen — ein stiller Fehltreffer, den erst die
+Lückenmeldung sichtbar machte. Lokal ist Lesen billig und deterministisch;
+der Prefilter sparte dort fast nichts und kostete Trefferquote. Begrenzt wird
+stattdessen gezählt: höchstens 64 MiB je Abfrage, was darüber liegt, nennt
+der Grund. Bei einer Netzquelle bleibt der Prefilter, dazu höchstens 20
+Abrufe je Abfrage.
+
 Abgeglichen wird ausschließlich an Tokengrenzen (`_retrieval_tokens`,
 `_phrase_present`). Ein rohes Substring-`in` gibt es im externen Pfad nicht,
-sonst fände „himmel" ein „schimmel".
+sonst fände „himmel" ein „schimmel". Stoppwörter durchlaufen dieselbe
+Normalisierung wie die Anfrage; in v1 wirkte „für" deshalb nie als
+Stoppwort.
 
 Der Katalog ist ausdrücklich **kein Integritätsartefakt**. Prüfsummen trägt er
 nur für lokale Quellen, wo sie überprüfbar bleiben; bei einer Netzquelle sind
@@ -389,15 +403,21 @@ gegen die AD-10 gebaut ist — nur eine Ebene höher. Integrität kommt von den
 Satzankern und vom Manifest, nicht vom Prefilter.
 
 **Grenze:** Die Trefferqualität hängt an der Struktur fremder Dokumente. Wer
-dort schludert, bekommt schlechtere Treffer; kein Ranking heilt das.
+dort schludert, bekommt schlechtere Treffer; kein Ranking heilt das. Bei einer
+Netzquelle hängt zusätzlich am Katalogtext, welche Dokumente überhaupt
+abgerufen werden.
 
 ### AD-13 · Netz nur im Fallback, Cache außerhalb des Artefakts
 
 **Entscheidung:** Eine aufgeführte Bezugsquelle darf ein festes
 https-Präfix sein. Abgerufen wird nur unter diesem Präfix, nur bei
-ausdrücklichem `--extern`, mit Zertifikatsprüfung, Zeit-, Byte- und
-Redirect-Grenzen, und jeder Abruf steht in `log.md`. Der TTL-Abzug liegt
-außerhalb des Skill-Ordners im Nutzer-Cache-Verzeichnis.
+ausdrücklichem `--extern`, mit Zertifikatsprüfung, Zeit-, Byte-, Redirect- und
+Abrufgrenzen (höchstens 20 je Abfrage), und jeder Abruf steht in `log.md`.
+Einer Weiterleitung folgt nie die HTTP-Schicht selbst: das Ziel wird
+aufgelöst und an Pfadgrenzen gegen das Präfix geprüft, bevor die nächste
+Anfrage hinausgeht. Kann `log.md` nicht geschrieben werden, findet der Abruf
+nicht statt. Der TTL-Abzug liegt außerhalb des Skill-Ordners im
+Nutzer-Cache-Verzeichnis.
 
 **Begründung:** Eine aufgeführte Bezugsquelle ist keine Internetrecherche.
 Recherche heißt offene Suche und unbekannte Ziele; aufgeführt heißt: ein
@@ -405,9 +425,12 @@ namentlich benanntes, über das Manifest gepinntes Ziel. Das ist dieselbe
 Kategorie wie eine Zeile im Quellenregister, und deshalb wird eine aufgeführte
 Netzquelle behandelt wie eine interne — auch dort, wo Internetrecherche
 ausdrücklich untersagt ist. Damit das überprüfbar bleibt statt behauptet,
-existiert das Herkunftsprotokoll. Der Cache liegt außerhalb, weil er innerhalb
-von `ROOT` durch Dateiart- und Manifest-Walk liefe und das Artefakt
-verunreinigte.
+existiert das Herkunftsprotokoll — und deshalb ist es Vorbedingung, nicht
+Nachtrag: Ein Abruf, der nicht protokolliert werden kann, ließe sich danach nur
+noch melden, nicht mehr nachweisen. Aus demselben Grund folgt `urllib` keiner
+Weiterleitung von selbst; sonst sähe ein fremdes Ziel die Anfrage, bevor die
+Präfixprüfung greift. Der Cache liegt außerhalb, weil er innerhalb von `ROOT`
+durch Dateiart- und Manifest-Walk liefe und das Artefakt verunreinigte.
 
 **Grenze, offen benannt:** Der Satz „kein Netzwerk im Skill" gilt jetzt für den
 Default-Query-Pfad statt absolut. Er ist damit schwächer, und die Landingpage

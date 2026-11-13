@@ -24,7 +24,7 @@ geschützte `dir_fd`-Operationen fail-closed ab.
 📖 **Konzept & Architekturentscheidungen:** [`wissenstresor/KONZEPT.md`](wissenstresor/KONZEPT.md)
 🌐 **Landingpage:** [`index.html`](index.html) (GitHub-Pages-fähig, Source = repo root)
 
-**Aktueller Release: v0.11.14** (Profil `oksv-lite/1.3`) mit Begriffswelten,
+**Aktueller Release: v0.12.0** (Profil `oksv-lite/1.3`) mit Begriffswelten,
 deterministischem Hybrid-Retrieval, geprüften Bild-/PDF-Regionen und einem
 reproduzierbaren `.skill`-Paket für Claude Code und Codex. Der
 Frontmatter-Parser lehnt Verschachtelung fail-closed ab statt sie still
@@ -64,9 +64,16 @@ dort durch, wo ein Abruf erst beim Lesen abbricht, ein fremder Tresor
 verlinkte Dokumente enthält oder die Vorauswahl einen Teil des Katalogs gar
 nicht öffnet.
 
-Abnahme: 121 Tests bestanden · 37 manifestierte Dateien · 39 sichere
+v0.12.0 härtet den Netz- und Fremdpfad und wechselt dafür beide
+Ranking-Nummern (`hybrid-local/v2`, `extern-zweistufig/v2`): Einer
+Weiterleitung folgt die HTTP-Schicht nie mehr selbst, ein Abruf findet nur
+statt, wenn er protokolliert werden kann, ein fremder Tresor liefert nur, was
+sein Manifest pinnt, lokale Quellen werden vollständig gelesen, und „für"
+wirkt endlich als Stoppwort.
+
+Abnahme: 141 Tests bestanden · 37 manifestierte Dateien · 39 sichere
 Paketeinträge · SHA-256
-`8b9673e2047f7d0ebec751780a7cfbd8e4be95c937e27b2f9f1856d9e02394bf`.
+`1c8611ad9880fd6ccf901b8ec0b46ab978f2f92c47214a0fe3152d44e3b2236f`.
 Dazu 2 aufgeführte externe Bezugsquellen · 2 Satzanker.
 
 Alles läuft mit der Python-Standardbibliothek, gemessen mit CPython 3.9.6 und
@@ -309,6 +316,13 @@ Stufe 1 stellt das Seerecht vor das Mietrecht — die Katalogtexte ähneln sich
 absichtlich. Stufe 2 dreht das Verhältnis. Der Katalogtext ist ein schwaches
 Signal, der Bestand dahinter das starke.
 
+Seit v0.12.0 (`extern-zweistufig/v2`) filtert Stufe 1 nur noch bei einer
+**Netzquelle**: Dort ist jedes geöffnete Dokument ein Abruf, also werden die
+besten 24 Katalogeinträge abgerufen, höchstens 20 je Abfrage. Eine **lokale**
+Quelle wird vollständig gelesen, der Katalog ordnet sie nur. In v1 öffnete
+Stufe 1 auch lokal nur 24 Dokumente; passte der Katalogtext nicht zur Frage,
+blieb ein Treffer im fünfundzwanzigsten ungelesen.
+
 ### Ehrlich scheitern
 
 Findet die zweite Stufe nichts, kommt nichts zurück:
@@ -350,10 +364,11 @@ SKILLSAFE_OFFLINE=1 python3 scripts/vault.py query --extern "himmel"
 Genau so sieht ein frisch entpacktes Paket ohne Netz aus: der Normalfall, und
 bis v0.11.11 meldete er fälschlich `no_external_candidates`. Wird nur ein
 Teil gelesen, bleibt es beim Ergebniszustand, aber der Grund nennt unter
-„Nicht gelesen" jede Lücke: ausgelassene Quellen, nicht lesbare Dokumente
-und was die Vorauswahl der ersten Stufe nicht geöffnet hat (sie öffnet je
-Quelle höchstens 24 Katalogeinträge). Der Befund reicht so weit wie das
-Gelesene, nicht weiter.
+„Nicht gelesen" jede Lücke: ausgelassene Quellen, nicht lesbare Dokumente,
+was ein gezähltes Budget abgeschnitten hat (20 Netzabrufe, 64 MiB je Abfrage)
+und was die Vorauswahl einer Netzquelle nicht geöffnet hat (dort höchstens
+24 Katalogeinträge). Der Befund reicht so weit wie das Gelesene, nicht
+weiter.
 
 Protokoll und Grenzen im Detail:
 [`references/externe-quellen.md`](wissenstresor/references/externe-quellen.md).

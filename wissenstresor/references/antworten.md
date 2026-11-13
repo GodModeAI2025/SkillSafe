@@ -93,8 +93,9 @@ Protokoll für den jeweils maßgeblichen Tresor durchlaufen — eine
      nichts umgehen.
    * Trägt `external.reason` bei einem der beiden ersten Zustände den Zusatz
      „Nicht gelesen", reicht das Ergebnis nur so weit wie das Gelesene: Eine
-     Quelle wurde nicht gelesen, ein Dokument war nicht lesbar, oder die
-     Vorauswahl hat einen Teil des Katalogs nicht geöffnet. Das dort
+     Quelle wurde nicht gelesen, ein Dokument war nicht lesbar, ein gezähltes
+     Budget der Abfrage war erschöpft, oder die Vorauswahl einer Netzquelle
+     hat einen Teil des Katalogs nicht geöffnet. Das dort
      Genannte zusätzlich als „Extern nicht gelesen:" ausweisen — mit Quelle
      und Grund, ohne Zustand: Den gibt es nur für die Suche als Ganzes, und
      die hat hier ein Ergebnis.

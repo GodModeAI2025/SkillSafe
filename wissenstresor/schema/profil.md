@@ -279,11 +279,13 @@ Mögliche Zustände sind:
 * `invalid_query`, `invalid_vault`, `vault_busy`, `snapshot_changed` —
   fail-closed, immer ohne Evidenz.
 
-Das Ranking `hybrid-local/v1` verwendet ausschließlich Ganzzahlen:
+Das Ranking `hybrid-local/v2` verwendet ausschließlich Ganzzahlen:
 kontrollierte Begriffe/Aliase, lexikalische Token-Treffer und höchstens einen
 Graph-Hop. `retrieval_complete` bedeutet nur, dass dieser Ranking-Scan alle
 validierten Claims gesehen hat; es ist kein semantischer Vollständigkeits-
-beweis.
+beweis. Stoppwörter durchlaufen dieselbe Normalisierung wie die Anfrage; v1
+verglich das rohe „für" mit dem Token „fuer", das Wort wirkte nie als
+Stoppwort. Das ist der einzige Unterschied zu v1.
 
 Keine Embeddings, niemals. Auf dem **Default-Query-Pfad** verlässt außerdem
 kein Byte den Skill-Ordner: kein Netzwerk, kein Dateizugriff nach außen, kein
@@ -312,12 +314,12 @@ wurde, wäre ein Fehltreffer, der nicht als Fehler auffällt.
 |---|---|---|
 | `not_requested` | Abfrage ohne `--extern`, oder sie scheitert, bevor ein Snapshot geladen ist (leere Frage, `--limit` außerhalb der Grenzen, `invalid_vault`, `vault_busy`, `snapshot_changed`) | nein |
 | `not_declared` | `sources/EXTERN.md` führt keine Quelle | nein |
-| `invalid_query` | `--source` nennt eine nicht aufgeführte ID | nein |
+| `invalid_query` | Die Anfrage ist so nicht auswertbar: `--source` nennt eine nicht aufgeführte ID, die Frage enthält keinen suchbaren Begriff, oder die lokale Abfrage endete nicht mit `candidates_found` oder `no_candidates` (etwa `ambiguous` oder eine unbekannte Begriffswelt) | nein |
 | `not_bound` | Jede berücksichtigte Quelle ist eine lokale Quelle ohne brauchbare Bindung auf diesem Host | nein |
-| `unreachable` | Mindestens eine berücksichtigte Quelle hätte gelesen werden sollen, aber es kam kein Dokument an — etwa eine Netzquelle bei gesetztem `SKILLSAFE_OFFLINE` oder mit fehlgeschlagenem Abruf, eine gebundene Quelle ohne lesbares Dokument oder ohne Katalog | nein |
+| `unreachable` | Mindestens eine berücksichtigte Quelle hätte gelesen werden sollen, aber es kam kein Dokument an — etwa eine Netzquelle bei gesetztem `SKILLSAFE_OFFLINE`, mit fehlgeschlagenem Abruf, ohne schreibbares Herkunftsprotokoll oder mit erschöpftem Abrufbudget, eine gebundene Quelle ohne lesbares Dokument oder ohne Katalog | nein |
 | `budget_exceeded` | Ein fremder Tresor überschreitet ein gezähltes Budget (Verzeichnistiefe oder Zahl der Einträge) | verworfen |
-| `invalid_external_source` | Ein fremder Tresor ist nicht vertrauenswürdig lesbar: sein Manifest besteht die Nachrechnung nicht, oder eines seiner Dokumente lässt sich nicht lesen (unlesbar, verlinkt, zu groß, kein UTF-8) | verworfen |
-| `no_external_candidates` | Gelesen, und kein gelesenes Dokument erreicht die Abdeckungsschwelle des Rankings | ja |
+| `invalid_external_source` | Ein fremder Tresor ist nicht vertrauenswürdig lesbar: sein Manifest besteht die Nachrechnung nicht, ein Dokument unter `knowledge/` steht nicht darin oder hat sich seit der Prüfung geändert, oder ein Dokument lässt sich nicht lesen (unlesbar, verlinkt, zu groß, Inhalt oder Dateiname kein UTF-8) | verworfen |
+| `no_external_candidates` | Gelesen, und kein gelesenes Dokument enthält einen Anfragebegriff als ganzes Token | ja |
 | `external_candidates_found` | Gelesen, mindestens ein Treffer | ja |
 
 „Berücksichtigt" sind alle aufgeführten Quellen oder, mit `--source`, die
@@ -335,29 +337,45 @@ Vier Angaben hängen an derselben Tatsache und widersprechen einander nie:
 * `external.live` und `fallback.external_live_lookup_used` sind genau dann
   wahr, wenn mindestens ein externes Dokument gelesen wurde und in das
   Ergebnis eingeht. Das Flag `--extern` allein macht keines von beiden wahr.
+  `external.fetched_at` ist zusätzlich nur gesetzt, wenn darunter ein
+  Dokument einer Netzquelle ist; ein abgerufenes, aber unlesbares Dokument
+  steht im Herkunftsprotokoll, nicht hier.
 * `fallback.external_document_paths` nennt genau diese Dokumente als
   `X-nnnn:pfad` und ist sonst leer.
 * `external_fingerprint` bezeugt ein Ergebnis und ist in jedem anderen
-  Zustand `null`. Sein Rezept gehört zu `extern-zweistufig/v1` und ist
-  unverändert: Algorithmus, normalisierte Anfrage, Treffer und der Katalog-
-  bzw. Manifeststand jeder Quelle, für die die Suche geöffnet wurde. Lücken
-  im Gelesenen stehen im `reason`, nicht im Fingerprint.
+  Zustand `null`. Sein Rezept ist seit v1 unverändert: Algorithmus,
+  normalisierte Anfrage, Treffer und der Katalog- bzw. Manifeststand jeder
+  Quelle, für die die Suche geöffnet wurde. Lücken im Gelesenen stehen im
+  `reason`, nicht im Fingerprint.
 
 Ein Ergebnis reicht genau so weit wie das Gelesene, und `reason` nennt bei
 `no_external_candidates` die Zahl der gelesenen Dokumente. Blieb etwas
 Aufgeführtes ungelesen, steht das bei beiden Ergebniszuständen als Zusatz
-„Nicht gelesen" im `reason` und nicht nur in `notes`. Drei Arten von Lücken
+„Nicht gelesen" im `reason` und nicht nur in `notes`. Vier Arten von Lücken
 gibt es: eine ganze Quelle wurde nicht gelesen; einzelne Dokumente aus dem
 Katalog waren nicht lesbar (gezählt im `reason`, einzeln benannt in `notes`);
-oder Stufe 1 hat sie gar nicht geöffnet, weil sie je Quelle höchstens 24
-Katalogeinträge öffnet. Fehlt der Zusatz, wurde jedes katalogisierte Dokument
-jeder berücksichtigten Quelle gelesen.
+ein gezähltes Budget der Abfrage war erschöpft — höchstens 20 Netzabrufe,
+höchstens 64 MiB gelesener Text —; oder Stufe 1 hat sie bei einer Netzquelle
+gar nicht geöffnet, weil sie dort höchstens 24 Katalogeinträge öffnet. Eine
+lokale Quelle wird vollständig gelesen. Fehlt der Zusatz, wurde jedes
+katalogisierte Dokument jeder berücksichtigten Quelle gelesen.
 
 Zustände, `live` und die Regel, wann es einen Fingerprint gibt, gehören zu
-diesem Query-Vertrag, nicht zum Ranking. `extern-zweistufig/v1` benennt die
+diesem Query-Vertrag, nicht zum Ranking. `extern-zweistufig/v2` benennt die
 Rechenvorschrift für Treffer und das Rezept des Fingerprints: Solange
 dieselben gelesenen Dokumente und dieselbe Anfrage dieselben Treffer, Scores
-und denselben Fingerprint ergeben, bleibt die Nummer.
+und denselben Fingerprint ergeben, bleibt die Nummer. Gegenüber v1 hat sich
+dreierlei geändert, und jedes davon ändert Treffer: Stoppwörter werden
+normalisiert (wie bei `hybrid-local/v2`), eine lokale Quelle wird vollständig
+statt in den besten 24 Katalogeinträgen gelesen, und ein Dokument zählt, sobald
+es einen Anfragebegriff enthält — v1 rundete das bei mehr als 100 Begriffen auf
+0 % Abdeckung ab und verwarf es.
+
+Geprüft wird das Ziel jeder Netzanfrage vor dem Socket: unter dem Präfix an
+Pfadgrenzen, ohne Punktsegmente, auch percent-kodiert. Einer Weiterleitung
+folgt die HTTP-Schicht nie selbst; ihr Ziel wird aufgelöst und genauso geprüft,
+bevor die nächste Anfrage hinausgeht. Kann `log.md` nicht geschrieben werden,
+findet kein Abruf statt.
 
 ## Externe Bezugsquellen (`sources/EXTERN.md`)
 
@@ -368,7 +386,8 @@ einer Antwort übernimmt. Acht Spalten:
 
 * `Art` ist `markdown-tree` oder `skillsafe-vault`. Ein fremder Tresor wird
   als **Daten** gelesen; sein `MANIFEST.sha256` rechnet diese Engine selbst
-  nach, sein `scripts/vault.py` wird niemals ausgeführt.
+  nach, gelesen wird nur, was es pinnt, und sein `scripts/vault.py` wird
+  niemals ausgeführt.
 * `Ziel` ist ein festes `https://`-Präfix oder `-` für eine lokale Quelle.
   `http`, Query, Fragment, Zugangsdaten im Host und `..` sind verboten. Ein
   absoluter lokaler Pfad steht hier nie — er gehört in die Bindung.
@@ -477,17 +496,19 @@ und dabei richtig aussieht. Ein Katalog behauptet nichts, was er nicht halten
 kann. `validate` erzwingt die Regel in **beide** Richtungen; eine Regel, die
 nur eine Richtung prüft, ist keine.
 
-Das kostet nichts: Der Katalog ist ausschließlich Prefilter, Stufe 2 rechnet
-immer gegen den jetzt gelesenen Text, und die Drift-Erkennung läuft über die
-Satzanker, nicht über den Katalog. Alle Zahlenfelder sind nachrechenbar und
+Das kostet nichts: Der Katalog ist ausschließlich Prefilter oder Reihenfolge,
+Stufe 2 rechnet immer gegen den jetzt gelesenen Text, und die Drift-Erkennung
+läuft über die Satzanker, nicht über den Katalog. Alle Zahlenfelder sind nachrechenbar und
 kommen aus dem Script; `title`, `summary` und `tags` sind Modellarbeit. Genau
 diese Trennlinie ist der Prüfpunkt.
 
-Das Ranking `extern-zweistufig/v1` nutzt den Katalog nur als Prefilter
-(Stufe 1) und rechnet Stufe 2 immer gegen den **jetzt gelesenen** Text. Ein
-Dokument ohne einen einzigen Anfragebegriff als ganzes Token fällt heraus,
-unabhängig vom Katalog-Score. Abgeglichen wird ausschließlich an
-Tokengrenzen; Substring-Treffer sind strukturell ausgeschlossen.
+Das Ranking `extern-zweistufig/v2` nutzt den Katalog bei einer Netzquelle als
+Prefilter (Stufe 1: die besten 24 werden abgerufen), bei einer lokalen Quelle
+nur als Reihenfolge — gelesen wird dort jedes katalogisierte Dokument. Stufe 2
+rechnet immer gegen den **jetzt gelesenen** Text. Ein Dokument ohne einen
+einzigen Anfragebegriff als ganzes Token fällt heraus, unabhängig vom
+Katalog-Score. Abgeglichen wird ausschließlich an Tokengrenzen;
+Substring-Treffer sind strukturell ausgeschlossen.
 
 ## Bindung (`.vault-extern.json`)
 

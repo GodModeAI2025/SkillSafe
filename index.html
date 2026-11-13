@@ -239,13 +239,13 @@
         <p class="sub">Belegtes Wissen aus Text, Bildern und PDFs — als Skill, nicht als Server.</p>
         <p class="tagline-en">Für Claude Code und Codex: kontrollierte Begriffswelten, reproduzierbares Hybrid-Retrieval, Wissensgraph-Kontext und geprüfte Bildfundstellen — lokal, nachvollziehbar und ohne Embedding-Pflicht.</p>
         <div class="cta-row">
-          <a class="btn btn-primary" href="#funktionen">Was v0.11.14 kann</a>
+          <a class="btn btn-primary" href="#funktionen">Was v0.12.0 kann</a>
           <a class="btn btn-ghost" href="#regeln">Die sechs Regeln</a>
           <a class="btn btn-ghost" href="wissenstresor/KONZEPT.md">Konzept lesen</a>
           <a class="btn btn-ghost" href="https://github.com/GodModeAI2025/SkillSafe">GitHub</a>
         </div>
       </div>
-      <div class="stamp"><span><b>VALIDATE</b>0 Fehler<br>6 Seiten · 28 Claims<br>v0.11.14</span></div>
+      <div class="stamp"><span><b>VALIDATE</b>0 Fehler<br>6 Seiten · 28 Claims<br>v0.12.0</span></div>
     </div>
   </section>
 
@@ -298,7 +298,7 @@
         <div class="rule-card"><div><h3>Wissensbausteine im OKF-Format</h3><p>Jedes Konzept ist eine eigene Markdown-Datei mit YAML-Frontmatter nach dem Google-OKF-Muster, zusammen ein prüfbares Bundle aus Kurzfassung, Claims und typisierten Relationen. Jede Kernaussage trägt Quelle, Fundstelle und Stand, nachvollziehbar bis zur Registerzeile.</p></div></div>
         <div class="rule-card"><div><h3>Begriffswelten + Hybrid-Suche</h3><p>Vorzugsbegriffe, Synonyme und Hierarchien erweitern die Discovery; feste Gewichte und Claim-IDs machen das Ranking reproduzierbar. Aliase helfen nur beim Finden und werden nie selbst zur Antwort-Evidenz.</p></div></div>
         <div class="rule-card"><div><h3>Bilder mit belegbarer Region</h3><p>PNG, JPEG, GIF, WebP, TIFF und PDF bleiben als gehashte Originale erhalten. Geprüfte Regionen binden sichtbare Befunde an Claims; OCR und Bildbeschreibung bleiben untrusted Quelldaten und gelangen nie direkt in Antworten.</p></div></div>
-        <div class="rule-card"><div><h3>Externe Quellen satzweise</h3><p>Ein fremdes Handbuch, ein Repo oder ein zweiter Tresor muss nicht einwandern. Ein Claim belegt sich über einen Satzanker gegen genau einen Satz dort, nachrechenbar über dessen Prüfsumme. Eingefroren wird das Zitat, nicht die Quelle. Ein zweistufiges Ranking sucht darin auf Anforderung live: Der Katalogtext entscheidet nur, was geöffnet wird, der tatsächliche Satzbestand entscheidet, was gewinnt. Findet die zweite Stufe nichts, kommt nichts zurück statt eines plausibel aussehenden Fehltreffers.</p></div></div>
+        <div class="rule-card"><div><h3>Externe Quellen satzweise</h3><p>Ein fremdes Handbuch, ein Repo oder ein zweiter Tresor muss nicht einwandern. Ein Claim belegt sich über einen Satzanker gegen genau einen Satz dort, nachrechenbar über dessen Prüfsumme. Eingefroren wird das Zitat, nicht die Quelle. Ein zweistufiges Ranking sucht darin auf Anforderung live: Bei einer Netzquelle entscheidet der Katalogtext, was abgerufen wird, eine lokale Quelle wird vollständig gelesen, und der tatsächliche Satzbestand entscheidet, was gewinnt. Findet die zweite Stufe nichts, kommt nichts zurück statt eines plausibel aussehenden Fehltreffers.</p></div></div>
         <div class="rule-card"><div><h3>Gesundheit laufend geprüft</h3><p>Das Script <code>doctor</code> findet deterministisch Drift, verwaiste Seiten und Manifest-Abweichungen. Der Lint-Workflow beurteilt zusätzlich Aktualität und ungedeckte Kurzfassungen. Veraltetes bleibt über Supersession sichtbar, und Widersprüche bekommen eine eigene Kante im Wissensgraph, statt stillschweigend entschieden zu werden.</p></div></div>
         <div class="rule-card"><div><h3>Wissen aus Teams und Einzelpersonen</h3><p>Der kontrollierte Ingest funktioniert für eine Person genauso wie für ein Team, das über Git zusammenarbeitet. Der Validator fängt Kollisionen bei Claim-IDs fail-closed ab. Getrennte Zielgruppen bekommen eigene Tresor-Instanzen mit fester Rangfolge von Organisation bis persönlich.</p></div></div>
         <div class="rule-card"><div><h3>Die Prüfkette läuft automatisch</h3><p>Auf <code>main</code>, den aufgeführten Branch-Präfixen und in jedem Pull Request fahren <code>validate</code>, <code>checksum --verify</code>, <code>doctor</code>, die Testsuite und der Paketbau über drei Interpreter, von Python 3.9 bis 3.13 auf Linux und macOS. Ein Wächter vergleicht zusätzlich jede auf dieser Seite veröffentlichte Zahl mit der echten Ausgabe. Die Kette ruft bewusst kein Schreibkommando, sonst würde sie genau den Fehler zudecken, den sie finden soll.</p></div></div>
@@ -353,7 +353,7 @@
         <div class="zone"><span class="zname">Internetrecherche</span><span class="zwhat">Findet nicht statt</span><span class="zprotect">Keine offene Suche, keine Suchmaschine, kein Folgen von Links aus Inhalten. Kein Codepfad übernimmt ein Ziel aus einer Anfrage oder einem Dokument.</span></div>
         <div class="zone"><span class="zname">Aufgeführte Quelle</span><span class="zwhat">Wie eine interne behandelt</span><span class="zprotect">Steht namentlich mit Ziel, Trust und Rechten im Register und ist über das Manifest gepinnt. Erreichbar ist ausschließlich das.</span></div>
         <div class="zone"><span class="zname">Herkunftsprotokoll</span><span class="zwhat">Jeder Abruf im Log</span><span class="zprotect">URL, Prüfsumme, Bytezahl und Zeitpunkt landen in <code>log.md</code>. Das ist der Unterschied zwischen gleichbehandelt und unbeaufsichtigt.</span></div>
-        <div class="zone"><span class="zname">Zwei Rankingstufen</span><span class="zwhat">Der Bestand entscheidet</span><span class="zprotect">Der Katalogtext bestimmt nur, welche Dokumente geöffnet werden. Gewertet wird der Text, der jetzt dort steht.</span></div>
+        <div class="zone"><span class="zname">Zwei Rankingstufen</span><span class="zwhat">Der Bestand entscheidet</span><span class="zprotect">Bei einer Netzquelle bestimmt der Katalogtext, welche Dokumente abgerufen werden; lokal wird alles gelesen. Gewertet wird immer der Text, der jetzt dort steht.</span></div>
       </div>
       <p class="lede reveal" style="margin-top:20px;">Warum zwei Stufen nötig sind, zeigt der mitgelieferte Beispielbaum. Auf die Anfrage „Minderung Mangel Wohnung" liefert die erste Stufe das Seerecht mit 78 Punkten vor dem Mietrecht mit 60, weil beide Katalogtexte absichtlich fast gleich klingen. Die zweite Stufe liest den tatsächlichen Satzbestand und dreht das Verhältnis auf 460 zu 152. Der Katalogtext ist ein schwaches Signal, der Bestand dahinter das starke. Ein Dokument, in dem kein einziger Anfragebegriff als ganzes Wort vorkommt, fällt heraus, egal wie gut sein Katalogeintrag aussah.</p>
       <p class="lede reveal" style="margin-top:20px;">Findet die zweite Stufe nichts, kommt nichts zurück. Kein alphabetischer Notnagel, kein bester Fehltreffer, stattdessen eine Meldung, die sagt, was zu tun ist. Ein plausibel aussehender Fehltreffer ist teurer als gar kein Treffer, weil er nicht als Fehler auffällt. Abgeglichen wird ausschließlich an Wortgrenzen, deshalb findet „himmel" auch kein „schimmel".</p>
@@ -382,7 +382,7 @@
         <pre>{
   "schema": "skillsafe.query/v1",
   "state": "candidates_found",
-  "retrieval": "hybrid-local/v1",
+  "retrieval": "hybrid-local/v2",
   "coverage": {"semantic_coverage": "not_assessed"},
   "concepts": {"matched": [{"id": "B-0001", "preferred": "Open Knowledge Format"}]},
   "evidence": [
@@ -464,7 +464,7 @@
 
 <footer>
   <div class="wrap-wide">
-    <span>SkillSafe v0.11.14 · Apache License 2.0 · Motor bleibt stabil, Treibstoff ist flüchtig.</span>
+    <span>SkillSafe v0.12.0 · Apache License 2.0 · Motor bleibt stabil, Treibstoff ist flüchtig.</span>
     <span><a href="README.md">README</a> · <a href="BETRIEB.md">Betrieb</a> · <a href="wissenstresor/KONZEPT.md">Konzept</a> · <a href="wissenstresor/SKILL.md">Skill-Vertrag</a> · <a href="https://godmodeai2025.github.io/MarkZimmermann/" target="_blank" rel="noopener">Impressum</a></span>
   </div>
 </footer>

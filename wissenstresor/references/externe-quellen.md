@@ -34,8 +34,11 @@ Ein solches Verbot trifft die offene Suche, nicht das Nachlesen einer
 namentlich aufgeführten, gepinnten Quelle des eigenen Bestands.
 
 Damit das überprüfbar bleibt statt behauptet: nur `GET` unter dem
-registrierten Präfix, jedes Redirect muss darunter bleiben, und jeder Abruf
-steht mit URL, Prüfsumme, Bytezahl und Zeitpunkt in `log.md`.
+registrierten Präfix, geprüft an Pfadgrenzen; einer Weiterleitung folgt die
+HTTP-Schicht nie selbst, ihr Ziel wird geprüft, bevor die nächste Anfrage
+hinausgeht; höchstens 20 Abrufe je Abfrage; und jeder Abruf steht mit URL,
+Prüfsumme, Bytezahl und Zeitpunkt in `log.md`. Kann `log.md` nicht geschrieben
+werden, findet der Abruf nicht statt.
 
 ## Zwei Allowlists, zwei Fragen
 
@@ -118,14 +121,21 @@ Schritt fällig ist, regelt allein `references/antworten.md`, Schritt 4c: Dort
 ist er Pflicht, sobald die Vollprüfung die Frage nicht deckt und Quellen
 aufgeführt sind.
 
-Das Ranking `extern-zweistufig/v1` arbeitet in zwei Stufen:
+Das Ranking `extern-zweistufig/v2` arbeitet in zwei Stufen:
 
-* **Stufe 1, Katalogtext** — entscheidet nur, welche Dokumente überhaupt
-  geöffnet werden. Ein schwaches Signal.
+* **Stufe 1, Katalogtext** — ein schwaches Signal. Bei einer **Netzquelle**
+  entscheidet es, welche Dokumente überhaupt abgerufen werden (die besten 24).
+  Bei einer **lokalen** Quelle ordnet es nur: gelesen wird jedes
+  katalogisierte Dokument, bis höchstens 64 MiB je Abfrage.
 * **Stufe 2, tatsächlicher Satzbestand** — wird gegen den **jetzt** gelesenen
   Text gerechnet, nicht gegen den Katalog. Das starke Signal.
 * **Abdeckungsschwelle** — ein Dokument, in dem kein einziger Anfragebegriff
   als ganzes Token vorkommt, fällt raus, egal wie gut Stufe 1 aussah.
+
+Warum lokal kein Prefilter mehr: In v1 öffnete Stufe 1 auch lokal nur 24
+Dokumente. Passte der Katalogtext nicht zur Frage, waren das die alphabetisch
+ersten — ein Treffer im fünfundzwanzigsten blieb ungelesen. Lokal ist Lesen
+billig und deterministisch; der Prefilter sparte dort fast nichts.
 
 Warum zwei Stufen: Im Demo-Bestand liefert „Minderung Mangel Wohnung" in
 Stufe 1 das Seerecht mit 78 Punkten **vor** dem Mietrecht mit 60 — die
@@ -134,7 +144,7 @@ Katalogtext ist ein schwaches Signal, der Bestand dahinter das starke.
 
 Abgeglichen wird ausschließlich an Tokengrenzen. „himmel" findet deshalb kein
 „schimmel" — der Fehler ist strukturell ausgeschlossen, nicht per Konvention
-vermieden.
+vermieden. Stoppwörter wie „für" zählen nicht, auch nicht als „fuer".
 
 ## Ehrlich scheitern
 
@@ -154,9 +164,9 @@ kein Negativbefund ist:
 | Zustand | Ursache | Was zu tun ist |
 |---|---|---|
 | `not_bound` | Jede berücksichtigte Quelle ist lokal und auf diesem Host nicht brauchbar gebunden | Der Nutzer bindet mit `extern bind`, wenn hier nachgeschlagen werden soll |
-| `unreachable` | Etwas hätte lesbar sein sollen, aber es kam kein Dokument an: `SKILLSAFE_OFFLINE` gesetzt, Abruf fehlgeschlagen, Datei aus dem Katalog nicht lesbar, kein Katalog | Ursache je Quelle steht in `reason`; Erreichbarkeit prüfen oder Katalog erzeugen |
+| `unreachable` | Etwas hätte lesbar sein sollen, aber es kam kein Dokument an: `SKILLSAFE_OFFLINE` gesetzt, Abruf fehlgeschlagen, `log.md` nicht schreibbar, Abrufbudget erschöpft, Datei aus dem Katalog nicht lesbar, kein Katalog | Ursache je Quelle steht in `reason` und `notes`; Erreichbarkeit oder Schreibrechte prüfen, Katalog erzeugen |
 | `budget_exceeded` | Ein fremder Tresor sprengt unter `knowledge/` ein gezähltes Budget (Verzeichnistiefe, Zahl der Einträge) | `reason` nennt die Grenze, bei der Tiefe auch den Pfad; prüfen, was dort liegt und nicht hingehört |
-| `invalid_external_source` | Ein fremder Tresor ist nicht vertrauenswürdig lesbar: Manifest stimmt nicht, oder ein Dokument ist unlesbar, verlinkt, zu groß oder kein UTF-8 | Fremden Bestand nicht verwenden, bis er wieder stimmt |
+| `invalid_external_source` | Ein fremder Tresor ist nicht vertrauenswürdig lesbar: Manifest stimmt nicht, ein Dokument steht nicht darin oder hat sich seit der Prüfung geändert, oder es ist unlesbar, verlinkt, zu groß oder kein UTF-8 | Fremden Bestand nicht verwenden, bis er wieder stimmt |
 
 Bei gemischten Ursachen gewinnt `unreachable` vor `not_bound`. In allen vier
 Fällen ist `live` falsch, `hits` leer und `external_fingerprint` `null`: Ein
@@ -176,11 +186,18 @@ Auch ein Ergebnis reicht nur so weit wie das Gelesene. Bleibt etwas
 Aufgeführtes ungelesen, bleibt es bei `no_external_candidates` oder
 `external_candidates_found`, aber `reason` trägt den Zusatz „Nicht gelesen".
 Er nennt jede Quelle, aus der nichts gelesen wurde, zählt Dokumente, die
-nicht lesbar waren (welche, steht in `notes`), und zählt, was Stufe 1 gar
-nicht geöffnet hat: Sie öffnet je Quelle höchstens 24 Katalogeinträge, und
-bei einem Katalogtext, der auf die Anfrage nicht passt, sind das schlicht die
-alphabetisch ersten. Fehlt der Zusatz, wurde jedes katalogisierte Dokument
-jeder berücksichtigten Quelle gelesen.
+nicht lesbar waren (welche, steht in `notes`), zählt, was ein gezähltes Budget
+abgeschnitten hat (20 Netzabrufe, 64 MiB je Abfrage), und zählt, was Stufe 1
+bei einer Netzquelle gar nicht geöffnet hat: dort höchstens 24
+Katalogeinträge, und bei einem Katalogtext, der auf die Anfrage nicht passt,
+sind das schlicht die alphabetisch ersten. Fehlt der Zusatz, wurde jedes
+katalogisierte Dokument jeder berücksichtigten Quelle gelesen.
+
+Eine Frage aus lauter Stoppwörtern ergibt `invalid_query`: Ohne suchbaren
+Begriff kann nichts gefunden werden, und ein „nichts gefunden" wäre ein
+Befund über eine Frage, die keine ist. Dasselbe gilt, wenn die lokale Abfrage
+gar nicht auswertbar war (`ambiguous`, unbekannte Begriffswelt): Dann wird
+extern nichts durchsucht.
 
 ## Was bei der Abfrage sichtbar wird
 

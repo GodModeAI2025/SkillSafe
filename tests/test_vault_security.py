@@ -1158,6 +1158,9 @@ class VaultSecurityTests(unittest.TestCase):
         result = self.run_cli("orchestrator-template", "X-0001")
         self.assertNotEqual(result.returncode, 0, result.stdout)
         self.assertIn("keine reguläre Datei", result.stdout)
+        # Früher hieß jeder Fehler hier budget_exceeded — eine Sonderdatei
+        # ist aber kein gesprengtes Budget.
+        self.assertEqual(json.loads(result.stdout)["state"], "invalid_source")
 
     def test_external_document_budget_fails_closed_without_partial_result(self):
         self.install_extern_register()
@@ -1213,10 +1216,19 @@ class VaultSecurityTests(unittest.TestCase):
 
     def test_only_https_targets_under_the_registered_prefix_are_reachable(self):
         vault = self.load_vault(self.root, "netz")
+        # Die Präfixprüfung liegt hinter dem Offline-Schalter. Damit dieser
+        # Test sie auch in der CI erreicht, wird der Schalter im Modul
+        # übergangen; ins Netz geht trotzdem nichts, weil jedes Ziel vor dem
+        # ersten Socket abgelehnt wird. Früher war der Test nur grün, weil
+        # ein anderer den globalen Schalter aus os.environ gelöscht hatte.
+        vault._netz_erlaubt = lambda: True
         praefix = "https://example.invalid/pfad/"
         for ziel, fragment in (
             ("http://example.invalid/pfad/x.md", "registrierten Präfix"),
             ("https://anderer.invalid/x.md", "registrierten Präfix"),
+            ("https://example.invalid/pfadfremd/x.md", "registrierten Präfix"),
+            ("https://example.invalid/pfad/../x.md", "registrierten Präfix"),
+            ("https://example.invalid/pfad/%2e%2e/x.md", "registrierten Präfix"),
         ):
             with self.subTest(ziel=ziel):
                 self.assertIn(fragment, vault._hole_https(ziel, praefix)[1])
@@ -1230,16 +1242,20 @@ class VaultSecurityTests(unittest.TestCase):
                 self.assertIn(fragment, vault._https_praefix(roh)[1])
 
     def test_offline_switch_blocks_every_fetch_before_the_socket(self):
+        from unittest import mock
+
         vault = self.load_vault(self.root, "offline")
         praefix = "https://example.invalid/"
-        os.environ[vault.EXTERN_OFFLINE_ENV] = "1"
-        try:
-            def darf_nicht_aufgerufen_werden(*args, **kwargs):
-                raise AssertionError("Es wurde trotz Offline-Schaltung geöffnet")
+
+        def darf_nicht_aufgerufen_werden(*args, **kwargs):
+            raise AssertionError("Es wurde trotz Offline-Schaltung geöffnet")
+
+        # patch.dict stellt den vorherigen Zustand wieder her. Das frühere
+        # 'del os.environ[...]' löschte den globalen Schalter der CI für jeden
+        # später laufenden Test dieses Prozesses.
+        with mock.patch.dict(os.environ, {vault.EXTERN_OFFLINE_ENV: "1"}):
             daten, grund = vault._hole_https(
                 praefix + "x.md", praefix, opener=darf_nicht_aufgerufen_werden)
-        finally:
-            del os.environ[vault.EXTERN_OFFLINE_ENV]
         self.assertIsNone(daten)
         self.assertIn(vault.EXTERN_OFFLINE_ENV, grund)
 
@@ -1602,7 +1618,7 @@ class VaultSecurityTests(unittest.TestCase):
             encoding="utf-8",
         )
 
-    def extern_im_prozess(self, suffix, antworten, frage):
+    def extern_im_prozess(self, suffix, antworten, frage, vorbereiten=None):
         """Engine laden, Abruf ersetzen, externen Block im Prozess bauen."""
         vault = self.load_vault(self.root, suffix)
         aufrufe = []
@@ -1616,6 +1632,8 @@ class VaultSecurityTests(unittest.TestCase):
         vault._netz_erlaubt = lambda: True
         # Der TTL-Abzug liegt sonst im Nutzer-Cache dieses Hosts.
         vault._extern_cache_dir = lambda xid: self.work / "abzug" / xid
+        if vorbereiten is not None:
+            vorbereiten(vault)
         snapshot, fehler = vault._load_released_query_snapshot(frage)
         self.assertIsNone(fehler, fehler)
         return vault, vault.build_external_result(snapshot, frage), aufrufe
@@ -1703,6 +1721,365 @@ class VaultSecurityTests(unittest.TestCase):
             (self.root / "log.md").read_text(encoding="utf-8"),
         )
 
+
+    # ------------------------------------------------ Weiterleitungen
+
+    def test_http_layer_never_follows_a_redirect_by_itself(self):
+        """Das fremde Ziel darf keine Anfrage sehen, bevor es geprüft ist.
+
+        urllib folgt Weiterleitungen von sich aus; die Präfixprüfung kam
+        früher erst danach. Lokal nachgestellt, ohne Netz: Server A leitet
+        auf Server B um, und B darf nichts sehen.
+        """
+        import http.server
+        import ssl
+        import threading
+        import urllib.error
+        from unittest import mock
+
+        vault = self.load_vault(self.root, "weiterleitung-http")
+        gesehen = []
+
+        class Ziel(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                gesehen.append(("ziel", self.path))
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(b"fremd")
+
+            def log_message(self, *args):
+                pass
+
+        ziel = http.server.HTTPServer(("127.0.0.1", 0), Ziel)
+
+        class Umleiter(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                gesehen.append(("umleiter", self.path))
+                self.send_response(302)
+                self.send_header(
+                    "Location", f"http://127.0.0.1:{ziel.server_port}/fremd.md")
+                self.end_headers()
+
+            def log_message(self, *args):
+                pass
+
+        umleiter = http.server.HTTPServer(("127.0.0.1", 0), Umleiter)
+        for server in (ziel, umleiter):
+            threading.Thread(target=server.serve_forever, daemon=True).start()
+        try:
+            lokal = {"no_proxy": "127.0.0.1,localhost",
+                     "NO_PROXY": "127.0.0.1,localhost"}
+            with mock.patch.dict(os.environ, lokal):
+                oeffner = vault._netz_oeffner(ssl.create_default_context())
+                with self.assertRaises(urllib.error.HTTPError) as fang:
+                    oeffner.open(
+                        f"http://127.0.0.1:{umleiter.server_port}/dok.md",
+                        timeout=5)
+            self.assertEqual(fang.exception.code, 302)
+            fang.exception.close()
+            self.assertEqual(gesehen, [("umleiter", "/dok.md")])
+        finally:
+            for server in (ziel, umleiter):
+                server.shutdown()
+                server.server_close()
+
+    def test_redirect_target_is_resolved_and_checked_before_the_next_request(self):
+        """Erst prüfen, dann folgen — relativ, absolut, kodiert."""
+        import urllib.error
+
+        vault = self.load_vault(self.root, "weiterleitung-pruefung")
+        vault._netz_erlaubt = lambda: True
+        praefix = self.NETZ_PRAEFIX
+
+        class Antwort:
+            def __init__(self, url):
+                self.url = url
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def read(self, anzahl):
+                return b"# Ziel\n\nInhalt.\n"
+
+        def lauf(location):
+            aufrufe = []
+
+            def oeffner(anfrage, timeout):
+                aufrufe.append(anfrage.full_url)
+                if len(aufrufe) == 1:
+                    raise urllib.error.HTTPError(
+                        anfrage.full_url, 302, "Found", {"Location": location},
+                        None)
+                return Antwort(anfrage.full_url)
+
+            daten, grund = vault._hole_https(
+                praefix + "a.md", praefix, opener=oeffner)
+            return daten, grund, aufrufe
+
+        daten, grund, aufrufe = lauf("b.md")
+        self.assertIsNone(grund)
+        self.assertEqual(aufrufe, [praefix + "a.md", praefix + "b.md"])
+        for location in (
+            "https://example.invalid/anderswo.md",
+            "../anderswo.md",
+            "https://example.invalid/pfad/../x.md",
+            "https://example.invalid/pfad/%2e%2e/x.md",
+            "https://example.invalid/pfad/a%2fb.md",
+            "https://example.invalid.fremd.net/pfad/x.md",
+            "http://example.invalid/pfad/x.md",
+            "file:///etc/passwd",
+        ):
+            with self.subTest(location=location):
+                daten, grund, aufrufe = lauf(location)
+                self.assertIsNone(daten)
+                self.assertIn("Weiterleitung verlässt", grund)
+                self.assertEqual(len(aufrufe), 1, "Der Weiterleitung wurde gefolgt")
+
+    def test_prefix_without_trailing_slash_is_checked_at_path_boundaries(self):
+        vault = self.load_vault(self.root, "praefixgrenze")
+        for praefix in ("https://example.invalid", "https://example.invalid/pfad"):
+            basis = praefix.rstrip("/") + "/"
+            with self.subTest(praefix=praefix):
+                self.assertTrue(vault._unter_praefix(basis + "x.md", praefix))
+                self.assertFalse(vault._unter_praefix(praefix + "fremd/x.md", praefix))
+                self.assertFalse(vault._unter_praefix(
+                    praefix.replace("example.invalid", "example.invalid.fremd.net")
+                    + "/x.md", praefix))
+        # Ein Leerzeichen im Katalogpfad wird kodiert, statt die Anfrage scheitern
+        # zu lassen.
+        url, grund = vault._https_ziel(self.NETZ_PRAEFIX, "ordner/mit leer.md")
+        self.assertIsNone(grund)
+        self.assertEqual(url, self.NETZ_PRAEFIX + "ordner/mit%20leer.md")
+
+    # ------------------------------------------------ Fremder Tresor
+
+    def test_foreign_document_outside_its_manifest_fails_closed(self):
+        """Gelesen wird nur, was das fremde Manifest pinnt."""
+        self.install_fremdtresor_register()
+        fremd = self.new_vault()
+        (fremd / "knowledge/demo-okf/untergeschoben.md").write_text(
+            "# Untergeschoben\n\nErheblicher Schimmelbefall ist ein Mangel.\n",
+            encoding="utf-8")
+        self.run_cli("extern", "bind", "X-0001", str(fremd))
+        release = self.run_cli("release", "patch")
+        self.assertEqual(release.returncode, 0, release.stdout + release.stderr)
+        payload = self.extern_cli("Schimmelbefall")
+        block = payload["external"]
+        self.assertEqual(block["state"], "invalid_external_source", block)
+        self.assertIn("steht nicht im fremden Manifest", block["reason"])
+        self.assertEqual(block["hits"], [])
+        self.assertFalse(block["live"])
+
+    def test_foreign_document_changed_after_the_check_fails_closed(self):
+        """Geliefert wird genau der Stand, der nachgerechnet wurde."""
+        self.install_fremdtresor_register()
+        fremd = self.new_vault()
+        self.run_cli("extern", "bind", "X-0001", str(fremd))
+        release = self.run_cli("release", "patch")
+        self.assertEqual(release.returncode, 0, release.stdout + release.stderr)
+        vault = self.load_vault(self.root, "fremd-toctou")
+        original = vault._lies_externes_dokument
+
+        def zweites_lesen(wurzel, anker, relpfad):
+            text, digest, grund = original(wurzel, anker, relpfad)
+            if relpfad == "knowledge/demo-okf/okf.md" and text is not None:
+                # Zwischen Nachrechnen und Lesen ausgetauscht.
+                geaendert = text + "\nUntergeschoben.\n"
+                return geaendert, hashlib.sha256(
+                    geaendert.encode("utf-8")).hexdigest(), None
+            return text, digest, grund
+
+        vault._lies_externes_dokument = zweites_lesen
+        snapshot, fehler = vault._load_released_query_snapshot("OKF")
+        self.assertIsNone(fehler, fehler)
+        block = vault.build_external_result(snapshot, "OKF")
+        self.assertEqual(block["state"], "invalid_external_source", block)
+        self.assertIn("seit der Manifestprüfung geändert", block["reason"])
+        self.assertEqual(block["hits"], [])
+
+    def test_fifo_listed_in_a_foreign_manifest_does_not_hang(self):
+        """sha256_file öffnete einen FIFO blockierend und hielt die Abfrage an."""
+        if not hasattr(os, "mkfifo"):
+            self.skipTest("mkfifo ist auf dieser Plattform nicht verfügbar")
+        self.install_fremdtresor_register()
+        fremd = self.new_vault()
+        ziel = fremd / "sources/raw/S-0001__google-okf-announcement.md"
+        ziel.unlink()
+        os.mkfifo(str(ziel))
+        self.run_cli("extern", "bind", "X-0001", str(fremd))
+        release = self.run_cli("release", "patch")
+        self.assertEqual(release.returncode, 0, release.stdout + release.stderr)
+        # run_cli bricht nach 15 s ab — ein Hänger wäre ein Testfehler.
+        payload = self.extern_cli("OKF")
+        block = payload["external"]
+        self.assertEqual(block["state"], "invalid_external_source", block)
+        self.assertIn("keine reguläre Datei", block["reason"])
+
+    def test_foreign_document_name_without_valid_utf8_fails_closed(self):
+        """Ein Dateiname aus ungültigen Bytes brach beim Hashen ab."""
+        self.install_fremdtresor_register()
+        fremd = self.new_vault()
+        name = os.path.join(
+            os.fsencode(str(fremd / "knowledge/demo-okf")), b"\xff-okf.md")
+        try:
+            fd = os.open(name, os.O_WRONLY | os.O_CREAT, 0o644)
+        except OSError:
+            self.skipTest("Dateisystem lehnt Namen ohne gültiges UTF-8 ab")
+        try:
+            os.write(fd, b"# OKF\n\nOKF steht hier auch.\n")
+        finally:
+            os.close(fd)
+        self.run_cli("extern", "bind", "X-0001", str(fremd))
+        release = self.run_cli("release", "patch")
+        self.assertEqual(release.returncode, 0, release.stdout + release.stderr)
+        payload = self.extern_cli("OKF")
+        block = payload["external"]
+        self.assertEqual(block["state"], "invalid_external_source", block)
+        self.assertIn("kein gültiges UTF-8", block["reason"])
+
+    # ------------------------------------------------ Herkunftsprotokoll
+
+    def test_unwritable_provenance_log_prevents_the_fetch(self):
+        """Ein Abruf, der nicht ins Log kann, findet nicht statt."""
+        self.install_extern_register(ziel=self.NETZ_PRAEFIX)
+        self.install_netzkatalog(["a.md"])
+        release = self.run_cli("release", "patch")
+        self.assertEqual(release.returncode, 0, release.stdout + release.stderr)
+
+        def gesperrt(vault):
+            vault._protokoll_sperre = lambda: "log.md ist nicht beschreibbar"
+
+        _, block, aufrufe = self.extern_im_prozess(
+            "protokoll-gesperrt", {}, "Schimmelbefall", vorbereiten=gesperrt)
+        self.assertEqual(aufrufe, [])
+        self.assertEqual(block["state"], "unreachable", block)
+        self.assertIn("Herkunftsprotokoll ist nicht schreibbar", block["reason"]
+                      + " ".join(block["notes"]))
+        self.assertIn("kein Negativbefund", block["reason"])
+
+    def test_failed_log_entry_never_reaches_stdout(self):
+        """Eine Fehlerzeile vor dem JSON machte die Ausgabe unlesbar."""
+        self.install_extern_register(ziel=self.NETZ_PRAEFIX)
+        self.install_netzkatalog(["a.md"])
+        release = self.run_cli("release", "patch")
+        self.assertEqual(release.returncode, 0, release.stdout + release.stderr)
+        inhalt = "# Minderung\n\nErheblicher Schimmelbefall ist ein Mangel.\n"
+
+        def log_kaputt(vault):
+            def cmd_log(*args, **kwargs):
+                print("🔴 log: Schreib-Lock nicht verfügbar — simuliert")
+                return 1
+            vault.cmd_log = cmd_log
+
+        ausgabe = io.StringIO()
+        with contextlib.redirect_stdout(ausgabe):
+            _, block, _ = self.extern_im_prozess(
+                "protokoll-kaputt", {"a.md": (inhalt.encode("utf-8"), None)},
+                "Schimmelbefall", vorbereiten=log_kaputt)
+        self.assertEqual(ausgabe.getvalue(), "")
+        self.assertEqual(block["state"], "external_candidates_found")
+        self.assertIn("Herkunftsprotokoll unvollständig", block["reason"])
+        self.assertIn("simuliert", block["reason"])
+
+    def test_anchor_template_records_its_fetch(self):
+        """Auch anchor-template ruft ab — und das steht jetzt im Log."""
+        self.install_extern_register(ziel=self.NETZ_PRAEFIX)
+        vault = self.load_vault(self.root, "anker-protokoll")
+        inhalt = b"# Minderung\n\nErheblicher Schimmelbefall ist ein Mangel.\n"
+        vault._hole_https = lambda url, praefix, opener=None: (inhalt, None)
+        vault._netz_erlaubt = lambda: True
+        vault._extern_cache_dir = lambda xid: self.work / "abzug-anker" / xid
+        ausgabe = io.StringIO()
+        with contextlib.redirect_stdout(ausgabe):
+            ergebnis = vault.cmd_anchor_template("X-0001", "a.md")
+        self.assertEqual(ergebnis, 0)
+        geruest = json.loads(ausgabe.getvalue())
+        self.assertEqual(geruest["source_id"], "X-0001")
+        self.assertIn(
+            f"extern | abruf {self.NETZ_PRAEFIX}a.md",
+            (self.root / "log.md").read_text(encoding="utf-8"),
+        )
+
+    # ------------------------------------------------ Budgets und Zustände
+
+    def test_network_source_is_bounded_by_stage_one_and_the_fetch_budget(self):
+        """Netzquelle: 24 geöffnet, 20 abgerufen — beide Lücken im Grund."""
+        self.install_extern_register(ziel=self.NETZ_PRAEFIX)
+        dokumente = [f"d{nummer:02d}.md" for nummer in range(30)]
+        self.install_netzkatalog(dokumente)
+        release = self.run_cli("release", "patch")
+        self.assertEqual(release.returncode, 0, release.stdout + release.stderr)
+        antworten = {
+            pfad: (f"# {pfad}\n\nAllgemeiner Fuelltext.\n".encode("utf-8"), None)
+            for pfad in dokumente
+        }
+        vault, block, aufrufe = self.extern_im_prozess(
+            "netzbudget", antworten, "Fuelltext")
+        self.assertEqual(len(aufrufe), vault.EXTERN_NETZ_MAX_ABRUFE)
+        self.assertEqual(block["state"], "external_candidates_found")
+        self.assertEqual(len(block["documents_read"]), vault.EXTERN_NETZ_MAX_ABRUFE)
+        offen = vault.MAX_EXTERN_STUFE1 - vault.EXTERN_NETZ_MAX_ABRUFE
+        self.assertIn(f"{offen} Dokument(e) nicht geöffnet", block["reason"])
+        self.assertIn("Netzabrufe je Abfrage", block["reason"])
+        self.assertIn(
+            f"{30 - vault.MAX_EXTERN_STUFE1} von 30 katalogisierten Dokumenten "
+            f"nicht geöffnet", block["reason"])
+        self.assertIsNotNone(block["fetched_at"])
+
+    def test_undecodable_fetch_stays_unreadable_on_every_run(self):
+        """Dieselben Bytes, derselbe Zustand — auch aus dem Cache.
+
+        Früher las der Cache mit errors="replace": beim ersten Lauf unlesbar,
+        beim zweiten ein Treffer. Und fetched_at stand, obwohl nichts gelesen
+        war.
+        """
+        self.install_extern_register(ziel=self.NETZ_PRAEFIX)
+        self.install_netzkatalog(["a.md"])
+        release = self.run_cli("release", "patch")
+        self.assertEqual(release.returncode, 0, release.stdout + release.stderr)
+        kaputt = b"# Minderung\n\nSchimmelbefall \xff ist ein Mangel.\n"
+        _, frisch, aufrufe = self.extern_im_prozess(
+            "utf8-frisch", {"a.md": (kaputt, None)}, "Schimmelbefall")
+        self.assertEqual(len(aufrufe), 1)
+        cache = (self.work / "abzug" / "X-0001" / (hashlib.sha256(
+            (self.NETZ_PRAEFIX + "a.md").encode("utf-8")).hexdigest() + ".md"))
+        self.assertFalse(cache.exists(), "Unlesbares landet nicht im Cache")
+        # So hätte ihn die alte Fassung hinterlassen.
+        cache.parent.mkdir(parents=True, exist_ok=True)
+        cache.write_bytes(kaputt)
+        _, aus_cache, aufrufe = self.extern_im_prozess(
+            "utf8-cache", {}, "Schimmelbefall")
+        self.assertEqual(aufrufe, [], "Der Cache-Treffer ist kein Abruf")
+        for name, block in (("frisch", frisch), ("cache", aus_cache)):
+            with self.subTest(lauf=name):
+                self.assertEqual(block["state"], "unreachable", block)
+                self.assertFalse(block["live"])
+                self.assertIsNone(block["fetched_at"])
+                self.assertTrue(any("kein gültiges UTF-8" in notiz
+                                    for notiz in block["notes"]), block["notes"])
+        # Nur der echte Abruf steht im Log, nicht der Cache-Treffer.
+        log = (self.root / "log.md").read_text(encoding="utf-8")
+        self.assertEqual(log.count(f"extern | abruf {self.NETZ_PRAEFIX}a.md"), 1)
+
+    def test_binding_root_without_valid_utf8_is_unbound_not_a_crash(self):
+        """Ein Surrogat in der Bindungsdatei endete im Traceback."""
+        self.install_extern_register()
+        release = self.run_cli("release", "patch")
+        self.assertEqual(release.returncode, 0, release.stdout + release.stderr)
+        (self.root / ".vault-extern.json").write_text(json.dumps({
+            "schema": "skillsafe.bindung/v1",
+            "bindings": [{"key": "testhandbuch", "source_id": "X-0001",
+                          "root": "/tmp/\ud800kaputt", "bound_at": "2026-11-13"}],
+        }), encoding="utf-8")
+        liste = self.run_cli("extern", "list")
+        self.assertEqual(liste.returncode, 0, liste.stdout + liste.stderr)
+        self.assertNotIn("Traceback", liste.stderr)
+        self.assertIn("kein gültiger UTF-8-Pfad", liste.stdout)
+        payload = self.extern_cli("Schimmelbefall")
+        self.assertEqual(payload["external"]["state"], "not_bound")
 
     def test_okf_export_carries_external_provenance_but_never_a_binding_path(self):
         """Eine extern belegte Seite darf den Tresor nicht ohne Beleg verlassen."""

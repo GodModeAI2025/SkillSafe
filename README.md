@@ -476,7 +476,7 @@ SkillSafe/
     ├── LICENSE             Apache-2.0-Lizenz im portablen Artefakt
     ├── scripts/vault.py   Motor: deterministische Engine (nur Stdlib)
     ├── schema/            Motor: Profil, Typen und Begriffswelten
-    ├── references/        Motor: Antwort-, Ingest-, Medien-, Begriffs-, Lint- und Export-Workflows
+    ├── references/        Motor: Workflows für Antworten, Ingest, Medien, Begriffe, externe Quellen, mehrere Tresore, Lint und Export
     ├── knowledge/          Treibstoff: Wissensseiten im OKF-Muster (Profil oksv-lite/1.3), nach Domäne getrennt
     ├── sources/            Treibstoff: Register, raw/, derived/, Quarantäne
     ├── sources/EXTERN.md   Treibstoff: Allowlist externer Bezugsquellen (X-nnnn)

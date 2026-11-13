@@ -83,7 +83,10 @@ geaendert haette. Ersatz: eigene Liste FUNKTIONSWOERTER, nur im lokalen
 Ranking hybrid-local/v2. Nebenbefund, bewusst nicht behoben: in der alten
 Liste steht 'für' in Umlautschreibung, geprueft wird gegen das normalisierte
 'fuer'; der Eintrag hat nie getroffen. Wer das korrigiert, zieht die Kataloge
-neu. Details: KONZEPT.md AD-14.
+neu. Details: KONZEPT.md AD-14. Nachtrag: Seit v0.17.0 behoben, aus der
+parallelen Linie (extern-zweistufig/v2, Katalog X-0001 neu gerechnet); das
+lokale Ranking filtert weiter mit der alten Form, damit hybrid-local/v4
+bytegleich bleibt.
 
 ## [2026-11-12] Kompositum nur bei vollstaendiger Zerlegung gegen das Bestandsvokabular — verworfen
 Die strengere Regel (beide Teile muessen als eigenes Wort im Bestand stehen)
@@ -209,3 +212,20 @@ jedes Wort hinter einem Artikel ein Substantiv, "laut" zaehlt nur vor einer
 Kennung, "aus", "stehen" und "lauten" sind gestrichen, ein Zeichen wie "§"
 ist ein Sachwort, und als Kennung zaehlt nur die Schreibung mit
 ASCII-Ziffern.
+## [2026-11-13] Katalog-Vorauswahl auch fuer lokale Quellen — verworfen
+extern-zweistufig/v1 oeffnete bei jeder Quelle nur die 24 besten
+Katalogeintraege. Passte der Katalogtext nicht zur Frage, waren das die
+alphabetisch ersten, und ein Treffer im fuenfundzwanzigsten Dokument blieb
+ungelesen — ein stiller Fehltreffer. Lokal ist Lesen billig und
+deterministisch; der Prefilter sparte dort fast nichts. Ersatz in v2: lokale
+Quellen vollstaendig lesen, begrenzt ueber gezaehlte 64 MiB je Abfrage mit
+benannter Luecke. Fuer Netzquellen bleibt der Prefilter, weil dort jedes
+geoeffnete Dokument ein Abruf ist. Ebenfalls geprueft und zurueckgestellt:
+ein voller Token-Index im Katalog — das waere ein neues Katalogschema fuer
+ein Problem, das sich lokal durch Lesen loest.
+
+## [2026-11-13] Weiterleitungen von urllib folgen lassen und danach pruefen — verworfen
+Die Pruefung der End-URL nach dem Lesen kam zu spaet: das fremde Ziel hatte
+die Anfrage da schon gesehen. Ersatz: ein Opener ohne automatische
+Weiterleitung; das Ziel wird aufgeloest und an Pfadgrenzen gegen das Praefix
+geprueft, bevor die naechste Anfrage hinausgeht.

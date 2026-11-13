@@ -88,8 +88,8 @@ git add -A && git commit
 ```
 
 Schritt 5 ist der, den man vergisst. `tools/check_docs.py` fängt das ab: es
-zieht Version, Seiten, Claims, Quellen, manifestierte Dateien, Paketeinträge,
-Paket-SHA und die Messwerte der Suche aus der echten Ausgabe und vergleicht
+zieht Version, Profilnummer, Seiten, Claims, Quellen, manifestierte
+Dateien, Paketeinträge, Paket-SHA und die Messwerte der Suche aus der echten Ausgabe und vergleicht
 sie mit `README.md` und `index.html`. Die Ende-zu-Ende-Zahlen nimmt es aus
 den Protokollen unter `tests/e2e/` und vergleicht sie mit den Tabellen und
 Summen in `README.md`, `index.html` und `wissenstresor/KONZEPT.md`.
@@ -452,15 +452,27 @@ Ohne `--extern` verlässt kein Byte den Skill-Ordner. Wer das Flag
 gewohnheitsmäßig setzt, hat den Tresor faktisch in eine Live-Suche über einen
 ungefrorenen Baum verwandelt und Regel 2 (Vertrauen zur Abfragezeit)
 ausgehebelt. Es gehört ans Ende des Antwort-Workflows: erst der lokale
-Bestand, dann die Vollsichtung mit Quittung, dann extern, und auch das nur,
-wenn der Mensch das Nachschlagen verlangt oder ihm zugestimmt hat. Im
-Ende-zu-Ende-Lauf riefen sieben von acht Agenten `--extern` von sich aus auf,
-solange der Vertrag das offenließ; mit Netz wäre jeder dieser Aufrufe ein
-Abruf samt Zeile in `log.md` gewesen.
+Bestand, dann die Vollsichtung mit Quittung, dann extern, und das nur, wenn
+die Frage danach ganz oder teilweise ungedeckt bleibt und Quellen aufgeführt
+sind. Dann ist der Schritt Pflicht (`references/antworten.md`, Schritt 4c);
+bei gedeckter Frage unterbleibt er. Im ersten Ende-zu-Ende-Lauf riefen sieben
+von acht Agenten `--extern` von sich aus auf, solange der Vertrag offenließ,
+wann; mit Netz wäre jeder dieser Aufrufe ein Abruf samt Zeile in `log.md`
+gewesen.
 
 `SKILLSAFE_OFFLINE=1` schaltet jeden Netzabruf hart ab, vor dem ersten Socket.
 Die CI-Kette setzt die Variable global — ein Gate darf nicht an fremder
 Verfügbarkeit hängen, sonst misst es das Wetter statt den Bestand.
+
+**Nicht gelesen ist nicht nichts gefunden.** In der CI und auf jedem frisch
+installierten Host mit gesetztem Offline-Schalter ist X-0001 ungebunden und
+X-0002 nicht abrufbar; `query --extern` liest dort kein einziges Dokument und
+meldet `external.state = unreachable`, mit `--source X-0001` allein
+`not_bound`. Ohne Schalter und mit Netz wird X-0002 gelesen, und der Grund
+nennt X-0001 unter „Nicht gelesen". Das ist kein Fehler des Tresors und kein Negativbefund, sondern
+die Aussage, dass nichts durchsucht wurde. `no_external_candidates` gibt es
+erst, wenn mindestens ein Dokument tatsächlich gelesen wurde. Der Exit-Code
+bleibt in allen Fällen der des lokalen Teils.
 
 ### Weitergabe
 
@@ -477,7 +489,15 @@ Registerzeilen durchsehen.
 |---|---|---|
 | `extern list` zeigt „ungebunden" | Normal nach Installation oder Pfad hat sich geändert | `extern bind` — nur wenn hier tatsächlich nachgeschlagen werden soll |
 | `Bindungswurzel und Tresor dürfen einander nicht enthalten` | Die Wurzel liegt im Tresor oder umgekehrt | Externen Baum als Geschwisterordner ablegen, nie im Skill-Ordner |
-| `external.state = unreachable` | Netz weg, Ziel weg, oder `SKILLSAFE_OFFLINE` gesetzt | Erreichbarkeit prüfen; fail-closed ist hier gewollt, es wird nichts geraten |
+| `external.state = not_bound` | Es wurde nichts gelesen: jede berücksichtigte Quelle ist lokal und auf diesem Host nicht brauchbar gebunden. Normal nach Installation | `extern bind` — nur wenn hier tatsächlich nachgeschlagen werden soll. Kein Negativbefund |
+| `external.state = unreachable` | Es wurde nichts gelesen, obwohl etwas hätte lesbar sein sollen: Netz weg, Ziel weg, `SKILLSAFE_OFFLINE` gesetzt, Datei aus dem Katalog nicht lesbar, kein Katalog, `log.md` nicht schreibbar oder Abrufbudget (20 je Abfrage) erschöpft | `external.reason` und `notes` nennen die Ursache je Quelle. Erreichbarkeit oder Schreibrechte prüfen bzw. Katalog erzeugen; fail-closed ist hier gewollt, es wird nichts geraten |
+| `notes` nennt „Herkunftsprotokoll ist nicht schreibbar" | Skill-Ordner oder `log.md` sind nicht beschreibbar, oder ein Release-Lock liegt herum. Ein Netzabruf, der nicht protokolliert werden kann, findet nicht statt | Schreibrechte bzw. Lock prüfen. Ein Tresor an einem schreibgeschützten Ort liest Netzquellen absichtlich nicht |
+| `reason` nennt „Herkunftsprotokoll unvollständig" | `log.md` war vor dem Abruf schreibbar, beim Eintragen nicht mehr (Lock, Platte voll) | Den genannten Abruf von Hand nachtragen (`vault.py log extern "abruf <url> …"`), Ursache beheben |
+| `external.state = budget_exceeded` | Ein fremder Tresor überschreitet unter `knowledge/` die Verzeichnistiefe oder die Zahl der Einträge; die Suche bricht ohne Teilergebnis ab | `external.reason` nennt die Grenze, bei der Tiefe auch den Pfad. Prüfen, was dort liegt und nicht hingehört; ein Tresor dieser Größe ist kein Fall für das Nachschlagen |
+| `external.state = invalid_external_source` | Ein fremder Tresor ist nicht vertrauenswürdig lesbar: Manifest stimmt nicht, oder ein Dokument ist unlesbar, verlinkt, zu groß oder kein UTF-8. Die Suche bricht ohne Teilergebnis ab | Fremden Bestand prüfen und erst wieder verwenden, wenn `doctor` dort grün ist |
+| `external.state = no_external_candidates`, aber `reason` nennt „Nicht gelesen" | Ein Teil wurde gelesen, ein Teil nicht; der Befund gilt nur für das Gelesene | Die genannte Quelle wie oben behandeln, dann erneut abfragen. Nennt der Grund „nicht geöffnet", war entweder ein Budget der Abfrage erschöpft (20 Netzabrufe, 64 MiB) oder der Katalog einer Netzquelle größer als die Vorauswahl der Stufe 1 (24): Katalogtexte schärfen, mit Fachbegriffen fragen, die dort stehen, oder `--source` auf eine Quelle einschränken. Lokale Quellen werden vollständig gelesen |
+| `external.state = invalid_query` ohne `--source` | Die Frage enthält keinen suchbaren Begriff, oder die lokale Abfrage war nicht auswertbar (`ambiguous`, unbekannte Begriffswelt) | Frage mit Fachbegriffen stellen bzw. erst die Begriffswelt klären. Extern wurde nichts gelesen |
+| `orchestrator-template` meldet `invalid_source` | Im Baum liegt etwas, das sich nicht katalogisieren lässt: Sonderdatei, Link, unlesbares Dokument, Dateiname ohne gültiges UTF-8 | `errors` nennt die Datei. Bis v0.16.0 (auf `main` bis v0.11.14) hieß dieser Fall fälschlich `budget_exceeded` |
 | `doctor`: „zitierter Satz nicht mehr gefunden" | Die fremde Quelle wurde umformuliert | Beleg prüfen, Anker neu setzen oder Claim zurückziehen. **Kein Release-Blocker.** |
 | `doctor`: „Satz steht jetzt an Position n" | Text davor eingefügt | Nichts Dringendes; `sentence_index` beim nächsten Anfassen nachziehen |
 | Paket-SHA weicht zwischen Rechnern ab | Host-lokale Datei ist ins Archiv gerutscht | Paketinhalt prüfen; `.vault-extern.json` darf nicht enthalten sein |

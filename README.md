@@ -88,7 +88,7 @@ trägt, steht einheitlich unter `query_terms.partial`. Und der
 Antworten-Vertrag sagt genauer, wann ein Ergebnis `partial` ist, dass der
 Plan-Aufruf der Vollsichtung entbehrlich ist, dass man Claims im Zweifel in
 die Quittung aufnimmt und dass der externe Fallback eine Option bleibt, keine
-Pflicht. Rangfolge, Punktzahlen, Trefferstärke und Fingerabdrücke sind
+Pflicht (v0.17.0 macht ihn zur Pflicht, siehe unten). Rangfolge, Punktzahlen, Trefferstärke und Fingerabdrücke sind
 unverändert; das Profil bleibt `hybrid-local/v2`.
 
 v0.14.0 ist das Ergebnis eines Reviews, der Fehler suchen sollte und zwei
@@ -182,6 +182,32 @@ Quittung" stand, obwohl eine davon, die Frage nach einer unbekannten Kennung,
 vertragsgemäß ohne Sichtung auskam. `tools/rangfolge_check.py` endet bei einem
 kaputten Schnappschuss oder Gold mit Exit 2 statt mit einem Traceback, ebenso
 bei einer Frage, die die Engine gar nicht annähme.
+
+Parallel zu v0.12.0 bis v0.16.0 entstand eine zweite Linie, auf `main` als
+v0.11.12 bis v0.12.0 veröffentlicht; v0.17.0 führt beide zusammen. Sie trennt
+**nicht gelesen von nichts gefunden**: Liest `query --extern` kein einziges
+Dokument, weil eine Quelle auf diesem Host nicht gebunden oder nicht
+erreichbar ist, meldet der Tresor das als eigenen Zustand (`not_bound`,
+`unreachable`) und ausdrücklich nicht als Negativbefund. Vorher sah ein frisch
+entpacktes Paket ohne Netz so aus, als sei gesucht und nichts gefunden worden.
+Die Trennung hält auch dort, wo ein Abruf erst beim Lesen abbricht, ein
+fremder Tresor verlinkte Dokumente enthält oder die Vorauswahl einen Teil des
+Katalogs gar nicht öffnet. Dazu härtet sie den Netz- und Fremdpfad und
+wechselt die externe Ranking-Nummer auf `extern-zweistufig/v2`: Einer
+Weiterleitung folgt die HTTP-Schicht nie mehr selbst, ein Abruf findet nur
+statt, wenn er protokolliert werden kann, ein fremder Tresor liefert nur, was
+sein Manifest pinnt, lokale Quellen werden vollständig gelesen, und „für"
+wirkt endlich als Stoppwort.
+
+v0.17.0 ist die Zusammenführung. Der externe Fallback (Schritt 4c) folgt der
+zweiten Linie: Er ist Pflicht, sobald nach der Vollsichtung ein Teil der Frage
+ungedeckt bleibt und Quellen aufgeführt sind; unterbleibt er, steht das in der
+Antwort („Extern nicht gelesen: nicht nachgeschlagen"). Das löst die Option
+aus v0.13.0 ab. Ein externer Treffer ersetzt „Nicht im Bestand" weiterhin
+nicht, und was nicht gelesen wurde, ist kein Negativbefund. Das lokale Ranking
+bleibt `hybrid-local/v4`. Auf `main` meldete v0.12.0 lokal ebenfalls
+„hybrid-local/v2", ein anderes Ranking als das gleichnamige dieser Folge;
+Fingerabdrücke aus beiden sind nicht vergleichbar.
 
 Abnahme: 193 Tests bestanden · 37 manifestierte Dateien · 39 sichere
 Paketeinträge · SHA-256
@@ -615,8 +641,9 @@ python3 scripts/vault.py query --extern "Minderung Mangel Wohnung"
 
 Ohne `--extern` verlässt **kein Byte** den Skill-Ordner, weder zur Platte noch
 ins Netz. Das Flag gehört ans Ende des Antwort-Workflows: erst der lokale
-Bestand, dann die Vollsichtung mit Quittung, dann extern, und auch das nur,
-wenn der Mensch es verlangt oder ihm zugestimmt hat.
+Bestand, dann die Vollsichtung mit Quittung, dann extern, und das nur, wenn
+die Frage danach ganz oder teilweise ungedeckt bleibt. Dann ist der Schritt
+Pflicht, und ein nicht gelesenes Dokument ist kein Negativbefund.
 
 Das Ranking läuft in zwei Stufen, und die zweite entscheidet:
 
@@ -629,22 +656,60 @@ Stufe 1 stellt das Seerecht vor das Mietrecht — die Katalogtexte ähneln sich
 absichtlich. Stufe 2 dreht das Verhältnis. Der Katalogtext ist ein schwaches
 Signal, der Bestand dahinter das starke.
 
+Seit v0.17.0 (auf `main` seit v0.12.0, `extern-zweistufig/v2`) filtert Stufe 1 nur noch bei einer
+**Netzquelle**: Dort ist jedes geöffnete Dokument ein Abruf, also werden die
+besten 24 Katalogeinträge abgerufen, höchstens 20 je Abfrage. Eine **lokale**
+Quelle wird vollständig gelesen, der Katalog ordnet sie nur. In v1 öffnete
+Stufe 1 auch lokal nur 24 Dokumente; passte der Katalogtext nicht zur Frage,
+blieb ein Treffer im fünfundzwanzigsten ungelesen.
+
 ### Ehrlich scheitern
 
 Findet die zweite Stufe nichts, kommt nichts zurück:
 
 ```bash
-python3 scripts/vault.py query --extern "himmel"
+python3 scripts/vault.py query --extern --source X-0001 "himmel"
 # external.state = no_external_candidates
-# "Kein aufgeführtes Dokument enthält die Anfragebegriffe ['himmel'].
-#  Fachbegriffe statt Eigennamen verwenden. Es wird bewusst kein bester
-#  Fehltreffer geliefert."
+# "Kein gelesenes Dokument enthält die Anfragebegriffe ['himmel']
+#  (gelesen: 4). Fachbegriffe statt Eigennamen verwenden. Es wird bewusst
+#  kein bester Fehltreffer geliefert."
 ```
 
 Kein alphabetischer Fallback, kein bester Fehltreffer. „himmel" findet auch
 kein „schimmel": abgeglichen wird ausschließlich an Tokengrenzen. Ein
 plausibel aussehender Fehltreffer ist teurer als kein Treffer, weil er nicht
 als Fehler auffällt.
+
+### Nicht gelesen ist nicht nichts gefunden
+
+Dieser Negativbefund setzt voraus, dass gelesen wurde — oben vier Dokumente.
+Wurde **kein einziges** geöffnet, gibt es keinen Befund, und der Tresor sagt
+das, statt eine leere Trefferliste für sich sprechen zu lassen:
+
+```bash
+python3 scripts/vault.py extern unbind X-0001
+SKILLSAFE_OFFLINE=1 python3 scripts/vault.py query --extern "himmel"
+# external.state = unreachable · live = false · external_fingerprint = null
+# "Es wurde kein externes Dokument gelesen — dies ist kein Negativbefund.
+#  Nicht gelesen: X-0001 ist auf diesem Host nicht gebunden — …;
+#  X-0002: SKILLSAFE_OFFLINE ist gesetzt — nicht abgerufen."
+```
+
+| Zustand | Bedeutung |
+|---|---|
+| `not_bound` | nichts gelesen: jede berücksichtigte Quelle ist lokal und hier nicht gebunden |
+| `unreachable` | nichts gelesen, obwohl etwas hätte lesbar sein sollen: offline, Abruf fehlgeschlagen, Datei oder Katalog fehlt |
+| `no_external_candidates` | gelesen, kein Treffer — erst das ist ein Negativbefund |
+
+Genau so sieht ein frisch entpacktes Paket ohne Netz aus: der Normalfall, und
+bis v0.16.0 (auf `main` bis v0.11.11) meldete er fälschlich
+`no_external_candidates`. Wird nur ein
+Teil gelesen, bleibt es beim Ergebniszustand, aber der Grund nennt unter
+„Nicht gelesen" jede Lücke: ausgelassene Quellen, nicht lesbare Dokumente,
+was ein gezähltes Budget abgeschnitten hat (20 Netzabrufe, 64 MiB je Abfrage)
+und was die Vorauswahl einer Netzquelle nicht geöffnet hat (dort höchstens
+24 Katalogeinträge). Der Befund reicht so weit wie das Gelesene, nicht
+weiter.
 
 Protokoll und Grenzen im Detail:
 [`references/externe-quellen.md`](wissenstresor/references/externe-quellen.md).

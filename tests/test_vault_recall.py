@@ -166,8 +166,9 @@ class WortformTests(VaultCase):
     def test_function_words_are_stored_in_normalized_spelling(self):
         """Ein Funktionswort in Umlautschreibung träfe nie ein Token.
 
-        Genau dieser Fehler steckt in RETRIEVAL_STOPWORDS ('für' steht dort,
-        geprüft wird aber gegen 'fuer'). Die neue Liste darf ihn nicht erben.
+        Genau dieser Fehler steckte bis extern-zweistufig/v1 in
+        RETRIEVAL_STOPWORDS ('für' stand dort, geprüft wurde gegen 'fuer');
+        seit v2 wird die alte Liste normalisiert. Die neue darf ihn nie haben.
         """
         for wort in sorted(self.engine.FUNKTIONSWOERTER):
             self.assertEqual(wort, self.engine._retrieval_norm(wort), wort)

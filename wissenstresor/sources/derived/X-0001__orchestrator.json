@@ -12,7 +12,7 @@
         "grenze"
       ],
       "title": "Beispielbaum: Zweck und Grenzen",
-      "token_count": 113,
+      "token_count": 111,
       "top_tokens": [
         "nicht",
         "er",
@@ -20,12 +20,12 @@
         "bestand",
         "engine",
         "externe",
-        "fuer",
         "markdown",
         "nur",
         "tresors",
         "warum",
-        "wird"
+        "wird",
+        "0001"
       ]
     },
     {
@@ -66,7 +66,7 @@
         "mangel"
       ],
       "title": "Mietminderung bei Maengeln",
-      "token_count": 51,
+      "token_count": 50,
       "top_tokens": [
         "mangel",
         "mietminderung",

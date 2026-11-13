@@ -375,6 +375,15 @@ def ist_stand():
     """Die echten Werte einsammeln. Kein Schreibkommando."""
     stand = {}
     stand["version"] = (SKILL / "VERSION").read_text(encoding="utf-8").strip()
+    # Die Profilnummer steht in der Engine, nicht in einer Ausgabe. Sie ist
+    # auf der Landingpage einmal still veraltet (1.2 statt 1.3), deshalb
+    # wird sie hier gelesen statt angenommen.
+    treffer = re.search(
+        r'^PROFIL = "([^"]+)"',
+        (SKILL / "scripts/vault.py").read_text(encoding="utf-8"), re.M)
+    if not treffer:
+        raise SystemExit("PROFIL in scripts/vault.py nicht gefunden")
+    stand["profil"] = treffer.group(1)
 
     rc, stats = lauf(["scripts/vault.py", "stats"], SKILL)
     if rc != 0:
@@ -452,6 +461,8 @@ def pruefe(stand):
 
     verlange(readme, r"\*\*Aktueller Release: v([0-9.]+)\*\*", "Version",
              stand["version"], "README.md")
+    verlange(readme, r"\*\*Aktueller Release: v[0-9.]+\*\* \(Profil `([^`]+)`\)",
+             "Profil", stand["profil"], "README.md")
     verlange(readme, r"Abnahme: (\d+) Tests bestanden", "Testzahl",
              stand["tests"], "README.md")
     verlange(readme, r"Tests bestanden · (\d+) manifestierte Dateien",
@@ -471,6 +482,18 @@ def pruefe(stand):
              stand["version"], "index.html")
     verlange(landing, r"<span>SkillSafe v([0-9.]+) ·", "Version (Footer)",
              stand["version"], "index.html")
+    verlange(landing, r'class="eyebrow">Profil ([^ <]+) · purer Skill<',
+             "Profil (Hero)", stand["profil"], "index.html")
+    # Die validate-Zeile im Demo-Terminal stand lange auf einem alten Stand
+    # (5 Seiten, 26 Claims), weil nur die doctor-Zeile bewacht war.
+    verlange(landing, r"validate: 0 Fehler, 0 Warnungen — (\d+) Seiten",
+             "Seiten (validate)", stand["seiten"], "index.html")
+    verlange(landing, r"validate: 0 Fehler, 0 Warnungen — \d+ Seiten, (\d+) Claims",
+             "Claims (validate)", stand["claims"], "index.html")
+    verlange(landing, r"\d+ Seiten, \d+ Claims, (\d+) Quellen, \d+ externe Quellen",
+             "Quellen (validate)", stand["quellen"], "index.html")
+    verlange(landing, r"\d+ Claims, \d+ Quellen, (\d+) externe Quellen",
+             "externe Quellen (validate)", stand["extern"], "index.html")
     verlange(landing, r"verify: (\d+) Dateien unverändert", "manifestierte Dateien",
              stand["manifest"], "index.html")
     verlange(landing, r"(\d+) Seiten / \d+ Claims / \d+ Quellen", "Seiten (doctor)",

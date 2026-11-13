@@ -441,33 +441,37 @@
   "schema": "skillsafe.query/v1",
   "state": "candidates_found",
   "retrieval": "hybrid-local/v4",
-  "coverage": {"match_strength": "strong", "query_terms": {"content": ["okf"], "matched": ["okf"], "partial": [], "unmatched": []}, "semantic_coverage": "not_assessed"},
-  "concepts": {"matched": [{"id": "B-0001", "match": "exact", "preferred": "Open Knowledge Format", "represented": true}]},
+  "coverage": {"match_strength": "strong", "query_terms": {"content": ["okf"], "matched": ["okf"], "partial": [], "unmatched": []}, "unknown_ids": [], "semantic_coverage": "not_assessed", …},
+  "concepts": {"matched": [{"id": "B-0001", "match": "exact", "preferred": "Open Knowledge Format", "represented": true, …}]},
   "evidence": [
-    {"claim_id": "C-0001", "page_status": "veraltet", "signals": ["page_status:veraltet", "trust_tier:unverified"], "source": {"id": "S-0001", "trust": "T2"}},
+    {"claim_id": "C-0001", "page_status": "veraltet", "signals": ["page_status:veraltet", "trust_tier:unverified"], "source": {"id": "S-0001", "trust": "T2", …}, …},
     …
-    {"claim_id": "C-0301", "page_status": "aktiv", "signals": ["trust_tier:unverified"], "source": {"id": "S-0004", "trust": "T1"}}
-  ]
+    {"claim_id": "C-0301", "page_status": "aktiv", "signals": ["trust_tier:unverified"], "source": {"id": "S-0004", "trust": "T1", …}, …},
+    …
+  ],
+  …
 }</pre>
         <p class="cmd">python3 scripts/vault.py query "Kann ich bei nassen Wänden die Miete kürzen?"</p>
         <pre>{
   "state": "candidates_found",
   "coverage": {"match_strength": "weak", "term_coverage_percent": 0,
-    "query_terms": {"content": ["kuerzen", "miete", "nassen", "waenden"], "matched": [], "partial": ["miete"], "unmatched": ["kuerzen", "nassen", "waenden"]}},
-  "fallback": {"exhaustive_review_required": true, "reason": "weak_candidates_only", "sweep": {"batch_size": 40, "batches": 1, "claims": 28}},
-  "evidence": [{"claim_id": "C-0401", "score": 12, "reasons": ["compound:miete"]}, …]
+    "query_terms": {"content": ["kuerzen", "miete", "nassen", "waenden"], "matched": [], "partial": ["miete"], "unmatched": ["kuerzen", "nassen", "waenden"]}, …},
+  "fallback": {"exhaustive_review_required": true, "reason": "weak_candidates_only", "unknown_ids_only": false, "sweep": {"batch_size": 40, "batches": 1, "claims": 28}, …},
+  "evidence": [{"claim_id": "C-0401", "score": 12, "reasons": ["compound:miete"], …}, …],
+  …
 }</pre>
         <p class="cmd">python3 scripts/vault.py sweep "Kann ich bei nassen Wänden die Miete kürzen?" --batch 1</p>
         <pre>{
   "schema": "skillsafe.sweep/v1",
   "state": "batch", "batch": 1, "batches_total": 1,
   "pages": [
-    {"path": "knowledge/demo-extern/mietminderung.md", "title": "Mietminderung bei Schimmelbefall", "claims": [
+    {"path": "knowledge/demo-extern/mietminderung.md", "title": "Mietminderung bei Schimmelbefall", …, "claims": [
       {"claim_id": "C-0401", "kind": "Wortlaut", "source_id": "X-0001", "text": "Erheblicher Schimmelbefall in Wohnräumen ist nach dem Beispielhandbuch ein Mangel, der zur Mietminderung berechtigt."},
       {"claim_id": "C-0402", "kind": "Wortlaut", "source_id": "X-0001", "text": "Der Mangel ist dem Vermieter nach dem Beispielhandbuch unverzüglich anzuzeigen."}]},
     …
   ],
-  "seal": "…"
+  "seal": "…",
+  …
 }</pre>
         <p class="cmd">python3 scripts/vault.py sweep "Kann ich bei nassen Wänden die Miete kürzen?" --receipt 1:&lt;siegel&gt;=C-0401,C-0402</p>
         <pre>{
@@ -476,19 +480,29 @@
   "coverage": {"batches_confirmed": 1, "batches_total": 1, "claims_swept": 28, "claims_total": 28, "scope_complete": true, "semantic_coverage": "swept"},
   "selected": ["C-0401", "C-0402"],
   "abstention": {"allowed": true, "reason": "jeder Claim des Bestands wurde vorgelegt und je Stapel quittiert"},
-  "sweep_fingerprint": "…"
+  "sweep_fingerprint": "…",
+  …
 }</pre>
         <p class="cmd">python3 scripts/vault.py query "Urlaubsanspruch"</p>
         <pre>{
   "schema": "skillsafe.query/v1",
   "state": "no_candidates",
-  "coverage": {"match_strength": "none", "semantic_coverage": "not_assessed"},
-  "fallback": {"exhaustive_review_required": true, "reason": "no_retrieval_candidates", "sweep": {"batch_size": 40, "batches": 1, "claims": 28}},
-  "evidence": []
+  "coverage": {"match_strength": "none", "semantic_coverage": "not_assessed", …},
+  "fallback": {"exhaustive_review_required": true, "reason": "no_retrieval_candidates", "unknown_ids_only": false, "sweep": {"batch_size": 40, "batches": 1, "claims": 28}, …},
+  "evidence": [],
+  …
+}</pre>
+        <p class="cmd">python3 scripts/vault.py query "Was steht in C-9999?"</p>
+        <pre>{
+  "state": "candidates_found",
+  "coverage": {"match_strength": "weak", "query_terms": {"content": ["9999", "steht"], "matched": ["steht"], "partial": [], "unmatched": ["9999"]}, "unknown_ids": ["C-9999"], …},
+  "fallback": {"exhaustive_review_required": false, "reason": "unknown_ids_only", "unknown_ids_only": true, …},
+  …
 }</pre>
       </div>
       <p class="lede reveal" style="margin-top:20px;">Der erste Treffer stammt aus der überholten Fassung, und das ist Absicht. Das Ranking bewertet Geltung nicht, es markiert sie mit <code>page_status:veraltet</code>. Welche Fassung maßgeblich ist, entscheidet der Antworten-Workflow anhand der <code>ersetzt</code>-Kante im Graph, und er benennt beide. Die Kante steht an jeder ausgegebenen Seite unter <code>relations</code>, in beiden Richtungen und auch nach einer Vollsichtung: Wer auf der überholten Seite landet, sieht dort, welche sie ersetzt. Verstecken wäre die einfachere, aber unehrliche Lösung.</p>
       <p class="lede reveal" style="margin-top:20px;">Die zweite Frage zeigt den neuen Weg. Von ihren vier Wörtern erkennt das Ranking keines; nur „Miete" findet es als Teil von „Mietminderung", und das nennt es <code>weak</code>. Also legt <code>sweep</code> alle 28 Claims vor. Dass „nasse Wände" den Schimmelbefall meint, entscheidet das Modell beim Lesen, und die Quittung hält fest, dass dabei kein Claim gefehlt hat.</p>
+      <p class="lede reveal" style="margin-top:20px;">Die letzte Frage nennt nichts als eine Kennung, die es nicht gibt. Das weiß das Script selbst, denn es kennt jede Kennung, und seit v0.16.0 sagt es das auch: <code>unknown_ids_only</code>. Eine Vollsichtung fände nichts anderes, also entfällt sie, und die Antwort ist ein Satz: „Die Kennung C-9999 gibt es im Bestand nicht." Dass „steht" zufällig einen Claim trifft, ändert daran nichts. Die Regel ist eng: Steht neben der Kennung irgendein Sachwort, auch kleingeschrieben oder als Zeichen, bleibt die Vollsichtung Pflicht.</p>
     </div>
   </section>
 

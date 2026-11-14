@@ -129,7 +129,9 @@ Quelle nennen, liest das Werkzeug dann als Zeilen nach dem Aufruf. Ein optionale
 gebundenen externen Quellen oder an der Netzlage, hält `stand.extern` beides
 fest: `{"gebunden": ["X-0001"], "offline": true}`. Bindet der prüfende Host
 andere Quellen, bricht das Werkzeug mit Exit 2 ab wie bei einem fremden
-Manifest, und `offline` gilt vor der Umgebung des Werkzeugs. Ohne die Angabe
+Manifest, außer jede Frage des Protokolls endet extern in `invalid_query`
+(dann liest keine Quelle etwas, und kein Urteil hängt an der Bindung);
+`offline` gilt vor der Umgebung des Werkzeugs. Ohne die Angabe
 gehört die Prüfung auf einen Host mit derselben Bindung. Die Kennung allein
 bindet den Inhalt der gebundenen Wurzel nicht: Sie stammt deshalb aus
 demselben Commit wie der Tresor (`git archive`, wie oben für Runde 5).

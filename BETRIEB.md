@@ -149,6 +149,11 @@ abgeräumt — exakt 15:02 nach dem Start, also vom eigenen `timeout-minutes: 15
 dieses Workflows. Der Pages-Lauf auf `e659a2d` baute erfolgreich und scheiterte
 danach im Deploy mit `Timeout reached, aborting!`.
 
+Am 14. November 2026 wurden die beiden Läufe zu `0f2bae9` nach 15:15 als
+`cancelled` abgeräumt, ubuntu/3.9 in beiden, ubuntu/3.13 und macOS/3.13 im
+zweiten: Die Kette selbst brauchte inzwischen rund 15 Minuten. Auch ein so
+abgeräumter Lauf ist kein grüner. Seitdem steht `timeout-minutes` auf 30.
+
 **Eine Ursache steht damit nicht fest.** Die naheliegende Erklärung — Merges
 mit einem App-Token lösen bewusst keine Läufe aus, damit sich Automatisierung
 nicht rekursiv auslöst — deckt Zeile zwei und scheitert an Zeile drei: die hat
@@ -335,9 +340,12 @@ ungelesene Quelle; eine Angabe zu einem Treffer, die kein geliefertes
 Dokument nennt oder einen Pfad, den die Abfrage nicht geliefert hat, ist bei
 bekannter Bindung (lokale Quelle) und bei einem Lauf ohne Netz (Netzquelle)
 ebenfalls ein Verstoß, sonst ein Hinweis. Ausgenommen sind Zitate, Dateien
-des geprüften Tresors und ein ausdrückliches „keine Treffer", das nichts
-nennt, was nach einer Fundstelle aussieht; eine Rückfrage zählt nie als
-Angabe. Einen Verzicht nimmt es nur an, wenn das Protokoll den
+des geprüften Tresors, solange die Angabe sie keiner Quelle zuschreibt, und
+eine reine Leermeldung („keine Treffer", „kein Zeiger"), die sonst nichts
+über die Quelle sagt und nichts nennt, was nach einer Fundstelle aussieht.
+Eine Rückfrage zählt nicht als Angabe, ob als eigener Satz, in Klammern,
+als Teilsatz oder direkt hinter dem Etikett; eine zitierte Frage ist keine
+Rückfrage. Einen Verzicht nimmt es nur an, wenn das Protokoll den
 Wunsch des Nutzers oder die Vorgabe der Umgebung im Feld `vorgabe` festhält.
 Ob der Schritt Pflicht ist, liest es aus dem Vertrag des geprüften Tresors
 (`references/antworten.md`); ein Stand, dessen Vertrag ihn freistellte, wird
@@ -346,7 +354,9 @@ Was eine Netzquelle geliefert hätte, prüft es nur, wenn auch der Lauf
 offline war: Das sagt `stand.extern.offline` im Protokoll, sonst
 `SKILLSAFE_OFFLINE` in seiner Umgebung. Hält das Protokoll unter
 `stand.extern.gebunden` fest, welche Quellen der Lauf gebunden hatte, und
-bindet der prüfende Host andere, bricht es ab. Exit 1 bei einem Verstoß, 2
+bindet der prüfende Host andere, bricht es ab, außer jede Frage des
+Protokolls endet extern in `invalid_query`: Dann liest keine Quelle etwas,
+und kein Urteil hängt an der Bindung. Exit 1 bei einem Verstoß, 2
 bei unbrauchbarem Protokoll, falschem Stand oder abweichender Bindung.
 
 **Siegel gelten für ihren Stand.** Nach jedem Release sind alte Quittungen

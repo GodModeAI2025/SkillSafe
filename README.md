@@ -29,7 +29,7 @@ geschützte `dir_fd`-Operationen fail-closed ab.
 📖 **Konzept & Architekturentscheidungen:** [`wissenstresor/KONZEPT.md`](wissenstresor/KONZEPT.md)
 🌐 **Landingpage:** [`index.html`](index.html) (GitHub-Pages-fähig, Source = repo root)
 
-**Aktueller Release: v0.18.4** (Profil `oksv-lite/1.3`) mit Begriffswelten,
+**Aktueller Release: v0.18.5** (Profil `oksv-lite/1.3`) mit Begriffswelten,
 deterministischem Hybrid-Retrieval, geprüften Bild-/PDF-Regionen und einem
 reproduzierbaren `.skill`-Paket für Claude Code und Codex. Der
 Frontmatter-Parser lehnt Verschachtelung fail-closed ab statt sie still
@@ -294,12 +294,37 @@ Satz: „Frage: Muss ich …" sucht nicht mehr nach „muss". Das Prüfwerkzeug
 hatte mit der Lockerung für „keine Treffer" auch erfundene Fundstellen ohne
 `.md`-Pfad durchgelassen (Kapitel, PDF, Pfad ohne Endung); jetzt ist eine
 Trefferangabe ohne geliefertes Dokument wieder ein Verstoß, außer sie meldet
-ausdrücklich keinen Treffer. Eine Rückfrage zählt in keiner Form mehr als
-Angabe, und eine Liste nach einer Rückfrage gehört zur Frage.
+ausdrücklich keinen Treffer. Eine Rückfrage als eigene Zeile, in Klammern,
+als Teilsatz oder als ganzer Listenpunkt zählt nicht mehr als Angabe, und
+eine Liste nach einer Rückfrage gehört zur Frage.
 
-Abnahme: 251 Tests bestanden · 37 manifestierte Dateien · 39 sichere
+v0.18.5 behebt, was eine fünfte Prüfung an v0.18.4 fand, ebenfalls vor
+`main`. Ein geschütztes Leerzeichen vor „#" machte eine Frontmatter-Zeile,
+die der Parser als Kommentar überspringt, für den Stolperdraht unsichtbar;
+jetzt zählt vor `#` und `<!--` jeder Leerraum wie im Parser. Ein Code-Zaun
+öffnet und schließt auch beim Einzug wie in CommonMark, ein Kommentar am
+Ende einer Codezeile setzt sich in der Kommentarzeile darunter fort, eine
+Überschrift in einem HTML-Kommentar steht für sich, und das Schwärzen von
+Fehlermeldungen läuft wieder in linearer Zeit. In der externen Suche bleibt
+ein Homograph am Satzanfang ein Begriff, wenn ihm „und", „oder" oder ein
+Genitivartikel folgt („Würde des Menschen"), vor einer Präposition aber
+nicht („Muss bei Auszug …"); eine Stichwortfrage aus Substantiven gilt
+nicht mehr als Titelschreibung, und ein Anführungszeichen vor dem
+Satzanfang ändert nichts mehr; über die 117 Fragen der Messung wechselt
+weder ein Begriff noch ein Zustand. Das Prüfwerkzeug
+nahm „kein Zeiger." (so schrieb es ein Agent in Runde 1) als erfundene
+Angabe und Inhalt neben „; sonst keine Treffer" als Leermeldung. Jetzt ist
+eine Leermeldung nur, was sonst nichts über die Quelle sagt, und eine
+Seitenzahl zählt als Fundstelle. Ein Dokument in Anführungszeichen oder mit
+„./" gilt als genannt, eine zitierte Frage nicht als Rückfrage, eine
+Rückfrage direkt hinter dem Etikett nicht als Angabe, und eine Datei des
+eigenen Tresors, die eine Angabe einer Quelle zuschreibt („X-0001,
+INDEX.md"), ist ein erfundener Treffer. Die Formen der Gutachter aus der
+dritten bis fünften Prüfung stehen mit erwartetem Urteil in den Tests.
+
+Abnahme: 252 Tests bestanden · 37 manifestierte Dateien · 39 sichere
 Paketeinträge · SHA-256
-`f2a6ca6894feeb2094f09c3a0c21ef989963b8c3cb0c99cf2b29d77d06a38afa`.
+`fd303a84aba7f2c4abd0b26de867d03f597fce813154a738a268d6f4f75ad2e4`.
 Dazu 2 aufgeführte externe Bezugsquellen · 2 Satzanker.
 
 Alles läuft mit der Python-Standardbibliothek, gemessen mit CPython 3.9 und

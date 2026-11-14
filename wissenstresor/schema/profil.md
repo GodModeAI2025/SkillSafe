@@ -178,12 +178,17 @@ eine aufgeführte externe Bezugsquelle.
   eine Überschrift oder ein neuer Listenpunkt trennt. Kommentare liest das
   Modell mit, sie bilden aber eigene Absätze und werden nie mit Text oder
   Code verbunden: Kommentarzeilen im Frontmatter und in einem Code-Zaun
-  (ohne ihr `#`; eine leere Kommentarzeile trennt) und HTML-Kommentare,
-  auch über mehrere Zeilen. Ein Code-Zaun gilt wie in CommonMark, auch
-  eingerückt in einem Listenpunkt: Er schließt nur mit demselben Zeichen in
-  mindestens derselben Länge und ohne Text dahinter, und sein Info-String
-  ist ein eigener Absatz; ```` ```x``` ```` am Zeilenanfang ist Inline-Code,
-  kein Zaun. Die lange Formel „ignore … instructions" sucht `validate`
+  (ohne ihr `#`; eine leere Kommentarzeile trennt; ein Kommentar am Ende
+  einer Codezeile setzt sich in der Kommentarzeile darunter fort) und
+  HTML-Kommentare, auch über mehrere Zeilen (eine Überschrift darin steht
+  für sich). Vor `#` und `<!--` zählt jeder Leerraum, auch ein geschütztes
+  Leerzeichen, wie im Frontmatter-Parser: Was er als Kommentar überspringt,
+  prüft `validate` als Kommentar. Ein Code-Zaun gilt wie in CommonMark: Er
+  öffnet mit höchstens drei Leerzeichen Einzug (in einem Listenpunkt auch
+  tiefer) und schließt nur mit demselben Zeichen in mindestens derselben
+  Länge, ohne Text dahinter und höchstens drei Leerzeichen tiefer als die
+  Öffnung; sein Info-String ist ein eigener Absatz, und ```` ```x``` ```` am
+  Zeilenanfang ist Inline-Code, kein Zaun. Die lange Formel „ignore … instructions" sucht `validate`
   zusätzlich über Überschriften und Leerzeilen hinweg bis zur nächsten
   Claim-Zeile; die Zweiwortformeln nicht, denn die entstehen dort zufällig
   („Tool-System" vor einem Absatz, der mit „Prompt" beginnt). Ein Pfad mit
@@ -355,11 +360,12 @@ jeder Kante unter `relations`, die auf sie zeigt. Ein externer Treffer,
 dessen Dokumentpfad eine Signatur trägt, hat das Signal
 `suspicious_instruction`, ebenso ein Beleg unter `evidence[]`, dessen
 Seitenpfad oder Ankerpfad eine trägt; der Pfad bleibt als Kennung stehen.
-Unmarkiert steht ein solcher Pfad nur in zwei Listen: in
-`fallback.page_paths` (Seiten des Bestands) und in
-`fallback.external_document_paths` (extern gelesene Dokumente). Beide
-nennen, was es gibt oder was gelesen wurde, nicht, was die Antwort liest
-oder zitiert: Markiert ist die Seite in `pages[]`, im Stapel und in der
+Unmarkiert steht ein solcher Pfad nur in zwei Listen und in einem Echo:
+in `fallback.page_paths` (Seiten des Bestands), in
+`fallback.external_document_paths` (extern gelesene Dokumente) und unter
+`scope.pages` in der Ausgabe von `sweep --page`, die das Argument des
+Agenten wiederholt. Sie nennen, was es gibt, was gelesen wurde oder was
+der Agent angefragt hat, nicht, was die Antwort liest oder zitiert: Markiert ist die Seite in `pages[]`, im Stapel und in der
 Quittung, ihr Beleg in `evidence[]`, ein Dokument an seinem Treffer; ein
 Dokument ohne Treffer zitiert die Antwort nicht, und vor seinem Pfad warnt
 schon `validate` am Katalog. Ohne Signatur fehlt das Feld ganz, und die
@@ -721,10 +727,20 @@ und ein Wort einer geschlossenen Liste von Homographen
 (`HOMOGRAPHE_SUBSTANTIVE`: „Waren", „Soll", „Haben", „Würde" …), wenn es
 mitten im Satz großgeschrieben steht, denn dann ist es ein Substantiv („Was
 sind Waren?"). Am Satzanfang (auch nach Doppelpunkt, Semikolon,
-Gedankenstrich und einer Aufzählungsmarke wie „1)") zählt es nur, wenn es
-für sich steht („Begriffsfrage: Waren – …"), nicht, wenn ein Satz folgt
-(„Frage: Muss ich …"); in einer Frage in Versalien („ß" zählt als groß)
-oder in Titelschreibung zählt es nie. Sonst macht Großschreibung kein
+Gedankenstrich und einer Aufzählungsmarke wie „1)", Anführungszeichen und
+Klammern davor zählen nicht) zählt es nur, wenn es für sich steht
+(„Begriffsfrage: Waren – …") oder eine Wortgruppe beginnt, in der ihm
+„und", „oder", „sowie" oder ein Genitivartikel folgt („Würde des
+Menschen", „Soll und Haben"); vor jedem anderen Wort, auch vor einer
+Präposition, ist es das Verb eines Satzes („Frage: Muss ich …", „Muss der
+Mieter …", „Muss bei Auszug …"). In einer
+Frage in Versalien („ß" zählt als groß) oder in Titelschreibung zählt es
+nie. Titelschreibung heißt: Jedes Wort beginnt groß, und nach dem ersten
+steht ein großgeschriebenes Funktionswort, das kein Homograph der Liste ist
+(„Wann Muss Der Mieter …"); eine Stichwortfrage aus Substantiven
+(„Zollgebühren Waren China") ist keine. Eine Frage in Versalien oder
+Titelschreibung, die sonst nur Funktionswörter enthält („WAS SIND
+WAREN?"), ergibt deshalb `invalid_query`. Sonst macht Großschreibung kein
 Funktionswort zum Begriff, auch nicht bei der Anrede („Können Sie …").
 Besteht die Frage nur aus Homographen („Würde"), sucht sie mit ihnen. Die
 Frage wird vorher normalisiert (NFKC), damit eine zerlegte Schreibung kein

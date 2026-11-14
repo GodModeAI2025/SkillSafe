@@ -252,7 +252,17 @@ v0.18.3 dafuer jede Zaunzeile uebersprang (eine Signatur im Info-String
 rutschte durch) und Kommentarzeilen mit Code und Absatz verband (neue
 Fehlalarme). Seit v0.18.4 gilt ein Zaun wie in CommonMark (Zeichen, Laenge,
 Info-String als eigener Absatz, auch eingerueckt), und Kommentare bilden
-eigene Absaetze, die nie mit Text oder Code verbunden werden.
+eigene Absaetze, die nie mit Text oder Code verbunden werden. Die fuenfte
+Pruefung fand darin drei Luecken: Ein geschuetztes Leerzeichen vor "#"
+machte eine Frontmatter-Zeile, die der Parser als Kommentar ueberspringt,
+fuer den Stolperdraht unsichtbar; eine eingerueckte Zaunzeile schloss oder
+oeffnete anders als in CommonMark; ein Kommentar am Ende einer Codezeile
+wurde nie mit der Kommentarzeile darunter verbunden. Seit v0.18.5 zaehlt
+vor `#` und `<!--` jeder Leerraum wie im Parser, ein Zaun oeffnet ausserhalb
+eines Listenpunkts nur mit hoechstens drei Leerzeichen Einzug und schliesst
+hoechstens drei Leerzeichen tiefer als die Oeffnung, ein Zeilenendkommentar
+setzt sich in der naechsten Kommentarzeile fort, und eine Ueberschrift in
+einem HTML-Kommentar steht fuer sich.
 
 ## [2026-11-14] Katalog von X-0002 von Hand neu erzeugen — verworfen
 sources/derived/X-0002__orchestrator.json fuehrt unter top_tokens noch "fuer",
@@ -305,11 +315,26 @@ Homograph nur fuer sich stehend; in Versalien (auch mit scharfem s) und
 in Titelschreibung nie. Eine Frage nur aus Homographen ("Wuerde") sucht mit
 ihnen, und die Pronomen der Anrede sind auch in Grossbuchstaben kein
 Kuerzel. Die Messung ueber die 117 Fragen bleibt bei 62 / 49 / 6;
-gegenueber v0.18.2 wechselt keine Frage ihren externen Zustand. Der Preis:
-Ein Substantiv, das kleingeschrieben ein Funktionswort waere und nicht auf
-der Liste steht, zaehlt extern nicht, ebenso einer der Liste am Satzanfang
-vor einem Satz ("Soll und Haben - ..."); die Liste waechst nur mit einem
-Beleg.
+gegenueber v0.18.2 wechselt keine Frage ihren externen Zustand. Die fuenfte
+Pruefung fand den Preis hoeher als genannt: Nach Doppelpunkt fielen auch
+"Zoll: Waren aus China" und "Grundgesetz: Wuerde des Menschen" weg, jede
+Stichwortfrage aus Substantiven ("Zollgebuehren Waren China") galt als
+Titelschreibung, und hinter einem Anfuehrungszeichen erkannte v0.18.4 den
+Satzanfang nicht ('Frage. "Muss ich ..."' machte "muss" zum Begriff). Seit
+v0.18.5 zaehlt ein Homograph am Satzanfang auch vor "und", "oder",
+"sowie" oder einem Genitivartikel ("Wuerde des Menschen"), Titelschreibung
+verlangt ein grossgeschriebenes Funktionswort nach dem ersten Wort, und
+Anfuehrungszeichen und Klammern vor dem Satzanfang zaehlen nicht. Eine
+Praeposition danach reicht nicht: Ein erster Entwurf nahm sie dazu, und
+"Muss bei Auszug renoviert werden?" oder "Waren in der Wohnung Maengel?"
+suchten wieder mit "muss" und "waren", also mit genau den Rauschbegriffen,
+die v3 abschafft. Der Preis: Ein Substantiv, das kleingeschrieben ein
+Funktionswort waere und nicht auf der Liste steht, zaehlt extern nicht,
+ebenso einer der Liste am Satzanfang vor einem anderen Wort ("Zoll: Waren
+aus China" und "Soll Haben Buchhaltung" suchen ohne "waren" und "soll");
+eine Frage in Versalien oder Titelschreibung ohne anderes Sachwort ("WAS
+SIND WAREN?") ergibt invalid_query, kein Negativbefund. Die Liste waechst
+nur mit einem Beleg.
 
 ## [2026-11-14] Trenner im Pfad fuer jede Formel als Leerraum werten — verworfen
 v0.18.3 las Bindestrich, Unterstrich, Punkt und %20 in einem Pfad als
@@ -334,4 +359,23 @@ dem Etikett. Ersatz in v0.18.4: Eine Trefferangabe ohne geliefertes
 Dokument ist erfunden, ausser sie meldet ausdruecklich keinen Treffer und
 nennt nichts, was nach einer Fundstelle aussieht; eine Fragezeile fuer sich
 beendet den Block, und eine Rueckfrage in Klammern, als Teilsatz oder als
-ganzer Listenpunkt ist keine Angabe.
+ganzer Listenpunkt ist keine Angabe. Die fuenfte Pruefung fand diese Regel
+zugleich zu eng und zu weit. Zu eng: "kein Zeiger." (so schrieb es ein
+Agent in Runde 1), "keine passenden Treffer" oder "Treffer: keine" galten
+als erfunden, "Kaution/Mietsicherheit" oder ein verneintes "keinen
+Abschnitt" als Fundstelle, ein Dokument in Anfuehrungszeichen als nicht
+genannt und eine zitierte Frage als Rueckfrage. Zu weit: Inhalt neben
+"; sonst keine Treffer" kam durch, ebenso "Seite 4", und eine Datei des
+eigenen Tresors blieb ausgenommen, auch wenn die Angabe sie X-0001
+zuschrieb. Ersatz in v0.18.5: Eine Leermeldung sagt neben Kennung, Zustand
+und Lesestatus hoechstens zwei Inhaltswoerter; fundstellenartig ist eine
+URL, eine Datei mit Dokumentendung, ein Pfad mit ./, ../, / oder zwei
+Schraegstrichen, eine Satz-, Absatz-, Zeilen- oder Seitenzahl und ein
+Kapitel oder Abschnitt mit Nummer oder Titel; ob ein Satz fragt,
+entscheidet sein letzter Teilsatz ausserhalb von Zitaten, auch direkt
+hinter dem Etikett. Die Formen der Gutachter aus der dritten bis fuenften
+Pruefung stehen mit erwartetem Urteil in den Tests. Der Preis: Die Grenze von zwei
+Inhaltswoertern ist eine Schaetzung; eine Leermeldung mit laengerer
+Begruendung ("keine Treffer, das Beispielhandbuch behandelt Mietrecht nur
+am Rand") gilt als Aussage ueber die Quelle und ist ohne geliefertes
+Dokument ein Verstoss.

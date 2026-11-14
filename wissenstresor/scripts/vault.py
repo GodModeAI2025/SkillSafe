@@ -366,12 +366,18 @@ def _ohne_signatur(eintrag, felder):
 FREITEXT_BLOCKSTART_RE = re.compile(
     r"^[ \t]{0,3}(?:#{1,6}(?:[ \t]|$)|[-*+][ \t]|\d{1,3}[.)][ \t]|\|)")
 FREITEXT_UEBERSCHRIFT_RE = re.compile(r"^[ \t]{0,3}#{1,6}(?:[ \t]|$)")
+FREITEXT_LISTENPUNKT_RE = re.compile(r"^[ \t]{0,3}(?:[-*+]|\d{1,3}[.)])[ \t]")
 # Ein Code-Zaun, auch eingerückt in einem Listenpunkt: Zeichen, Länge und
 # der Info-String dahinter. Ein Backtick-Zaun hat keinen Backtick im
 # Info-String, sonst ist die Zeile Inline-Code.
 FREITEXT_ZAUN_RE = re.compile(r"^[ \t]*(`{3,}|~{3,})(.*)$")
 FREITEXT_ZITAT_RE = re.compile(r"^[ \t]{0,3}(?:>[ \t]?)+")
-FREITEXT_HTML_KOMMENTAR_RE = re.compile(r"^[ \t]*<!--[ \t]?|[ \t]?-->[ \t]*$")
+# Vor "#" und "<!--" zählt jeder Leerraum, wie im Frontmatter-Parser (eine
+# Zeile mit geschütztem Leerzeichen vor "#" überspringt er als Kommentar);
+# danach nur Leerzeichen und Tabulator, denn was folgt, ist Inhalt.
+FREITEXT_HTML_KOMMENTAR_RE = re.compile(r"^\s*<!--[ \t]?|[ \t]?-->\s*$")
+# Ein Kommentar am Ende einer Codezeile: "#" nach Leerraum.
+FREITEXT_ZEILENKOMMENTAR_RE = re.compile(r"[ \t]#")
 # Nur die lange Formel verbindet der Stolperdraht auch über Absätze hinweg:
 # "ignore … instructions" entsteht über eine Überschrift kaum zufällig, die
 # Zweiwortformeln ("System" vor einem Absatz, der mit "Prompt" beginnt) schon.
@@ -387,10 +393,19 @@ def _leer(text):
 
 
 def _ohne_kommentarzeichen(zeile):
-    """Eine Kommentarzeile ohne ihr "#" (Frontmatter, Code-Zaun). Nur das
-    Zeichen und der Leerraum davor fallen weg; ob die Zeile leer ist,
-    entscheidet _leer am Rest."""
-    return zeile.lstrip(" \t").lstrip("#")
+    """Eine Kommentarzeile ohne ihr "#" (Frontmatter, Code-Zaun). Davor fällt
+    jeder Leerraum weg, wie im Frontmatter-Parser; ob die Zeile leer ist,
+    entscheidet _leer am Rest, und dort ist ein geschütztes Leerzeichen
+    Inhalt."""
+    return zeile.lstrip().lstrip("#")
+
+
+def _ist_kommentarzeile(zeile):
+    return zeile.lstrip().startswith("#")
+
+
+def _einzug(zeile):
+    return len(zeile.expandtabs(4)) - len(zeile.expandtabs(4).lstrip(" "))
 
 
 def _freitext_laeufe(datei_zeilen, offset, rumpf_zeilen, absatzweise=True):
@@ -399,16 +414,22 @@ def _freitext_laeufe(datei_zeilen, offset, rumpf_zeilen, absatzweise=True):
     Zitatzeichen fallen zuerst weg; was danach bleibt, entscheidet.
     Absatzweise (Standard) beendet eine Leerzeile den Lauf, ein neuer Block
     (Überschrift, Listenpunkt, Tabellenzeile) beginnt einen neuen, und eine
-    Überschrift steht für sich. Kommentarzeilen bilden eigene Läufe und
-    werden nie mit Text oder Code verbunden: "#"-Zeilen im Frontmatter und
-    in einem Code-Zaun (ohne das "#"; eine leere Kommentarzeile trennt) und
-    HTML-Kommentare, auch über mehrere Zeilen. Ein Code-Zaun gilt nach
-    CommonMark: Er schließt nur mit demselben Zeichen in mindestens
-    derselben Länge und ohne Text dahinter; sein Info-String ist ein eigener
-    Lauf, und die Codezeilen darin bilden Läufe wie Absätze. Abschnittsweise
-    trennen nur Claim-Zeilen und die übrigen Frontmatter-Zeilen. Eine
-    Claim-Zeile beginnt einen Lauf wie ein Listenpunkt; ihre Fortsetzung
-    gehört dazu. Zurück kommen Läufe aus (Zeilennummer, Text, ist_claim)."""
+    Überschrift steht für sich, auch in einem HTML-Kommentar. Kommentare
+    bilden eigene Läufe und werden nie mit Text oder Code verbunden:
+    "#"-Zeilen im Frontmatter und in einem Code-Zaun (ohne das "#"; eine
+    leere Kommentarzeile trennt; ein Kommentar am Ende einer Codezeile setzt
+    sich in der nächsten Kommentarzeile fort) und HTML-Kommentare, auch über
+    mehrere Zeilen. Als Kommentarzeile gilt, was der Frontmatter-Parser
+    überspringt: "#" nach beliebigem Leerraum. Ein Code-Zaun gilt nach
+    CommonMark: Er öffnet mit höchstens drei Leerzeichen Einzug (in einem
+    Listenpunkt auch weiter eingerückt), schließt nur mit demselben Zeichen
+    in mindestens derselben Länge, ohne Text dahinter und nicht weiter als
+    drei Leerzeichen über den Einzug der Öffnung hinaus eingerückt; sein
+    Info-String ist ein eigener Lauf, und die Codezeilen darin bilden Läufe
+    wie Absätze. Abschnittsweise trennen nur Claim-Zeilen und die übrigen
+    Frontmatter-Zeilen. Eine Claim-Zeile beginnt einen Lauf wie ein
+    Listenpunkt; ihre Fortsetzung gehört dazu. Zurück kommen Läufe aus
+    (Zeilennummer, Text, ist_claim)."""
     laeufe, lauf = [], []
     art = None
 
@@ -430,7 +451,7 @@ def _freitext_laeufe(datei_zeilen, offset, rumpf_zeilen, absatzweise=True):
 
     if offset:
         for nummer, zeile in enumerate(datei_zeilen[:offset], 1):
-            if 1 < nummer < offset and zeile.lstrip(" \t").startswith("#"):
+            if 1 < nummer < offset and _ist_kommentarzeile(zeile):
                 rest = _ohne_kommentarzeichen(zeile)
                 if absatzweise and _leer(rest):
                     schliessen()
@@ -441,32 +462,35 @@ def _freitext_laeufe(datei_zeilen, offset, rumpf_zeilen, absatzweise=True):
         schliessen()
     zaun = None
     im_html = False
+    in_liste = False
     for bn, zeile in enumerate(rumpf_zeilen, 1):
         nummer = offset + bn
         ist_claim = zeile.startswith(CLAIM_START)
         if ist_claim and zaun is None and not im_html:
             schliessen()
             anhaengen(nummer, zeile, "claim", True)
+            in_liste = True
             continue
         rest = FREITEXT_ZITAT_RE.sub("", zeile)
         if not absatzweise:
             rest = FREITEXT_HTML_KOMMENTAR_RE.sub("", rest)
-            if rest.lstrip(" \t").startswith("#"):
+            if _ist_kommentarzeile(rest):
                 rest = _ohne_kommentarzeichen(rest).strip(" \t")
             # Alles außer Claim-Zeilen gehört zum Abschnitt; die Art des
             # Laufs bleibt die der Claim-Zeile davor.
             lauf.append((nummer, rest, False))
             continue
         if zaun is not None:
-            zeichen, laenge = zaun
+            zeichen, laenge, einzug = zaun
             schluss = FREITEXT_ZAUN_RE.match(rest)
             if (schluss and schluss.group(1)[0] == zeichen
                     and len(schluss.group(1)) >= laenge
-                    and _leer(schluss.group(2))):
+                    and _leer(schluss.group(2))
+                    and _einzug(rest) <= einzug + 3):
                 schliessen()
                 zaun = None
                 continue
-            if rest.lstrip(" \t").startswith("#"):
+            if _ist_kommentarzeile(rest):
                 # Code-Kommentar: liest das Modell mit; ein leerer trennt.
                 kommentar = _ohne_kommentarzeichen(rest)
                 if _leer(kommentar):
@@ -476,19 +500,29 @@ def _freitext_laeufe(datei_zeilen, offset, rumpf_zeilen, absatzweise=True):
             elif _leer(rest):
                 schliessen()
             else:
-                anhaengen(nummer, rest, "code")
+                ende = FREITEXT_ZEILENKOMMENTAR_RE.search(rest)
+                code = rest[:ende.start()] if ende else rest
+                if not _leer(code):
+                    anhaengen(nummer, code, "code")
+                if ende and not _leer(rest[ende.end():]):
+                    # Ein Kommentar am Zeilenende beginnt einen
+                    # Kommentarlauf, den die nächste Kommentarzeile fortsetzt.
+                    anhaengen(nummer, rest[ende.end():].strip(" \t"),
+                              "kommentar")
             continue
         oeffnung = FREITEXT_ZAUN_RE.match(rest)
-        if oeffnung and not (oeffnung.group(1)[0] == "`"
-                             and "`" in oeffnung.group(2)):
+        if (oeffnung and not (oeffnung.group(1)[0] == "`"
+                              and "`" in oeffnung.group(2))
+                and (_einzug(rest) <= 3 or in_liste)):
             schliessen()
-            zaun = (oeffnung.group(1)[0], len(oeffnung.group(1)))
+            zaun = (oeffnung.group(1)[0], len(oeffnung.group(1)),
+                    _einzug(rest))
             if not _leer(oeffnung.group(2)):
                 # Der Info-String steht sichtbar da: ein eigener Lauf.
                 anhaengen(nummer, oeffnung.group(2).strip(" \t"), "info")
                 schliessen()
             continue
-        kommentarzeile = im_html or rest.lstrip(" \t").startswith("<!--")
+        kommentarzeile = im_html or rest.lstrip().startswith("<!--")
         if kommentarzeile:
             oeffnet, schliesst = rest.rfind("<!--"), rest.rfind("-->")
             im_html = oeffnet > schliesst if oeffnet >= 0 else (
@@ -497,13 +531,25 @@ def _freitext_laeufe(datei_zeilen, offset, rumpf_zeilen, absatzweise=True):
             if _leer(kommentar):
                 schliessen()
             else:
+                if FREITEXT_BLOCKSTART_RE.match(kommentar):
+                    schliessen()
                 anhaengen(nummer, kommentar, "html")
+                if FREITEXT_UEBERSCHRIFT_RE.match(kommentar):
+                    schliessen()
             continue
         if _leer(rest):
             schliessen()
             continue
         if FREITEXT_BLOCKSTART_RE.match(rest):
             schliessen()
+            in_liste = bool(FREITEXT_LISTENPUNKT_RE.match(rest))
+        elif not rest[:1].isspace():
+            in_liste = False
+        if (not FREITEXT_UEBERSCHRIFT_RE.match(rest)
+                and _ist_kommentarzeile(rest)):
+            # "#" hinter einem geschützten Leerzeichen ist keine Überschrift,
+            # sieht aber so aus; geprüft wird der Text dahinter.
+            rest = _ohne_kommentarzeichen(rest)
         anhaengen(nummer, rest, "text")
         if FREITEXT_UEBERSCHRIFT_RE.match(rest):
             schliessen()
@@ -1497,10 +1543,15 @@ HOMOGRAPHE_SUBSTANTIVE = frozenset(
 SATZZEICHEN_VOR_SATZANFANG = ".!?…:;–—"
 AUFZAEHLUNG_VOR_SATZANFANG_RE = re.compile(
     r"(?:^|\s)(?:\d{1,3}[.)]|[A-Za-z][)]|[-*•–—])$")
-# Ein Homograph am Satzanfang ist nur dann ein Substantiv, wenn er für
-# sich steht ("Begriffsfrage: Waren – was …", "Waren?"); folgt ein Wort,
-# beginnt dort ein Satz ("Frage: Muss ich …").
+# Ein Homograph am Satzanfang ist ein Substantiv, wenn er für sich steht
+# ("Begriffsfrage: Waren – was …", "Waren?") oder eine Wortgruppe beginnt,
+# in der ihm "und", "oder", "sowie" oder ein Genitivartikel folgt ("Würde
+# des Menschen", "Soll und Haben", "Waren und Dienstleistungen"). Vor jedem
+# anderen Wort beginnt dort ein Satz mit dem Verb, auch vor einer
+# Präposition ("Frage: Muss ich …", "Muss der Mieter …", "Muss bei Auszug
+# renoviert werden?", "Waren in der Wohnung Mängel?").
 SATZZEICHEN_NACH_ALLEINSTEHEND = "–—-,;:.!?…"
+NACH_SUBSTANTIV = frozenset("und oder sowie des eines".split())
 # Die Pronomen der Anrede sind in Großbuchstaben kein Kürzel ("Können SIE
 # das?"), anders als "IT". Nur für die externe Suche; das lokale Ranking
 # bleibt bytegleich.
@@ -1517,9 +1568,19 @@ def _versalien(text):
 
 
 def _titelschreibung(text):
-    """Beginnt jedes Wort eines Texts aus mindestens drei Wörtern groß?"""
+    """Steht ein Text aus mindestens drei Wörtern in Titelschreibung?
+
+    Jedes Wort beginnt groß, und mitten im Text auch ein Funktionswort, das
+    kein Homograph der Liste ist ("Wann Muss Der Mieter …"). Eine Folge
+    großgeschriebener Substantive ist im Deutschen keine Titelschreibung,
+    sondern eine Stichwortfrage ("Zollgebühren Waren China")."""
     woerter = [wort for wort in WORT_RE.findall(text) if wort[:1].isalpha()]
-    return len(woerter) >= 3 and all(wort[:1].isupper() for wort in woerter)
+    if len(woerter) < 3 or not all(wort[:1].isupper() for wort in woerter):
+        return False
+    return any(token in FUNKTIONSWOERTER
+               and token not in HOMOGRAPHE_SUBSTANTIVE
+               for wort in woerter[1:]
+               for token in _retrieval_norm(wort).split())
 
 
 def _sachwoerter_gross(text):
@@ -1543,11 +1604,16 @@ def _sachwoerter_gross(text):
         if not treffer:
             continue
         roh = text[:fund.start()].rstrip(" \t\r\n")
-        davor = roh.rstrip("\"'„“”‚‘’»«()[]")
+        # Leerraum, Anführungszeichen und Klammern in einem Schritt: auch
+        # 'Frage. „Muss ich …“' beginnt einen Satz.
+        davor = text[:fund.start()].rstrip(" \t\r\n\"'„“”‚‘’»«()[]")
         if (not davor or davor[-1] in SATZZEICHEN_VOR_SATZANFANG
                 or AUFZAEHLUNG_VOR_SATZANFANG_RE.search(roh)):
             danach = text[fund.end():].lstrip(" \t\"'“”‚‘’»«)]")
-            if danach and danach[0] not in SATZZEICHEN_NACH_ALLEINSTEHEND:
+            folgewort = WORT_RE.match(danach)
+            if danach and danach[0] not in SATZZEICHEN_NACH_ALLEINSTEHEND and not (
+                    folgewort and _retrieval_norm(folgewort.group(0))
+                    in NACH_SUBSTANTIV):
                 continue
         gross.update(treffer)
     return gross
@@ -3586,8 +3652,18 @@ MELDUNG_EXTERN_MIT_SIGNATUR = ("Meldung enthält eine offensichtliche "
                                "Instruktionssignatur — Wortlaut nicht "
                                "ausgegeben")
 MELDUNG_ORT_RE = re.compile(r"[\w./-]+(?::\d+)?")
-# Ein Pfad in einer Meldung, auch in Bindestrichform.
-MELDUNG_PFAD_RE = re.compile(r"[\w.%-]*/[\w.%/-]+|[\w.%-]+\.(?:md|markdown|txt|json)")
+# Ein Pfad in einer Meldung, auch in Bindestrichform: ein Token mit "/" oder
+# mit einer Dateiendung. Gesucht wird tokenweise, linear auch bei langen
+# Zeilen ohne Leerraum.
+MELDUNG_TRENNER_RE = re.compile(r"[\s'\"„“”‚‘’»«()\[\],;]+")
+MELDUNG_DATEI_RE = re.compile(r"\.(?:md|markdown|txt|json)$", re.IGNORECASE)
+
+
+def _meldung_pfade(text):
+    for token in MELDUNG_TRENNER_RE.split(text):
+        token = token.rstrip(":.")
+        if "/" in token or MELDUNG_DATEI_RE.search(token):
+            yield token
 MELDUNG_KENNUNG_RE = re.compile(r"(?:[SX]-\d{4}|[A-Z]-\d{4})(?![\w-])")
 # So zitiert repr() nicht druckbaren Leerraum: \t, \xa0, \u2009 …
 MELDUNG_ESCAPE_RE = re.compile(
@@ -3610,8 +3686,7 @@ def _meldung_ohne_signatur(text, ersatz=MELDUNG_MIT_SIGNATUR):
     if not isinstance(text, str) or not (
             _hat_signatur(text)
             or _hat_signatur(MELDUNG_ESCAPE_RE.sub(" ", text))
-            or any(_pfad_mit_signatur(pfad)
-                   for pfad in MELDUNG_PFAD_RE.findall(text))):
+            or any(_pfad_mit_signatur(pfad) for pfad in _meldung_pfade(text))):
         return text
     ort, trenner, _ = text.partition(": ")
     if (trenner and MELDUNG_ORT_RE.fullmatch(ort)

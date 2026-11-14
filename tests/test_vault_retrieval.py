@@ -1348,12 +1348,39 @@ Das Bild zeigt eine grüne Produktionsfreigabe.
             "WIE HOCH IST DIE KAUTION OHNE ANZEIGE AN DER STRAßE?"))
         self.assertNotIn("muss", vault._anfragebegriffe(
             "Wann Muss Der Mieter Den Mangel Anzeigen?"))
-        # Eine Frage nur aus Homographen sucht mit ihnen; die Pronomen der
+        # Eine Frage nur aus Homographen sucht mit ihnen, auch
+        # kleingeschrieben (dort trägt nur diese Regel); die Pronomen der
         # Anrede sind auch in Großbuchstaben kein Kürzel.
         self.assertEqual(vault._anfragebegriffe("Würde"), ("wuerde",))
         self.assertEqual(vault._anfragebegriffe("Waren?"), ("waren",))
+        self.assertEqual(vault._anfragebegriffe("waren"), ("waren",))
+        self.assertEqual(vault._anfragebegriffe("wohl sein"), ("wohl", "sein"))
         self.assertEqual(vault._anfragebegriffe("Muss das sein?"), ())
         self.assertEqual(vault._anfragebegriffe("Können SIE das?"), ())
+        # Aus der fünften Prüfung: Ein Satz beginnt auch hinter Leerraum und
+        # Anführungszeichen oder Klammer; ein Homograph, dem „und", „oder",
+        # „sowie" oder ein Genitivartikel folgt, ist auch am Satzanfang ein
+        # Substantiv, vor einer Präposition nicht (ein Modalverb vor einer
+        # Präpositionalgruppe ist im Deutschen häufig); eine Stichwortfrage
+        # aus Substantiven ist keine Titelschreibung.
+        for frage in ("Kurze Rückfrage. „Muss ich den Schornstein fegen lassen?“",
+                      "Der Kamin zieht schlecht. (Muss ich den Schornsteinfeger rufen?)",
+                      "Der Vermieter fragt: „Muss ich das reparieren?“",
+                      "Muss der Mieter den Mangel anzeigen?",
+                      "Muss bei Auszug renoviert werden?",
+                      "Frage: Muss nach dem Auszug gestrichen werden?"):
+            self.assertNotIn("muss", vault._anfragebegriffe(frage), frage)
+        self.assertNotIn("waren", vault._anfragebegriffe(
+            "Waren in der Wohnung Mängel?"))
+        self.assertNotIn("soll", vault._anfragebegriffe(
+            "Soll im Winter gelüftet werden?"))
+        for frage, begriff in (
+                ("Zoll: Waren und Dienstleistungen aus China – was gilt?",
+                 "waren"),
+                ("Grundgesetz: Würde des Menschen – was bedeutet das?", "wuerde"),
+                ("Buchhaltung: Soll und Haben – was ist das?", "soll"),
+                ("Zollgebühren Waren China", "waren")):
+            self.assertIn(begriff, vault._anfragebegriffe(frage), frage)
         # Bleibt nichts übrig, gibt es keinen Begriff und keinen Rückfall.
         self.assertEqual(vault._anfragebegriffe("Darf sie das ohne ihn?"), ())
         self.assertIn("dann", vault._retrieval_tokens("Die Wohnung ist dann"))

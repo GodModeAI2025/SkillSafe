@@ -1514,7 +1514,7 @@ class AntwortCheckTests(unittest.TestCase):
                             for h in ungebunden["hinweise"]), ungebunden)
 
     def test_step_4c_answer_forms_read_as_meant(self):
-        """Antwortformen aus der dritten Prüfung, je Bindung ein Lauf.
+        """Antwortformen aus der dritten bis fünften Prüfung, je Bindung ein Lauf.
 
         Sauber: Hervorhebung, Anführungszeichen und Klammern am Satzende, eine
         Erläuterung als Listenpunkt, eine Rückfrage in einer Angabe, ein
@@ -1525,7 +1525,13 @@ class AntwortCheckTests(unittest.TestCase):
         Rückfrage, auch umbrochen oder in Klammern. Hinweis: ein Zustand, den
         die Abfrage nicht meldet, und eine gelesene Quelle als ungelesen. Die
         erste Frage des Protokolls hat keinen suchbaren Begriff; die
-        Bindungsprobe nimmt dann die nächste.
+        Bindungsprobe nimmt dann die nächste. Aus der fünften Prüfung:
+        Dokumente in Anführungszeichen oder mit „./“, Einleitungssätze und
+        Teilsätze mit Rückfrage, ein Nachsatz mit Quellkennung und
+        „keine Treffer“ in mehreren Wortlauten sind sauber; eine Tresordatei
+        oder ein endungsloser Pfad als Fundstelle, eine Seitenangabe und
+        Inhalt neben „keine Treffer“ sind Verstöße, ebenso eine Rückfrage
+        hinter dem Etikett, die als einzige eine Quelle nennt.
         """
         gebunden = self.basis / "formen" / "wissenstresor"
         shutil.copytree(self.root, gebunden)
@@ -1553,6 +1559,11 @@ class AntwortCheckTests(unittest.TestCase):
         alle = [f"{stelle['source_id']}, {stelle['document']}, Satzposition "
                 f"{stelle['sentence_index']}" for stelle in treffer["hits"]]
         erstes = treffer["hits"][0]["document"]
+        # Die erste Zeile unter einem Etikett ohne Doppelpunkt beginnt klein:
+        # Sie setzt das Etikett trotzdem nicht fort.
+        klein_zuerst = sorted(treffer["hits"],
+                              key=lambda stelle: stelle["document"][:1].isupper())
+        self.assertTrue(klein_zuerst[0]["document"][:1].islower(), klein_zuerst)
         verzeichnis, _, name = erstes.rpartition("/")
         laenger = (verzeichnis + "/" if verzeichnis else "") + "keine-" + name
         ung = ("Extern nicht gelesen: X-0002 (SKILLSAFE_OFFLINE gesetzt) — "
@@ -1695,12 +1706,12 @@ class AntwortCheckTests(unittest.TestCase):
                 mit, kern + "### Extern (nicht im Bestand)\n" + "\n".join(
                     f"{stelle['document']} ({stelle['source_id']}), "
                     f"Satzposition {stelle['sentence_index']}"
-                    for stelle in treffer["hits"]) + "\n\n" + ung),
+                    for stelle in klein_zuerst) + "\n\n" + ung),
             "T-fett-ohne-doppelpunkt": (
                 mit, kern + "**Extern (nicht im Bestand)**\n" + "\n".join(
                     f"{stelle['document']} ({stelle['source_id']}), "
                     f"Satzposition {stelle['sentence_index']}"
-                    for stelle in treffer["hits"]) + "\n\n" + ung),
+                    for stelle in klein_zuerst) + "\n\n" + ung),
             # Ein geliefertes Dokument in Hervorhebung, mit absolutem Pfad
             # oder unter der Kennung als Ordner ist genannt; ein Verweis auf
             # eine Datei des eigenen Tresors ist kein Treffer.
@@ -1745,6 +1756,106 @@ class AntwortCheckTests(unittest.TestCase):
                                   + "\nExtern nicht gelesen (Zustand nur "
                                   "für X-0002): SKILLSAFE_OFFLINE gesetzt — "
                                   "kein Negativbefund"),
+            # Aus der fünften Prüfung: Formen, die ein Agent so schreibt.
+            "T-anfuehrungszeichen": (mit, kern + "\n".join(
+                f"Extern (nicht im Bestand): X-0001, Dokument "
+                f"„{stelle['document']}“, Satzposition {stelle['sentence_index']}"
+                for stelle in treffer["hits"]) + "\n" + ung),
+            "T-punkt-schraegstrich-geliefert": (mit, kern + "\n".join(
+                f"Extern (nicht im Bestand): X-0001, ./{stelle['document']}, "
+                f"Satzposition {stelle['sentence_index']}"
+                for stelle in treffer["hits"]) + "\n" + ung),
+            "T-einleitung-mit-rueckfrage": (
+                mit, kern + "**Extern (nicht im Bestand):**\nIch habe drei "
+                "Zeiger gefunden — soll ich sie genauer ansehen?\n" + liste
+                + "\n\n" + ung),
+            "T-einleitung-satz": (mit, kern + "**Extern (nicht im Bestand):**\n"
+                                  "Ich habe drei Zeiger gefunden.\n" + liste
+                                  + "\n\n" + ung),
+            "T-bindestrich-rueckfrage": (mit, kern + "\n".join(
+                f"Extern (nicht im Bestand): X-0001 - {stelle['document']}, "
+                f"Satzposition {stelle['sentence_index']} - passt das?"
+                for stelle in treffer["hits"]) + "\n" + ung),
+            "T-teilsatz-rueckfrage": (mit, kern + "\n".join(
+                f"Extern (nicht im Bestand): X-0001 — {stelle['document']}, "
+                f"Satzposition {stelle['sentence_index']}, nur lexikalisch "
+                f"nah: hilft das?" for stelle in treffer["hits"]) + "\n" + ung),
+            "T-code-rueckfrage": (mit, kern + "**Extern (nicht im Bestand):**\n"
+                                  + "\n".join(
+                f"- `X-0001`, `{stelle['document']}`, Satzposition "
+                f"{stelle['sentence_index']} — beantwortet das die Frage?"
+                for stelle in treffer["hits"]) + "\n\n" + ung),
+            "T-nachsatz-mit-quelle": (mit, kern + "Extern (nicht im Bestand):\n"
+                                      + "\n".join(
+                f"- {stelle['document']}, Satzposition {stelle['sentence_index']}"
+                for stelle in treffer["hits"]) + "\nAlle aus X-0001, bei dieser "
+                "Abfrage lokal gelesen.\n\n" + ung),
+            "T-zitierte-frage": (mit, kern + "\n".join(
+                f"Extern (nicht im Bestand): X-0001 – {stelle['document']}, "
+                f"Satzposition {stelle['sentence_index']}, nur lexikalisch "
+                f"nah an „{mit}“" for stelle in treffer["hits"]) + "\n" + ung),
+            "T-zusatz-und-absatz": (
+                mit, kern + "**Extern (nicht im Bestand)** (X-0001, bei dieser "
+                "Abfrage lokal gelesen):\n\n" + "\n".join(
+                    f"{stelle['document']}, Satzposition "
+                    f"{stelle['sentence_index']} — nur lexikalisch nah."
+                    for stelle in treffer["hits"]) + "\n\n" + ung),
+            "T-erfunden-hinter-zitierter-frage": (
+                mit, kern + zeilen + " – außerdem handbuch/erfunden.md, "
+                "Satzposition 2: „Welche Vektordatenbank ist gemeint?“\n" + ung),
+            "T-tresordatei-zugeschrieben": (mit, kern + zeilen + "; X-0001, "
+                                            "INDEX.md, Satzposition 2\n" + ung),
+            "T-endungslos-daneben": (mit, kern + zeilen + "; außerdem "
+                                     "handbuch/eigenbedarf, Satzposition 2\n"
+                                     + ung),
+            "O-kein-zeiger": (ohne, "Nicht im Bestand.\n\n" + s_ohne
+                              + "\nExtern (nicht im Bestand): kein Zeiger.\n"
+                              + ung),
+            "O-keine-passenden": (ohne, "Nicht im Bestand.\n\n" + s_ohne
+                                  + "\nExtern (nicht im Bestand): keine "
+                                  "passenden Treffer in X-0001\n" + ung),
+            "O-treffer-keine": (ohne, "Nicht im Bestand.\n\n" + s_ohne
+                                + "\nExtern (nicht im Bestand): X-0001 – "
+                                "Treffer: keine\n" + ung),
+            "O-kein-dokument-enthaelt": (ohne, "Nicht im Bestand.\n\n" + s_ohne
+                                         + "\nExtern (nicht im Bestand): Kein "
+                                         "Dokument von X-0001 enthält die "
+                                         "Anfragebegriffe\n" + ung),
+            "O-schraegstrich-und-abschnitt": (
+                ohne, "Nicht im Bestand.\n\n" + s_ohne + "\nExtern (nicht im "
+                "Bestand): keine Treffer zu Mietkaution/Kaution in X-0001 – das "
+                "Beispielhandbuch hat keinen Abschnitt dazu\n" + ung),
+            "O-nur-keine": (ohne, "Nicht im Bestand.\n\n" + s_ohne
+                            + "\nExtern (nicht im Bestand): keine\n" + ung),
+            "O-inhalt-sonst-keine": (ohne, "Nicht im Bestand.\n\n" + s_ohne
+                                     + "\nExtern (nicht im Bestand): X-0001 – "
+                                     "die Kaution beträgt höchstens drei "
+                                     "Monatsmieten; sonst keine Treffer\n"
+                                     + ung),
+            "O-seite": (ohne, "Nicht im Bestand.\n\n" + s_ohne + "\nExtern "
+                        "(nicht im Bestand): keine Treffer in X-0001; Seite 4 "
+                        "des Beispielhandbuchs regelt nur die Minderung\n"
+                        + ung),
+            "O-ohne-fundstelle": (ohne, "Nicht im Bestand.\n\n" + s_ohne
+                                  + "\nExtern (nicht im Bestand): X-0001 – das "
+                                  "Beispielhandbuch begrenzt die Kaution auf "
+                                  "höchstens drei Monatsmieten (ohne "
+                                  "Fundstelle)\n" + ung),
+            "O-seite-kurz": (ohne, "Nicht im Bestand.\n\n" + s_ohne
+                             + "\nExtern (nicht im Bestand): keine Treffer in "
+                             "X-0001, Seite 4\n" + ung),
+            "O-kein-kapitel": (ohne, "Nicht im Bestand.\n\n" + s_ohne
+                               + "\nExtern (nicht im Bestand): keine Treffer in "
+                               "X-0001 – das Beispielhandbuch hat kein Kapitel "
+                               "Mietrecht\n" + ung),
+            "T-zitat-ohne-teilsatz": (mit, kern + "\n".join(
+                f"Extern (nicht im Bestand): X-0001 {stelle['document']} "
+                f"(Satzposition {stelle['sentence_index']}) nah an „{mit}“"
+                for stelle in treffer["hits"]) + "\n" + ung),
+            "T-strich-ohne-komma": (mit, kern + "\n".join(
+                f"Extern (nicht im Bestand): X-0001 {stelle['document']} "
+                f"Satzposition {stelle['sentence_index']} — passt das?"
+                for stelle in treffer["hits"]) + "\n" + ung),
             # Ein Verzicht unter einer Überschrift, mit Vorgabe.
             "O-verzicht-ueberschrift": (
                 ohne, "Nicht im Bestand.\n\n" + s_ohne + "\n### Extern nicht "
@@ -1788,7 +1899,7 @@ class AntwortCheckTests(unittest.TestCase):
                                   "Kaution",
             "T-erfunden-pdf": "ohne Treffer der Abfrage: X-0001 "
                               "handbuch/mietkaution.pdf",
-            "T-erfunden-ohne-endung": "ohne Treffer der Abfrage: X-0001, "
+            "T-erfunden-ohne-endung": "ohne Treffer der Abfrage: X-0001 "
                                       "handbuch/mietkaution",
             "T-kennung-dahinter": "ohne Treffer der Abfrage: X-0002 "
                                   "handbuch/mietkaution.md",
@@ -1796,6 +1907,15 @@ class AntwortCheckTests(unittest.TestCase):
                                      "handbuch/erfunden.md",
             "T-unterstrich-erfunden": "ohne Treffer der Abfrage: X-0001 "
                                       "handbuch/erfunden.md",
+            "T-erfunden-hinter-zitierter-frage": "ohne Treffer der Abfrage: "
+                                                 "X-0001 handbuch/erfunden.md",
+            "T-tresordatei-zugeschrieben": "ohne Treffer der Abfrage: X-0001 "
+                                           "INDEX.md",
+            "T-endungslos-daneben": "handbuch/eigenbedarf",
+            "O-inhalt-sonst-keine": "ohne Treffer der Abfrage",
+            "O-seite": "ohne Treffer der Abfrage",
+            "O-ohne-fundstelle": "ohne Treffer der Abfrage",
+            "O-seite-kurz": "ohne Treffer der Abfrage",
         }
         hinweise = {
             "O-zustand": "Zustand not_bound genannt, die Abfrage meldet "
@@ -1877,11 +1997,54 @@ class AntwortCheckTests(unittest.TestCase):
                                        "Zustand unreachable; X-0002 wurde "
                                        "deshalb nicht nachgeschlagen — kein "
                                        "Negativbefund."),
+            # Aus der fünften Prüfung: Eine Aussage vor der Rückfrage weist
+            # aus, eine Rückfrage allein nicht, auch nicht hinter dem Etikett.
+            "F-strich-aussage-frage": (ohne, "Nicht im Bestand.\n\n" + s_frei
+                                       + "\nExtern nicht gelesen: X-0002 "
+                                       "(SKILLSAFE_OFFLINE gesetzt) — X-0001 "
+                                       "ist auf diesem Host nicht gebunden, "
+                                       "soll ich es binden?"),
+            "F-bindestrich-aussage": (ohne, "Nicht im Bestand.\n\n" + s_frei
+                                      + "\nExtern nicht gelesen: X-0002 - "
+                                      "SKILLSAFE_OFFLINE gesetzt - X-0001 nicht "
+                                      "gebunden, soll ich binden?"),
+            "F-einleitung-liste": (ohne, "Nicht im Bestand.\n\n" + s_frei
+                                   + "\nExtern nicht gelesen:\nBeide Quellen "
+                                   "blieben ungelesen — soll ich es später "
+                                   "erneut versuchen?\n- X-0001: auf diesem "
+                                   "Host nicht gebunden\n- X-0002: "
+                                   "SKILLSAFE_OFFLINE gesetzt\nKein "
+                                   "Negativbefund."),
+            "F-code-liste": (ohne, "Nicht im Bestand.\n\n" + s_frei
+                             + "\n**Extern nicht gelesen:**\n- `X-0001`: auf "
+                             "diesem Host nicht gebunden\n- `X-0002`: "
+                             "`SKILLSAFE_OFFLINE` gesetzt\n\nKein "
+                             "Negativbefund."),
+            "F-umbruch-hinter-etikett": (ohne, "Nicht im Bestand.\n\n"
+                                         + s_frei + "\nExtern nicht gelesen: "
+                                         "X-0002 (SKILLSAFE_OFFLINE gesetzt), "
+                                         "Zustand unreachable — soll ich X-0001"
+                                         "\nauf diesem Host binden lassen?"),
+            "F-frage-hinter-etikett": (ohne, "Nicht im Bestand.\n\n" + s_frei
+                                       + "\nExtern nicht gelesen: X-0002 "
+                                       "(SKILLSAFE_OFFLINE gesetzt), Zustand "
+                                       "unreachable — soll ich X-0001 auf "
+                                       "diesem Host binden lassen?"),
+            "F-klammer-umbrochen": (ohne, "Nicht im Bestand.\n\n" + s_frei
+                                    + "\nExtern nicht gelesen: X-0002 "
+                                    "(SKILLSAFE_OFFLINE gesetzt) (soll ich "
+                                    "X-0001\nbinden lassen?)"),
+            "F-frage-mit-oder": (ohne, "Nicht im Bestand.\n\n" + s_frei
+                                 + "\nExtern nicht gelesen: X-0002 "
+                                 "(SKILLSAFE_OFFLINE gesetzt) — soll ich X-0001 "
+                                 "binden, oder lieber nicht?"),
         }, self.root, {"extern": {"gebunden": [], "offline": True}}, "frei")
         for kennung in ("F-einzeilig", "F-umbrochen", "F-klammern",
                         "F-rueckfrage-liste", "F-befehl", "F-klein",
                         "F-listenpunkt-frage", "F-klammer-im-satz",
-                        "F-semikolon"):
+                        "F-semikolon", "F-umbruch-hinter-etikett",
+                        "F-frage-hinter-etikett", "F-klammer-umbrochen",
+                        "F-frage-mit-oder"):
             self.assertTrue(any("fehlt für X-0001" in m
                                 for m in frei[kennung]["verstoesse"]),
                             (kennung, frei[kennung]))
@@ -1891,6 +2054,10 @@ class AntwortCheckTests(unittest.TestCase):
         nachsatz = frei["F-nachsatz-eine-quelle"]
         self.assertEqual(nachsatz["verstoesse"], [], nachsatz)
         self.assertIs(nachsatz["extern_verzicht"], False)
+        for kennung in ("F-strich-aussage-frage", "F-bindestrich-aussage",
+                        "F-einleitung-liste", "F-code-liste"):
+            self.assertEqual(frei[kennung]["verstoesse"], [],
+                             (kennung, frei[kennung]))
 
         # Endet jede Frage des Protokolls extern in invalid_query, liest
         # keine etwas, und kein Urteil hängt an der Bindung: Das Werkzeug

@@ -1357,30 +1357,33 @@ Das Bild zeigt eine grüne Produktionsfreigabe.
         self.assertEqual(vault._anfragebegriffe("wohl sein"), ("wohl", "sein"))
         self.assertEqual(vault._anfragebegriffe("Muss das sein?"), ())
         self.assertEqual(vault._anfragebegriffe("Können SIE das?"), ())
-        # Aus der fünften Prüfung: Ein Satz beginnt auch hinter Leerraum und
-        # Anführungszeichen oder Klammer; ein Homograph, dem „und", „oder",
-        # „sowie" oder ein Genitivartikel folgt, ist auch am Satzanfang ein
-        # Substantiv, vor einer Präposition nicht (ein Modalverb vor einer
-        # Präpositionalgruppe ist im Deutschen häufig); eine Stichwortfrage
-        # aus Substantiven ist keine Titelschreibung.
+        # Aus der fünften und sechsten Prüfung: Ein Satz beginnt auch hinter
+        # Leerraum, Anführungszeichen oder Klammer und hinter einer
+        # Aufzählungsmarke vor einem Anführungszeichen; am Satzanfang zählt
+        # ein Homograph nur für sich stehend, denn vor jedem Wort ist er
+        # meist ein Verb oder eine Präposition („Soll oder muss …", „Laut
+        # des Mietvertrags …"). Eine Stichwortfrage aus Substantiven ist
+        # keine Titelschreibung.
         for frage in ("Kurze Rückfrage. „Muss ich den Schornstein fegen lassen?“",
                       "Der Kamin zieht schlecht. (Muss ich den Schornsteinfeger rufen?)",
                       "Der Vermieter fragt: „Muss ich das reparieren?“",
                       "Muss der Mieter den Mangel anzeigen?",
                       "Muss bei Auszug renoviert werden?",
-                      "Frage: Muss nach dem Auszug gestrichen werden?"):
+                      "Frage: Muss nach dem Auszug gestrichen werden?",
+                      "Muss eines der Fenster ausgetauscht werden?",
+                      "1) „Muss ich den Schornstein fegen lassen?“"):
             self.assertNotIn("muss", vault._anfragebegriffe(frage), frage)
         self.assertNotIn("waren", vault._anfragebegriffe(
             "Waren in der Wohnung Mängel?"))
-        self.assertNotIn("soll", vault._anfragebegriffe(
-            "Soll im Winter gelüftet werden?"))
-        for frage, begriff in (
-                ("Zoll: Waren und Dienstleistungen aus China – was gilt?",
-                 "waren"),
-                ("Grundgesetz: Würde des Menschen – was bedeutet das?", "wuerde"),
-                ("Buchhaltung: Soll und Haben – was ist das?", "soll"),
-                ("Zollgebühren Waren China", "waren")):
-            self.assertIn(begriff, vault._anfragebegriffe(frage), frage)
+        self.assertFalse({"soll", "muss"} & set(vault._anfragebegriffe(
+            "Soll oder muss der Mieter den Mangel anzeigen?")))
+        self.assertNotIn("laut", vault._anfragebegriffe(
+            "Laut des Mietvertrags darf ich das?"))
+        self.assertIn("waren", vault._anfragebegriffe("Zollgebühren Waren China"))
+        # Der Preis: Eine Wortgruppe am Satzanfang sucht ohne ihren
+        # Homographen (notes/dead-ends.md).
+        self.assertNotIn("wuerde", vault._anfragebegriffe(
+            "Grundgesetz: Würde des Menschen – was bedeutet das?"))
         # Bleibt nichts übrig, gibt es keinen Begriff und keinen Rückfall.
         self.assertEqual(vault._anfragebegriffe("Darf sie das ohne ihn?"), ())
         self.assertIn("dann", vault._retrieval_tokens("Die Wohnung ist dann"))

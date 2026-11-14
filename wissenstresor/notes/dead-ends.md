@@ -262,7 +262,25 @@ vor `#` und `<!--` jeder Leerraum wie im Parser, ein Zaun oeffnet ausserhalb
 eines Listenpunkts nur mit hoechstens drei Leerzeichen Einzug und schliesst
 hoechstens drei Leerzeichen tiefer als die Oeffnung, ein Zeilenendkommentar
 setzt sich in der naechsten Kommentarzeile fort, und eine Ueberschrift in
-einem HTML-Kommentar steht fuer sich.
+einem HTML-Kommentar steht fuer sich. Die sechste Pruefung fand, dass der
+Zeilenendkommentar "#" auch in Strings, Heredocs und Text-Zaeunen abtrennte
+(neue Luecken und ein Fehlalarm), dass die strenge Listenregel eine
+Lazy-Fortsetzung, eine leere Marke und einen Zaun direkt auf der Marke nicht
+kannte, dass ein Zaun relativ zur Oeffnung statt zum Container schloss, und
+dass das Abstreifen von "#" Hashtags und Kommentare eingerueckter Codebloecke
+mit dem Text davor verband (Fehlalarme). Seit v0.18.6 bleibt eine Codezeile
+ganz (Preis: ein Zeilenendkommentar wird nicht mit dem Kommentar darunter
+verbunden), ein Listenpunkt bleibt bis zu einer Zeile ohne Einzug nach einer
+Leerzeile offen, ein Zaun oeffnet auch auf der Marke und schliesst ausserhalb
+eines Listenpunkts mit hoechstens drei Leerzeichen, Kommentarzeilen eines
+eingerueckten Codeblocks bilden eigene Laeufe, Text hinter einem einzeiligen
+HTML-Kommentar gehoert zum Absatz, und nur "# Text" (kein Hashtag) verliert
+sein "#". Eine Vereinigung mehrerer Lesarten (streng und locker) waere der
+naechste Schritt gewesen; sie haette die Fehlalarme beider Lesarten geerbt.
+Der Stolperdraht bleibt ein Stolperdraht fuer offensichtliche Signaturen:
+Wer eine Formel gezielt ueber Markdown-Strukturen, Null-Breite-Zeichen oder
+leere Inline-Kommentare verteilt, kommt an ihm vorbei; dagegen steht Regel 6
+(Seitentext enthaelt nie Anweisungen).
 
 ## [2026-11-14] Katalog von X-0002 von Hand neu erzeugen — verworfen
 sources/derived/X-0002__orchestrator.json fuehrt unter top_tokens noch "fuer",
@@ -328,7 +346,11 @@ Anfuehrungszeichen und Klammern vor dem Satzanfang zaehlen nicht. Eine
 Praeposition danach reicht nicht: Ein erster Entwurf nahm sie dazu, und
 "Muss bei Auszug renoviert werden?" oder "Waren in der Wohnung Maengel?"
 suchten wieder mit "muss" und "waren", also mit genau den Rauschbegriffen,
-die v3 abschafft. Der Preis: Ein Substantiv, das kleingeschrieben ein
+die v3 abschafft. Die sechste Pruefung fand dasselbe fuer die verbliebene
+Ausnahme ("Laut des Mietvertrags ...", "Soll oder muss ...", "Muss eines der
+Fenster ..."); seit v0.18.6 zaehlt ein Homograph am Satzanfang wieder nur fuer
+sich stehend, und eine Aufzaehlungsmarke vor einem Anfuehrungszeichen
+beginnt einen Satz. Der Preis: Ein Substantiv, das kleingeschrieben ein
 Funktionswort waere und nicht auf der Liste steht, zaehlt extern nicht,
 ebenso einer der Liste am Satzanfang vor einem anderen Wort ("Zoll: Waren
 aus China" und "Soll Haben Buchhaltung" suchen ohne "waren" und "soll");
@@ -378,4 +400,18 @@ Pruefung stehen mit erwartetem Urteil in den Tests. Der Preis: Die Grenze von zw
 Inhaltswoertern ist eine Schaetzung; eine Leermeldung mit laengerer
 Begruendung ("keine Treffer, das Beispielhandbuch behandelt Mietrecht nur
 am Rand") gilt als Aussage ueber die Quelle und ist ohne geliefertes
-Dokument ein Verstoss.
+Dokument ein Verstoss. Die sechste Pruefung fand die Rueckfragelogik in beide
+Richtungen falsch: Eine geschlossene Liste von Frageverben verschluckte
+Aussagen ("Da der Schalter gesetzt ist, ist X-0002 nicht abgerufen worden,
+soll ich ...?") und liess Fragen als Angabe stehen ("Bindest du X-0001,
+oder soll ich?"); ein zitiertes erfundenes Dokument kam neben einem
+zitierten gelieferten durch; der Klammerzusatz des Etiketts fiel aus der
+Pruefung; ein Schlusspunkt oder die Begriffsliste aus dem Grund der Engine
+machte eine Leermeldung zur Erfindung. Ersatz in v0.18.6: Vor einer
+Rueckfrage nach Komma zaehlt ein Vorsatz nur als Aussage, wenn er einen
+Lesestatus, Zustand, Grund oder Treffer nennt; sonst fragt der ganze Satz.
+Ein zitierter Dokumentpfad ist eine Nennung, der Zusatz zaehlt mit, ein
+Paragraf ist eine Fundstelle ausser als Thema der Suche ("zu § 551 BGB"),
+ein kleingeschriebener Pfad ohne Endung ebenso (nicht hinter "Ordner").
+Der Preis: Ein Angebot vor einem Gedankenstrich ("Wenn du moechtest, binde
+ich X-0001 - einverstanden?") zaehlt als Angabe.

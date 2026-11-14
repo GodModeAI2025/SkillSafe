@@ -67,23 +67,31 @@ umbrochen, in Klammern oder direkt hinter dem Etikett („Soll ich X-0001
 binden lassen?"): Eine Kennung darin weist die Quelle nicht als ungelesen
 aus, ebenso wenig in einem Listenpunkt, der als Ganzes fragt, oder als
 Teilsatz. Ob ein Satz fragt, entscheidet sein Ende außerhalb von Zitaten:
-Endet er mit einem Fragezeichen, ist sein letzter Teilsatz die Rückfrage,
-dazu jeder Teilsatz davor, der wie eine Frage beginnt; eine Aussage davor
-bleibt eine Angabe („X-0001 ist nicht gebunden, soll ich es binden?"), und
-eine zitierte Frage ist keine Rückfrage. Umgekehrt nennt jede Angabe zu
+Endet er mit einem Fragezeichen, ist das letzte Segment nach Semikolon,
+Doppelpunkt oder Gedankenstrich die Rückfrage, wenn es wie eine Frage
+beginnt; sonst nur sein letzter Teilsatz nach einem Komma, und zwar nur,
+wenn das davor wie eine Angabe einen Lesestatus, Zustand, Grund oder
+Treffer nennt („X-0001 ist nicht gebunden, soll ich es binden?"); sonst
+fragt das ganze Segment („Falls du X-0001 nutzen willst, soll ich es
+binden?"). Eine zitierte Frage ist keine Rückfrage, und eine Frage in
+Klammern macht den Satz nicht zur Frage. Umgekehrt nennt jede Angabe zu
 einem Treffer ein Dokument, das die Abfrage für eine genannte Quelle
-geliefert hat, auch in Anführungszeichen oder mit „./", und jeder Pfad darin
-ist ein solches Dokument. Ausgenommen sind Zitate und Dateien des geprüften
-Tresors, eine Datei außerhalb von knowledge/ aber nur, solange die Angabe
-sie keiner Quelle zuschreibt („X-0001, INDEX.md" ist eine Fundstelle in
-X-0001). Eine Angabe ohne geliefertes Dokument behauptet nur dann nichts,
-wenn sie ausdrücklich keinen Treffer meldet („keine Treffer", „kein
-Zeiger", „Treffer: keine", „nichts gefunden"), sonst nichts über den Inhalt
-einer Quelle sagt (neben Kennung, Zustand und Lesestatus höchstens zwei
-Inhaltswörter) und nichts nennt, was nach einer Fundstelle aussieht: eine
-URL, eine Datei mit Dokumentendung, einen Pfad mit „./", „../", „/" oder
-zwei Schrägstrichen, eine Satz-, Absatz-, Zeilen- oder Seitenzahl, ein
-Kapitel oder einen Abschnitt mit Nummer oder Titel (ein verneintes „keinen
+geliefert hat, auch in Anführungszeichen, mit „./" oder im Klammerzusatz
+des Etiketts, und jeder Pfad darin ist ein solches Dokument, auch in
+Anführungszeichen. Ausgenommen sind zitierte Sätze und Dateien des
+geprüften Tresors, eine Datei außerhalb von knowledge/ aber nur, solange
+die Angabe sie keiner Quelle zuschreibt („X-0001, INDEX.md" ist eine
+Fundstelle in X-0001). Eine Angabe ohne geliefertes Dokument behauptet nur
+dann nichts, wenn sie ausdrücklich keinen Treffer meldet („keine Treffer",
+„kein Zeiger", „Treffer: keine", „nichts gefunden"), sonst nichts über den
+Inhalt einer Quelle sagt (neben Kennung, Zustand, Lesestatus und den
+aufgezählten Anfragebegriffen höchstens zwei Inhaltswörter) und nichts
+nennt, was nach einer Fundstelle aussieht: eine URL, eine Datei mit
+Dokumentendung, einen Pfad mit „./", „../", „/", zwei Schrägstrichen oder
+kleingeschrieben ohne Endung (nicht als Ordner), eine Satz-, Absatz-,
+Zeilen- oder Seitenzahl (auch in der Mehrzahl), einen Paragrafen (außer als
+Thema der Suche: „zu § 551 BGB"), ein Kapitel oder einen Abschnitt mit
+Nummer, Titel oder Präposition („Abschnitt über …"; ein verneintes „keinen
 Abschnitt" zählt nicht). Bei bekannter
 Bindung (lokale Quelle) und bei einem Lauf ohne Netz (Netzquelle) ist eine
 erfundene Angabe ein Verstoß, sonst ein Hinweis. Weist eine Antwort eine Quelle als ungelesen aus, die die
@@ -269,8 +277,19 @@ externes bestand tresor ordner katalog volltext stufe gefunden getroffen
 bei dieser abfrage ab bis seit abschnitt abschnitte kapitel lokalen
 lokale lokal nachschlagen nachgeschlagen nachschlag kam kamen zustande
 möglich moeglich gelang gelungen erfolgt erfolgte durchgeführt
-durchgefuehrt
+durchgefuehrt ich wir du man mir mich uns dir dich habe hast hatten bin bist
+war werde wurde kann konnte konnten können koennen muss musste soll darf
+alle alles allen beide beiden einige mehrere jede jeder jedes jeden jedem
+insgesamt sämtliche saemtliche eins zwei drei vier fünf fuenf sechs sieben
+acht neun zehn durchsucht gesucht geprüft geprueft nachgesehen abgefragt
+angefragt untersucht leider ebenfalls jedoch allerdings also somit daher
+deshalb fachbegriffe statt eigennamen verwenden bewusst bester fehltreffer
+geliefert befund gilt
 """.split())
+# Die Begriffe, die eine Leermeldung aufzählt („… enthält die
+# Anfragebegriffe hoch, mietkaution", wie im Grund der Engine), sagen nichts
+# über die Quelle.
+BEGRIFFSLISTE_RE = re.compile(r"(?i)\b(?:anfrage|such)?begriffe?\b[^().;]*")
 # Was nach einer Fundstelle aussieht: eine URL, eine Datei mit
 # Dokumentendung, ein Pfad mit ./, ../, / oder mindestens zwei
 # Schrägstrichen, eine Satz-, Absatz-, Zeilen- oder Seitenzahl, ein
@@ -280,36 +299,63 @@ STELLENARTIG_RE = re.compile(
     r"|(?<![\w/.-])[\w.-]+\.(?:" + DOKUMENT_ENDUNGEN + r")\b"
     r"|(?<![\w/.-])(?:\.{1,2}/|/)[\w./-]*\w"
     r"|(?<![\w/.-])[\w.-]+/[\w.-]+/[\w./-]*\w"
-    r"|\b(?:satz(?:position|nummer)?|sentence(?:_index)?|absatz|zeile|"
-    r"seite|s\.|rn\.?)\s*[:=]?\s*\d")
-KAPITEL_RE = re.compile(r"\b(?i:kapitel|abschnitt)\s+(?:\d|[„\"»«]|[A-ZÄÖÜ])")
+    r"|\b(?:satz(?:position(?:en)?|nummern?)?|s(?:ä|ae)tze|sentence(?:_index)?|"
+    r"abs(?:atz|(?:ä|ae)tze)|zeilen?|seiten?|s\.|rn\.?)\s*[:=]?\s*\d")
+KAPITEL_RE = re.compile(r"\b(?i:kapitel|abschnitt)\s+(?:\d|[„\"»«]|[A-ZÄÖÜ]|"
+                        r"(?i:über|ueber|zu|zum|zur|für|fuer)\s)")
 VERNEINUNG_DAVOR_RE = re.compile(r"(?i)\b(?:kein|keine|keinen|keinem|keiner|ohne)\s+$")
+# Ein kleingeschriebener Pfad ohne Endung ist ein Zeiger („am ehesten
+# handbuch/mietminderung"), außer er nennt einen Ordner („Ordner
+# beispiel-extern/handbuch") oder liegt im geprüften Tresor (knowledge/…).
+# Glieder unter drei Zeichen („km/h") und „und/oder" sind keine Pfade.
+SCHRAEG_PFAD_RE = re.compile(
+    r"(?<![\w/.-])(?!und/oder(?![\w/.-])|and/or(?![\w/.-]))"
+    r"([a-z0-9][a-z0-9._-]*(?:/[a-z0-9][a-z0-9._-]*)+/?)(?![\w/.-])")
+ORDNER_DAVOR_RE = re.compile(
+    r"(?i)\b(?:ordner|verzeichnis|unterordner|quellordner|wurzel)\s+$")
+# Ein Paragraf ist eine Fundstelle („§ 4 regelt nur die Minderung"), außer er
+# nennt das Thema der Suche („keine Treffer zu § 551 BGB").
+PARAGRAF_RE = re.compile(r"§\s*\d")
+THEMA_DAVOR_RE = re.compile(
+    r"(?i)\b(?:zu|zum|zur|über|ueber|nach|wegen|bezüglich|bezueglich|bzgl\.?|"
+    r"betreffend|um)\s+$")
 # Ein Pfad ohne Endung, dem eine Satzposition folgt: auch das ist eine
-# Fundstelle („handbuch/eigenbedarf, Satzposition 2").
+# Fundstelle („handbuch/eigenbedarf, Satzposition 2"). Ein Pfad ist es nur
+# mit kleinem Anfang jedes Glieds; „Mieter/Vermieter, Satzposition 7" nennt
+# ein Stichwort.
 FREMDE_STELLE_RE = re.compile(
-    r"(?i)(?<![\w/.-])((?:[\w.-]+/)+[\w.-]*[a-z][\w.-]*)(?=\s*[,:(]?\s*"
+    r"(?i)(?<![\w/.-])((?-i:(?:[a-z0-9_.-][\w.-]*/)+[a-z0-9_.-]*[a-z][\w.-]*)"
+    r")(?=\s*[,:(]?\s*"
     r"(?:satz(?:position|nummer)?|sentence(?:_index)?|absatz|zeile|seite)"
     r"\s*[:=]?\s*\d)")
 # Ein Pfad, den die Angabe einer Quelle zuschreibt: eine Kennung direkt
-# davor („X-0001, INDEX.md") oder eine Stelle direkt dahinter („INDEX.md
-# (Satzposition 2)").
-QUELLBEZUG_DAVOR_RE = re.compile(r"(?i)X-\d{4}[\s,:/(—–-]*$")
+# davor („X-0001, INDEX.md", nicht in einer Klammer dahinter: „X-0001
+# (sources/EXTERN.md: lokal gebunden)") oder eine Satzposition direkt
+# dahinter („INDEX.md (Satzposition 2)"; ein Abschnitt kann zur Tresordatei
+# selbst gehören).
+QUELLBEZUG_DAVOR_RE = re.compile(r"(?i)X-\d{4}[\s,:/—–-]*$")
 QUELLBEZUG_DAHINTER_RE = re.compile(
     r"(?i)\s*[,:(]?\s*(?:satz(?:position|nummer)?|sentence(?:_index)?|"
-    r"absatz|abschnitt|kapitel|seite|zeile)\b")
+    r"seite|zeile)\b")
 # Eine Rückfrage in einer Angabe: eine Klammer mit Fragezeichen, oder der
-# letzte Teilsatz vor dem Fragezeichen, dazu jeder Teilsatz davor, der wie
-# eine Frage beginnt (Verb oder Fragewort).
+# Schluss eines Satzes, der mit einem Fragezeichen endet. Gefragt ist das
+# letzte Segment nach Semikolon, Doppelpunkt oder Gedankenstrich, wenn es
+# wie eine Frage beginnt (Verb, „oder", Fragewort), sonst nur sein letzter
+# Teilsatz nach einem Komma.
 RUECKFRAGE_KLAMMER_RE = re.compile(r"\s*[(\[][^()\[\]]*\?[^()\[\]]*[)\]]")
-TEILSATZ_GRENZE_RE = re.compile(r"[,;:]|\s[—–-]\s|[—–]")
-FRAGE_ANFANG = frozenset("""
+STARKE_GRENZE_RE = re.compile(r"[;:]|\s[—–-]\s|[—–]")
+WORT_IM_SATZ_RE = re.compile(r"[^\W\d_][\w']*")
+FRAGE_VERBEN = frozenset("""
 soll sollen sollte sollten möchtest moechtest möchten moechten möchte moechte
 willst wollen will kann kannst können koennen könnte koennte könntest
 koenntest darf darfst dürfen duerfen hilft helfen passt passen beantwortet
 beantworten ist sind gibt gäbe gaebe hast haben habe hat wäre waere wären
 waeren würde wuerde würdest wuerdest brauchst brauchen reicht genügt genuegt
-stimmt meinst meinen magst wie was wann wo wer wen wem wessen welche welcher
-welches welchen welchem warum wieso weshalb wozu wohin woher ob oder
+stimmt meinst meinen magst oder
+""".split())
+FRAGEWORT_ANFANG = frozenset("""
+wie was wann wo wer wen wem wessen welche welcher welches welchen welchem
+warum wieso weshalb wozu wohin woher ob
 """.split())
 # Ein Befehl in Code (eine Code-Spanne mit Leerraum): Er weist keine Quelle
 # aus, auch wenn er ihre Kennung nennt.
@@ -1071,39 +1117,74 @@ def _maske(text):
     return ZITAT_RE.sub(lambda fund: "Z" * len(fund.group(0)), text)
 
 
-def _ohne_rueckfragen(satz):
-    """Ein Satz ohne die Rückfrage darin, und ob er ganz eine Rückfrage war.
+# Woran ein Vorsatz vor einer Rückfrage als Aussage zu erkennen ist: Er
+# nennt einen Lesestatus, einen Zustand, einen Grund oder einen Treffer wie
+# eine Angabe zu Schritt 4c. „Falls du X-0001 nutzen willst, soll ich es
+# binden?" fragt als Ganzes; „X-0001 ist nicht gebunden, soll ich es
+# binden?" sagt zuerst etwas aus.
+AUSSAGE_RE = re.compile(
+    r"(?i)\b(?:nicht\s+gebunden|ungebunden|nicht\s+erreichbar|offline|"
+    r"skillsafe_offline|nicht\s+gelesen|ungelesen|gelesen|nicht\s+abgerufen|"
+    r"abgerufen|nicht\s+nachgeschlagen|nachgeschlagen|negativbefund|"
+    r"nicht\s+verf(?:ü|ue)gbar|satzposition|sentence_index|lexikalisch|"
+    r"zeiger|treffer|" + "|".join(EXTERN_ZUSTAENDE) + r")\b")
 
-    Fort fällt jede Klammer mit Fragezeichen. Endet der Satz danach mit
-    einem Fragezeichen, ist der letzte Teilsatz die Rückfrage (Teilsätze
-    trennen Komma, Semikolon, Doppelpunkt und Gedankenstrich, auch „ - "),
-    dazu jeder Teilsatz davor, der wie eine Frage beginnt: mit einem Verb
-    oder Fragewort („Soll ich X-0001 binden, oder nicht?"). Was davor steht,
-    ist die Angabe („X-0001 ist nicht gebunden, soll ich es binden?"). Zitate
-    zählen dabei nicht. Zurück kommen der Rest und ob etwas abgetrennt
-    wurde; ein leerer Rest heißt: Der ganze Satz war eine Rückfrage."""
+
+def _fragt(teil):
+    """Beginnt ein Teil eines Satzes wie eine Frage? Mit einem Verb oder
+    „oder" („soll ich …", „oder lieber …"), oder mit einem Fragewort, dem ein
+    Verb folgt oder das ohne Komma bis zum Fragezeichen reicht („Welche
+    Quelle soll ich binden?"). „Wie gewünscht, habe ich …" beginnt keine
+    Frage."""
+    woerter = [wort.casefold() for wort in WORT_IM_SATZ_RE.findall(teil)]
+    if not woerter:
+        return False
+    if woerter[0] in FRAGE_VERBEN:
+        return True
+    return woerter[0] in FRAGEWORT_ANFANG and (
+        "," not in teil or (len(woerter) > 1 and woerter[1] in FRAGE_VERBEN))
+
+
+def _ohne_rueckfragen(satz):
+    """Ein Satz ohne die Rückfrage darin, und ob eine Frage abgetrennt wurde.
+
+    Fort fällt jede Klammer mit Fragezeichen; sie macht den Satz nicht zur
+    Frage. Endet der Satz danach mit einem Fragezeichen, ist das letzte
+    Segment nach Semikolon, Doppelpunkt oder Gedankenstrich (auch „ - ") die
+    Rückfrage, wenn es wie eine Frage beginnt („— soll ich X-0001 binden,
+    oder nicht?", „Soll ich X-0001, das Beispielhandbuch, binden?"). Sonst
+    ist nur sein letzter Teilsatz nach einem Komma die Rückfrage, sofern das
+    davor eine Aussage wie eine Angabe ist (AUSSAGE_RE: „X-0001 ist nicht
+    gebunden, soll ich es binden?", „Da der Schalter gesetzt ist, ist X-0002
+    nicht abgerufen worden, soll ich …?"); fehlt eine solche Aussage, fragt
+    das ganze Segment („Falls du X-0001 nutzen willst, soll ich es
+    binden?", „Bindest du X-0001, oder soll ich?"). Beginnt der letzte
+    Teilsatz mit „oder", gehört eine Frage davor dazu. Zitate zählen dabei
+    nicht. Zurück kommen der Rest und ob eine Frage abgetrennt wurde; ein
+    leerer Rest heißt: Der ganze Satz war eine Rückfrage."""
     maske = _maske(satz)
-    abgetrennt = False
     while True:
         klammer = RUECKFRAGE_KLAMMER_RE.search(maske)
         if not klammer:
             break
         anfang, ende = klammer.span()
         satz, maske = satz[:anfang] + satz[ende:], maske[:anfang] + maske[ende:]
-        abgetrennt = True
     if not FRAGE_RE.search(FORMEL_STOERER.sub("", maske).rstrip()):
-        return satz, abgetrennt
-    grenzen = list(TEILSATZ_GRENZE_RE.finditer(maske))
-    index = len(grenzen) - 1
-    while index >= 0:
-        anfang = grenzen[index - 1].end() if index > 0 else 0
-        erstes = re.match(r"[\W_]*([^\W\d_][\w']*)", maske[anfang:grenzen[index].start()])
-        if not (erstes and erstes.group(1).casefold() in FRAGE_ANFANG):
-            break
-        index -= 1
-    if index < 0:
-        return "", True
-    return satz[:grenzen[index].start()].rstrip(), True
+        return satz, False
+    grenzen = list(STARKE_GRENZE_RE.finditer(maske))
+    beginn = grenzen[-1].end() if grenzen else 0
+    schnitt = grenzen[-1].start() if grenzen else 0
+    segment = maske[beginn:]
+    kommas = [fund.start() for fund in re.finditer(",", segment)]
+    if (kommas and not _fragt(segment)
+            and AUSSAGE_RE.search(segment[:kommas[-1]])):
+        schnitt = beginn + kommas[-1]
+        letzter = segment[kommas[-1] + 1:]
+        woerter = WORT_IM_SATZ_RE.findall(letzter)
+        if (woerter and woerter[0].casefold() == "oder" and len(kommas) > 1
+                and _fragt(segment[kommas[-2] + 1:kommas[-1]])):
+            schnitt = beginn + kommas[-2]
+    return satz[:schnitt].rstrip(), True
 
 
 def _etikett_nackt(satz):
@@ -1420,6 +1501,16 @@ def _kennung_zum_pfad(text, fund, angabe):
     return next(iter(alle)) if len(alle) == 1 else ""
 
 
+def _zitat_ausblenden(fund):
+    """Ein Zitat für die Suche nach fremden Pfaden: Ein zitierter Satz wird
+    zu Leerraum gleicher Länge, ein zitierter Dokumentpfad bleibt stehen."""
+    zitat = fund.group(0)
+    inneres = zitat[1:-1]
+    if DOKUMENT_RE.fullmatch(inneres.strip()):
+        return " " + inneres + " "
+    return " " * len(zitat)
+
+
 def _quellbezug(text, anfang, ende):
     """Schreibt die Angabe den Pfad an dieser Stelle einer Quelle zu: eine
     Kennung direkt davor oder eine Stelle direkt dahinter?"""
@@ -1429,9 +1520,21 @@ def _quellbezug(text, anfang, ende):
 
 def _stellenartig(text):
     """Nennt ein Text etwas, das nach einer Fundstelle aussieht? Ein
-    verneintes „kein Kapitel", „keinen Abschnitt" zählt nicht."""
+    verneintes „kein Kapitel", „keinen Abschnitt" zählt nicht, ein Paragraf
+    als Thema der Suche („zu § 551 BGB") ebenso wenig, und ein Pfad ohne
+    Endung nur kleingeschrieben und nicht als Ordner."""
     if STELLENARTIG_RE.search(text):
         return True
+    if any(not THEMA_DAVOR_RE.search(text[:fund.start()])
+           for fund in PARAGRAF_RE.finditer(text)):
+        return True
+    for fund in SCHRAEG_PFAD_RE.finditer(text):
+        pfad = fund.group(1)
+        glieder = [glied for glied in pfad.split("/") if glied]
+        if (len(glieder) > 1 and all(len(glied) >= 3 for glied in glieder)
+                and not pfad.startswith("knowledge/")
+                and not ORDNER_DAVOR_RE.search(text[:fund.start()])):
+            return True
     return any(not VERNEINUNG_DAVOR_RE.search(text[:fund.start()])
                for fund in KAPITEL_RE.finditer(text))
 
@@ -1447,9 +1550,10 @@ def _leermeldung(text):
         return True
     if not KEIN_TREFFER_RE.search(rein):
         return False
-    uebrig = KEIN_TREFFER_RE.sub(" ", rein)
-    inhalt = [wort for wort in re.findall(r"[\w][\w./-]*", uebrig)
-              if not wort.isdigit()
+    uebrig = BEGRIFFSLISTE_RE.sub(" ", KEIN_TREFFER_RE.sub(" ", rein))
+    woerter = (wort.strip("./-") for wort in re.findall(r"[\w][\w./-]*", uebrig))
+    inhalt = [wort for wort in woerter
+              if wort and not wort.isdigit()
               and wort.casefold() not in NEUTRALE_WOERTER
               and not wort.casefold().startswith("knowledge/")]
     return len(inhalt) <= 2
@@ -1611,13 +1715,17 @@ def _pruefe_extern(vault, frage, antwort, aufgefuehrt, offline, bindung_bekannt,
         bezug = (_kennungen(angabe) & aufgefuehrt) or set(aufgefuehrt)
         hier = [stelle for stelle in treffer
                 if str(stelle["source_id"]).upper() in bezug]
+        # Nur das Etikett fällt weg; ein Klammerzusatz dahinter kann das
+        # Dokument nennen („Extern (nicht im Bestand) (X-0001, README.md):").
         ohne = re.sub(r"(?i)^\W*extern\s*\(\s*nicht\s+im\s+bestand\s*\)"
-                      r"\s*(?:\([^)]*\)\s*)?:?", "", _ohne_hervorhebung(angabe))
-        # Genannt ist ein geliefertes Dokument auch in Anführungszeichen;
-        # nach fremden Pfaden wird nur außerhalb von Zitaten gesucht.
+                      r"\s*:?", "", _ohne_hervorhebung(angabe))
+        # Genannt ist ein geliefertes Dokument auch in Anführungszeichen.
+        # Ein Zitat, das nur einen Dokumentpfad enthält, ist eine Nennung wie
+        # ohne Anführungszeichen: geliefert oder fremd. Nach fremden Pfaden in
+        # zitierten Sätzen wird nicht gesucht.
         nennt = any(_nennt_dokument(ohne, stelle.get("document"))
                     for stelle in hier)
-        rest = ZITAT_RE.sub(lambda fund: " " * len(fund.group(0)), ohne)
+        rest = ZITAT_RE.sub(_zitat_ausblenden, ohne)
         for stelle in hier:
             rest, _ = _ohne_dokument(rest, stelle.get("document"))
         # Dateien des geprüften Tresors (knowledge/…, sources/EXTERN.md …)

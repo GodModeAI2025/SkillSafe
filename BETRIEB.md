@@ -149,10 +149,6 @@ abgeräumt — exakt 15:02 nach dem Start, also vom eigenen `timeout-minutes: 15
 dieses Workflows. Der Pages-Lauf auf `e659a2d` baute erfolgreich und scheiterte
 danach im Deploy mit `Timeout reached, aborting!`.
 
-Am 14. November 2026 wurden die beiden Läufe zu `0f2bae9` nach 15:15 als
-`cancelled` abgeräumt, ubuntu/3.9 in beiden, ubuntu/3.13 und macOS/3.13 im
-zweiten: Die Kette selbst brauchte inzwischen rund 15 Minuten. Auch ein so
-abgeräumter Lauf ist kein grüner. Seitdem steht `timeout-minutes` auf 30.
 
 **Eine Ursache steht damit nicht fest.** Die naheliegende Erklärung — Merges
 mit einem App-Token lösen bewusst keine Läufe aus, damit sich Automatisierung
@@ -164,6 +160,12 @@ Genau das ist der Eintrag, der bleiben muss. Der Tresor verlangt für jede
 Behauptung eine Fundstelle; für Betriebsbefunde gilt dasselbe. An diesem Tag
 wurde die Ursache zweimal benannt, bevor sie belegt war. **Eine unbelegte
 Ursache ist schlimmer als keine, weil sie das Suchen beendet.**
+
+Ein späterer Befund, mit belegter Ursache: Am 14. November 2026 wurden die
+beiden Läufe zu `0f2bae9` nach 15:15 als `cancelled` abgeräumt, ubuntu/3.9
+in beiden, ubuntu/3.13 und macOS/3.13 im zweiten. Die Kette selbst brauchte
+inzwischen rund 15 Minuten; der 3.9-Job zu `670f2dc` brauchte 20½ Minuten. Auch ein so
+abgeräumter Lauf ist kein grüner. Seitdem steht `timeout-minutes` auf 30.
 
 **Was unabhängig von der Ursache trägt — und das Verfahren ist:**
 
@@ -339,13 +341,19 @@ Abfrage mit `--extern` liefert, und „Extern nicht gelesen:" für jede
 ungelesene Quelle; eine Angabe zu einem Treffer, die kein geliefertes
 Dokument nennt oder einen Pfad, den die Abfrage nicht geliefert hat, ist bei
 bekannter Bindung (lokale Quelle) und bei einem Lauf ohne Netz (Netzquelle)
-ebenfalls ein Verstoß, sonst ein Hinweis. Ausgenommen sind Zitate, Dateien
-des geprüften Tresors, solange die Angabe sie keiner Quelle zuschreibt, und
-eine reine Leermeldung („keine Treffer", „kein Zeiger"), die sonst nichts
-über die Quelle sagt und nichts nennt, was nach einer Fundstelle aussieht.
-Eine Rückfrage zählt nicht als Angabe, ob als eigener Satz, in Klammern,
-als Teilsatz oder direkt hinter dem Etikett; eine zitierte Frage ist keine
-Rückfrage. Einen Verzicht nimmt es nur an, wenn das Protokoll den
+ebenfalls ein Verstoß, sonst ein Hinweis. Ausgenommen sind zitierte Sätze
+(ein zitierter Dokumentpfad zählt wie ohne Anführungszeichen), Dateien des
+geprüften Tresors unter `knowledge/` und andere, solange die Angabe sie
+keiner Quelle zuschreibt, und eine Leermeldung („keine Treffer", „kein
+Zeiger"), die neben Kennung, Zustand und Lesestatus höchstens zwei
+Inhaltswörter nennt und nichts, was nach einer Fundstelle aussieht. Eine
+Rückfrage zählt nicht als Angabe, ob als eigener Satz, in Klammern, als
+Teilsatz oder direkt hinter dem Etikett. Als Rückfrage gilt das letzte
+Segment nach Semikolon, Doppelpunkt oder Gedankenstrich, wenn es wie eine
+Frage beginnt; sonst der letzte Teilsatz nach einem Komma, wenn das davor
+einen Lesestatus, Zustand, Grund oder Treffer nennt, und sonst der ganze
+Satz. Eine zitierte Frage ist keine Rückfrage. Einen Verzicht nimmt es nur
+an, wenn das Protokoll den
 Wunsch des Nutzers oder die Vorgabe der Umgebung im Feld `vorgabe` festhält.
 Ob der Schritt Pflicht ist, liest es aus dem Vertrag des geprüften Tresors
 (`references/antworten.md`); ein Stand, dessen Vertrag ihn freistellte, wird

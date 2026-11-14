@@ -153,12 +153,11 @@ nicht), ebenso ein Wort einer kurzen, geschlossenen Liste von Homographen
 („Waren", „Soll", „Haben", „Würde" …), wenn es mitten im Satz
 großgeschrieben steht: Dann ist es ein Substantiv („Was sind Waren?"). Am
 Satzanfang, auch nach Doppelpunkt, Gedankenstrich oder „1)", zählt es nur
-für sich stehend („Begriffsfrage: Waren – …") oder vor „und", „oder",
-„sowie" oder einem Genitivartikel („Würde des Menschen", „Soll und
-Haben"), nicht als Verb eines Satzes, auch nicht vor einer Präposition
-(„Frage: Muss ich …", „Muss bei Auszug …"),
-und in Versalien oder Titelschreibung nie (Titelschreibung: alle Wörter
-groß und darunter ein Funktionswort wie „Der"; eine Stichwortfrage wie
+für sich stehend („Begriffsfrage: Waren – …"), nicht vor einem Wort, wo
+es meist Verb oder Präposition ist („Frage: Muss ich …", „Soll oder muss
+…", „Laut des Mietvertrags …"), und in Versalien oder Titelschreibung nie
+(Titelschreibung: alle Wörter groß und nach dem ersten ein Funktionswort,
+das nicht auf der Liste steht, wie „Der"; eine Stichwortfrage wie
 „Zollgebühren Waren China" ist keine). Sonst
 macht Großschreibung kein Funktionswort zum Begriff, auch nicht bei der
 Anrede („Können Sie …"). Eine Frage nur aus Homographen („Würde") sucht mit

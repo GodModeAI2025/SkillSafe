@@ -364,9 +364,12 @@ def _ohne_signatur(eintrag, felder):
 # _freitext_laeufe eigens. Leerraum ist hier nur Leerzeichen und Tabulator:
 # Ein geschütztes Leerzeichen ist Inhalt (CommonMark).
 FREITEXT_BLOCKSTART_RE = re.compile(
-    r"^[ \t]{0,3}(?:#{1,6}(?:[ \t]|$)|[-*+][ \t]|\d{1,3}[.)][ \t]|\|)")
+    r"^[ \t]{0,3}(?:#{1,6}(?:[ \t]|$)|[-*+](?:[ \t]|$)|\d{1,3}[.)](?:[ \t]|$)|\|)")
+# "# Text" nach beliebigem Leerraum: sieht aus wie eine Überschrift.
+FREITEXT_RAUTE_ALS_TITEL_RE = re.compile(r"^\s*#{1,6}(?:\s|$)")
 FREITEXT_UEBERSCHRIFT_RE = re.compile(r"^[ \t]{0,3}#{1,6}(?:[ \t]|$)")
-FREITEXT_LISTENPUNKT_RE = re.compile(r"^[ \t]{0,3}(?:[-*+]|\d{1,3}[.)])[ \t]")
+FREITEXT_LISTENPUNKT_RE = re.compile(
+    r"^[ \t]{0,3}(?:[-*+]|\d{1,3}[.)])(?:[ \t]+|$)")
 # Ein Code-Zaun, auch eingerückt in einem Listenpunkt: Zeichen, Länge und
 # der Info-String dahinter. Ein Backtick-Zaun hat keinen Backtick im
 # Info-String, sonst ist die Zeile Inline-Code.
@@ -376,8 +379,6 @@ FREITEXT_ZITAT_RE = re.compile(r"^[ \t]{0,3}(?:>[ \t]?)+")
 # Zeile mit geschütztem Leerzeichen vor "#" überspringt er als Kommentar);
 # danach nur Leerzeichen und Tabulator, denn was folgt, ist Inhalt.
 FREITEXT_HTML_KOMMENTAR_RE = re.compile(r"^\s*<!--[ \t]?|[ \t]?-->\s*$")
-# Ein Kommentar am Ende einer Codezeile: "#" nach Leerraum.
-FREITEXT_ZEILENKOMMENTAR_RE = re.compile(r"[ \t]#")
 # Nur die lange Formel verbindet der Stolperdraht auch über Absätze hinweg:
 # "ignore … instructions" entsteht über eine Überschrift kaum zufällig, die
 # Zweiwortformeln ("System" vor einem Absatz, der mit "Prompt" beginnt) schon.
@@ -463,13 +464,16 @@ def _freitext_laeufe(datei_zeilen, offset, rumpf_zeilen, absatzweise=True):
     zaun = None
     im_html = False
     in_liste = False
+    listen_einzug = 0
+    nach_leer = True
+    code_block = False
     for bn, zeile in enumerate(rumpf_zeilen, 1):
         nummer = offset + bn
         ist_claim = zeile.startswith(CLAIM_START)
         if ist_claim and zaun is None and not im_html:
             schliessen()
             anhaengen(nummer, zeile, "claim", True)
-            in_liste = True
+            in_liste, listen_einzug, nach_leer, code_block = True, 2, False, False
             continue
         rest = FREITEXT_ZITAT_RE.sub("", zeile)
         if not absatzweise:
@@ -481,14 +485,15 @@ def _freitext_laeufe(datei_zeilen, offset, rumpf_zeilen, absatzweise=True):
             lauf.append((nummer, rest, False))
             continue
         if zaun is not None:
-            zeichen, laenge, einzug = zaun
+            zeichen, laenge, grenze = zaun
             schluss = FREITEXT_ZAUN_RE.match(rest)
             if (schluss and schluss.group(1)[0] == zeichen
                     and len(schluss.group(1)) >= laenge
                     and _leer(schluss.group(2))
-                    and _einzug(rest) <= einzug + 3):
+                    and _einzug(rest) <= grenze):
                 schliessen()
                 zaun = None
+                nach_leer = False
                 continue
             if _ist_kommentarzeile(rest):
                 # Code-Kommentar: liest das Modell mit; ein leerer trennt.
@@ -500,33 +505,46 @@ def _freitext_laeufe(datei_zeilen, offset, rumpf_zeilen, absatzweise=True):
             elif _leer(rest):
                 schliessen()
             else:
-                ende = FREITEXT_ZEILENKOMMENTAR_RE.search(rest)
-                code = rest[:ende.start()] if ende else rest
-                if not _leer(code):
-                    anhaengen(nummer, code, "code")
-                if ende and not _leer(rest[ende.end():]):
-                    # Ein Kommentar am Zeilenende beginnt einen
-                    # Kommentarlauf, den die nächste Kommentarzeile fortsetzt.
-                    anhaengen(nummer, rest[ende.end():].strip(" \t"),
-                              "kommentar")
+                # Eine Codezeile ganz, auch mit "#" darin: Ob es ein
+                # Kommentar ist oder ein String, sagt erst die Sprache.
+                anhaengen(nummer, rest, "code")
             continue
-        oeffnung = FREITEXT_ZAUN_RE.match(rest)
+        breit = rest.expandtabs(4)
+        einzug = _einzug(rest)
+        # Ein Zaun öffnet am Zeilenanfang, auch direkt hinter einer
+        # Listenmarke ("- ```bash"); außerhalb eines Listenpunkts mit
+        # höchstens drei Leerzeichen Einzug.
+        punkt = FREITEXT_LISTENPUNKT_RE.match(breit)
+        kandidat = breit[punkt.end():] if punkt else breit
+        oeffnung = FREITEXT_ZAUN_RE.match(kandidat)
         if (oeffnung and not (oeffnung.group(1)[0] == "`"
                               and "`" in oeffnung.group(2))
-                and (_einzug(rest) <= 3 or in_liste)):
+                and (punkt or einzug <= 3 or in_liste)):
             schliessen()
-            zaun = (oeffnung.group(1)[0], len(oeffnung.group(1)),
-                    _einzug(rest))
+            if punkt:
+                in_liste, listen_einzug = True, punkt.end()
+                grenze = punkt.end() + 3
+            elif in_liste:
+                grenze = einzug + 3
+            else:
+                grenze = 3
+            zaun = (oeffnung.group(1)[0], len(oeffnung.group(1)), grenze)
             if not _leer(oeffnung.group(2)):
                 # Der Info-String steht sichtbar da: ein eigener Lauf.
                 anhaengen(nummer, oeffnung.group(2).strip(" \t"), "info")
                 schliessen()
+            nach_leer = code_block = False
             continue
         kommentarzeile = im_html or rest.lstrip().startswith("<!--")
         if kommentarzeile:
             oeffnet, schliesst = rest.rfind("<!--"), rest.rfind("-->")
             im_html = oeffnet > schliesst if oeffnet >= 0 else (
                 im_html and schliesst < 0)
+            danach = ""
+            if not im_html and schliesst >= 0:
+                # Was hinter "-->" steht, ist sichtbarer Text des Absatzes.
+                danach = rest[schliesst + 3:]
+                rest = rest[:schliesst + 3]
             kommentar = FREITEXT_HTML_KOMMENTAR_RE.sub("", rest)
             if _leer(kommentar):
                 schliessen()
@@ -536,22 +554,50 @@ def _freitext_laeufe(datei_zeilen, offset, rumpf_zeilen, absatzweise=True):
                 anhaengen(nummer, kommentar, "html")
                 if FREITEXT_UEBERSCHRIFT_RE.match(kommentar):
                     schliessen()
+            if not _leer(danach):
+                anhaengen(nummer, danach, "text")
+            nach_leer = code_block = False
             continue
         if _leer(rest):
             schliessen()
+            nach_leer = True
             continue
-        if FREITEXT_BLOCKSTART_RE.match(rest):
+        # Ein eingerückter Codeblock: nach einer Leerzeile vier Spalten tief
+        # (ein Tabulator zählt vier), außerhalb eines Listenpunkts. Seine
+        # Kommentarzeilen werden verbunden wie im Zaun, nie mit dem Code.
+        code_block = (einzug >= 4 and not in_liste
+                      and (nach_leer or code_block))
+        nach_leer_vorher, nach_leer = nach_leer, False
+        if code_block:
+            if _ist_kommentarzeile(rest):
+                kommentar = _ohne_kommentarzeichen(rest)
+                if _leer(kommentar):
+                    schliessen()
+                else:
+                    anhaengen(nummer, kommentar.strip(" \t"), "kommentar")
+            else:
+                anhaengen(nummer, rest, "code")
+            continue
+        ueberschrift = bool(FREITEXT_UEBERSCHRIFT_RE.match(breit))
+        if FREITEXT_BLOCKSTART_RE.match(breit):
             schliessen()
-            in_liste = bool(FREITEXT_LISTENPUNKT_RE.match(rest))
-        elif not rest[:1].isspace():
+            punkt = FREITEXT_LISTENPUNKT_RE.match(breit)
+            in_liste = bool(punkt)
+            if punkt:
+                listen_einzug = punkt.end()
+        elif nach_leer_vorher and not rest[:1].isspace():
+            # Nach einer Leerzeile beendet eine Zeile ohne Einzug die Liste;
+            # direkt hinter dem Text eines Punkts setzt sie ihn fort.
             in_liste = False
-        if (not FREITEXT_UEBERSCHRIFT_RE.match(rest)
-                and _ist_kommentarzeile(rest)):
-            # "#" hinter einem geschützten Leerzeichen ist keine Überschrift,
-            # sieht aber so aus; geprüft wird der Text dahinter.
+        if (not ueberschrift and _ist_kommentarzeile(rest)
+                and FREITEXT_RAUTE_ALS_TITEL_RE.match(rest)):
+            # "# Text" hinter einem geschützten Leerzeichen oder tiefer
+            # eingerückt ist keine Überschrift, sieht aber so aus; geprüft
+            # wird der Text dahinter, mit dem Absatz. Ein Hashtag ("#ki")
+            # bleibt, wie er ist.
             rest = _ohne_kommentarzeichen(rest)
         anhaengen(nummer, rest, "text")
-        if FREITEXT_UEBERSCHRIFT_RE.match(rest):
+        if ueberschrift:
             schliessen()
     schliessen()
     return laeufe
@@ -1543,15 +1589,12 @@ HOMOGRAPHE_SUBSTANTIVE = frozenset(
 SATZZEICHEN_VOR_SATZANFANG = ".!?…:;–—"
 AUFZAEHLUNG_VOR_SATZANFANG_RE = re.compile(
     r"(?:^|\s)(?:\d{1,3}[.)]|[A-Za-z][)]|[-*•–—])$")
-# Ein Homograph am Satzanfang ist ein Substantiv, wenn er für sich steht
-# ("Begriffsfrage: Waren – was …", "Waren?") oder eine Wortgruppe beginnt,
-# in der ihm "und", "oder", "sowie" oder ein Genitivartikel folgt ("Würde
-# des Menschen", "Soll und Haben", "Waren und Dienstleistungen"). Vor jedem
-# anderen Wort beginnt dort ein Satz mit dem Verb, auch vor einer
-# Präposition ("Frage: Muss ich …", "Muss der Mieter …", "Muss bei Auszug
-# renoviert werden?", "Waren in der Wohnung Mängel?").
+# Ein Homograph am Satzanfang ist nur dann ein Substantiv, wenn er für
+# sich steht ("Begriffsfrage: Waren – was …", "Waren?"). Folgt ein Wort,
+# ist er dort meist das Verb eines Satzes ("Frage: Muss ich …", "Muss bei
+# Auszug …", "Soll oder muss …"); eine Wortgruppe wie "Würde des Menschen"
+# geht dabei verloren (notes/dead-ends.md).
 SATZZEICHEN_NACH_ALLEINSTEHEND = "–—-,;:.!?…"
-NACH_SUBSTANTIV = frozenset("und oder sowie des eines".split())
 # Die Pronomen der Anrede sind in Großbuchstaben kein Kürzel ("Können SIE
 # das?"), anders als "IT". Nur für die externe Suche; das lokale Ranking
 # bleibt bytegleich.
@@ -1603,17 +1646,15 @@ def _sachwoerter_gross(text):
                    if token in HOMOGRAPHE_SUBSTANTIVE}
         if not treffer:
             continue
-        roh = text[:fund.start()].rstrip(" \t\r\n")
         # Leerraum, Anführungszeichen und Klammern in einem Schritt: auch
-        # 'Frage. „Muss ich …“' beginnt einen Satz.
+        # 'Frage. „Muss ich …“' beginnt einen Satz, und eine Aufzählungsmarke
+        # vor einem Anführungszeichen ('1) „Muss ich …“') zählt ebenso.
+        roh = text[:fund.start()].rstrip(" \t\r\n\"'„“”‚‘’»«")
         davor = text[:fund.start()].rstrip(" \t\r\n\"'„“”‚‘’»«()[]")
         if (not davor or davor[-1] in SATZZEICHEN_VOR_SATZANFANG
                 or AUFZAEHLUNG_VOR_SATZANFANG_RE.search(roh)):
             danach = text[fund.end():].lstrip(" \t\"'“”‚‘’»«)]")
-            folgewort = WORT_RE.match(danach)
-            if danach and danach[0] not in SATZZEICHEN_NACH_ALLEINSTEHEND and not (
-                    folgewort and _retrieval_norm(folgewort.group(0))
-                    in NACH_SUBSTANTIV):
+            if danach and danach[0] not in SATZZEICHEN_NACH_ALLEINSTEHEND:
                 continue
         gross.update(treffer)
     return gross
@@ -3654,14 +3695,15 @@ MELDUNG_EXTERN_MIT_SIGNATUR = ("Meldung enthält eine offensichtliche "
 MELDUNG_ORT_RE = re.compile(r"[\w./-]+(?::\d+)?")
 # Ein Pfad in einer Meldung, auch in Bindestrichform: ein Token mit "/" oder
 # mit einer Dateiendung. Gesucht wird tokenweise, linear auch bei langen
-# Zeilen ohne Leerraum.
-MELDUNG_TRENNER_RE = re.compile(r"[\s'\"„“”‚‘’»«()\[\],;]+")
+# Zeilen ohne Leerraum. Getrennt wird auch an ":" und "#", denn dahinter
+# steht eine Zeilennummer oder ein Anker ("datei.md:3", "datei.md#L3").
+MELDUNG_TRENNER_RE = re.compile(r"[\s'\"„“”‚‘’»«()\[\]{},;:#`<>!?|]+")
 MELDUNG_DATEI_RE = re.compile(r"\.(?:md|markdown|txt|json)$", re.IGNORECASE)
 
 
 def _meldung_pfade(text):
     for token in MELDUNG_TRENNER_RE.split(text):
-        token = token.rstrip(":.")
+        token = token.strip(".")
         if "/" in token or MELDUNG_DATEI_RE.search(token):
             yield token
 MELDUNG_KENNUNG_RE = re.compile(r"(?:[SX]-\d{4}|[A-Z]-\d{4})(?![\w-])")

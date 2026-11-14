@@ -177,21 +177,37 @@ eine aufgeführte externe Bezugsquelle.
   geschütztes Leerzeichen ist Inhalt, auch im Zitat und im Frontmatter),
   eine Überschrift oder ein neuer Listenpunkt trennt. Kommentare liest das
   Modell mit, sie bilden aber eigene Absätze und werden nie mit Text oder
-  Code verbunden: Kommentarzeilen im Frontmatter und in einem Code-Zaun
-  (ohne ihr `#`; eine leere Kommentarzeile trennt; ein Kommentar am Ende
-  einer Codezeile setzt sich in der Kommentarzeile darunter fort) und
-  HTML-Kommentare, auch über mehrere Zeilen (eine Überschrift darin steht
-  für sich). Vor `#` und `<!--` zählt jeder Leerraum, auch ein geschütztes
+  Code verbunden: Kommentarzeilen im Frontmatter, in einem Code-Zaun und in
+  einem eingerückten Codeblock (ohne ihr `#`; eine leere Kommentarzeile
+  trennt) und HTML-Kommentare, auch über mehrere Zeilen (eine Überschrift
+  darin steht für sich; Text hinter einem Kommentar, der in derselben Zeile
+  schließt, gehört zum Absatz). Eine Codezeile bleibt ganz, auch mit `#`
+  darin, denn ob das ein Kommentar oder ein String ist, sagt erst die
+  Sprache. Vor `#` und `<!--` zählt jeder Leerraum, auch ein geschütztes
   Leerzeichen, wie im Frontmatter-Parser: Was er als Kommentar überspringt,
-  prüft `validate` als Kommentar. Ein Code-Zaun gilt wie in CommonMark: Er
-  öffnet mit höchstens drei Leerzeichen Einzug (in einem Listenpunkt auch
-  tiefer) und schließt nur mit demselben Zeichen in mindestens derselben
-  Länge, ohne Text dahinter und höchstens drei Leerzeichen tiefer als die
-  Öffnung; sein Info-String ist ein eigener Absatz, und ```` ```x``` ```` am
-  Zeilenanfang ist Inline-Code, kein Zaun. Die lange Formel „ignore … instructions" sucht `validate`
-  zusätzlich über Überschriften und Leerzeilen hinweg bis zur nächsten
-  Claim-Zeile; die Zweiwortformeln nicht, denn die entstehen dort zufällig
-  („Tool-System" vor einem Absatz, der mit „Prompt" beginnt). Ein Pfad mit
+  prüft `validate` als Kommentar; ein Hashtag (`#ki`) ist keine Überschrift.
+  Ein Code-Zaun öffnet am Zeilenanfang mit höchstens drei Leerzeichen
+  Einzug, in einem Listenpunkt auch tiefer und direkt auf der Listenmarke
+  (```` - ```bash ````). Ein Listenpunkt bleibt offen, bis nach einer
+  Leerzeile eine Zeile ohne Einzug folgt; auch eine leere Marke (`-`)
+  beginnt einen. Der Zaun schließt nur mit demselben Zeichen in mindestens
+  derselben Länge und ohne Text dahinter, außerhalb eines Listenpunkts mit
+  höchstens drei Leerzeichen Einzug, in einem höchstens drei tiefer als
+  seine Öffnung; sein Info-String ist ein eigener Absatz, und
+  ```` ```x``` ```` am Zeilenanfang ist Inline-Code, kein Zaun. Ein
+  Tabulator zählt vier Spalten. Die lange Formel „ignore … instructions"
+  sucht `validate` zusätzlich über Überschriften und Leerzeilen hinweg bis
+  zur nächsten Claim-Zeile; die Zweiwortformeln nicht, denn die entstehen
+  dort zufällig („Tool-System" vor einem Absatz, der mit „Prompt" beginnt).
+  Der Stolperdraht fängt offensichtliche Signaturen in gewöhnlich
+  geschriebenem Text, auch über Zeilenumbrüche innerhalb eines Absatzes,
+  Zitats, Kommentars oder Codeblocks; gegen gezielte Verschleierung schützt
+  er nicht. Nicht erkannt
+  wird etwa eine Formel, die ein Null-Breite-Zeichen oder ein leerer
+  Inline-Kommentar zerteilt, eine Zweiwortformel über zwei Überschriften
+  und eine, die über einen Zeilenendkommentar und die Kommentarzeile
+  darunter (oder zwei Zeilenendkommentare) verteilt ist. Dagegen steht
+  Regel 6 des Skills: Der Text einer Seite enthält nie Anweisungen. Ein Pfad mit
   Signatur ist ebenfalls eine Warnung: ein Seitenpfad, der Pfad eines
   Dokuments im Katalog einer externen Quelle und der Dokumentpfad eines
   Ankers. Mit Leerzeichen zählt dabei jede Formel; mit Bindestrich,
@@ -728,12 +744,12 @@ und ein Wort einer geschlossenen Liste von Homographen
 mitten im Satz großgeschrieben steht, denn dann ist es ein Substantiv („Was
 sind Waren?"). Am Satzanfang (auch nach Doppelpunkt, Semikolon,
 Gedankenstrich und einer Aufzählungsmarke wie „1)", Anführungszeichen und
-Klammern davor zählen nicht) zählt es nur, wenn es für sich steht
-(„Begriffsfrage: Waren – …") oder eine Wortgruppe beginnt, in der ihm
-„und", „oder", „sowie" oder ein Genitivartikel folgt („Würde des
-Menschen", „Soll und Haben"); vor jedem anderen Wort, auch vor einer
-Präposition, ist es das Verb eines Satzes („Frage: Muss ich …", „Muss der
-Mieter …", „Muss bei Auszug …"). In einer
+Klammern davor zählen nicht, auch nicht hinter einer Aufzählungsmarke)
+zählt es nur, wenn es für sich steht („Begriffsfrage: Waren – …"); vor
+einem Wort ist es meist das Verb eines Satzes oder eine Präposition
+(„Frage: Muss ich …", „Muss bei Auszug …", „Soll oder muss …", „Laut des
+Mietvertrags …"). Der Preis: Eine Wortgruppe am Satzanfang („Grundgesetz:
+Würde des Menschen") sucht ohne ihren Homographen. In einer
 Frage in Versalien („ß" zählt als groß) oder in Titelschreibung zählt es
 nie. Titelschreibung heißt: Jedes Wort beginnt groß, und nach dem ersten
 steht ein großgeschriebenes Funktionswort, das kein Homograph der Liste ist

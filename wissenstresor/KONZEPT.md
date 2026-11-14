@@ -372,9 +372,8 @@ fällt heraus, unabhängig vom Katalog-Score. Bleibt nichts übrig, kommt nichts
 zurück. Funktionswörter der Frage sind seit v3 kein Anfragebegriff: Ein Satz,
 den nur ein „sie" oder ein „ohne" trifft, ist kein Fund. Ein Wort einer
 geschlossenen Liste von Homographen ist großgeschrieben mitten im Satz ein
-Substantiv und zählt („Waren"), am Satzanfang nur für sich stehend oder vor
-„und", „oder", „sowie" oder einem Genitivartikel („Würde des Menschen");
-eine Frage aus lauter Funktionswörtern sucht gar nicht
+Substantiv und zählt („Waren"), am Satzanfang nur für sich stehend; eine
+Frage aus lauter Funktionswörtern sucht gar nicht
 (`invalid_query`).
 
 **Begründung:** Der Katalogtext ist ein schwaches Signal, der Bestand dahinter
@@ -891,8 +890,11 @@ an Kanten und in Pfaden; seit v0.18.3 auch unter `coverage.omitted_pages`
 und am Beleg mit Signatur im Ankerpfad, seit v0.18.4 im Seitenpfad und in
 Code-Zäunen nach CommonMark; mit Bindestrich im Pfad nur „ignore …
 instructions"; seit v0.18.5 auch hinter Unicode-Leerraum vor `#` oder
-`<!--`, mit dem Einzug von CommonMark und im Kommentar am Ende einer
-Codezeile) · verschachteltes Frontmatter in jeder Form
+`<!--`; seit v0.18.6 auch in Text- und String-Zeilen mit `#`, in
+eingerückten Codeblöcken, hinter einem einzeiligen HTML-Kommentar und in
+Zäunen auf einer Listenmarke oder nach einer Lazy-Fortsetzung; gegen
+gezielte Verschleierung schützt Regel 6, nicht der Stolperdraht) ·
+verschachteltes Frontmatter in jeder Form
 (Blockform, Map-Liste, Tabulator) → Abbruch, und Unterschlüssel gelangen
 nie ins Frontmatter-Dictionary · fremde Dateiart, zweites Script oder
 gesetztes Ausführungsbit im Tresorbaum → Abbruch in `validate` und im

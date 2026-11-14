@@ -8,6 +8,7 @@ hier deshalb vor allem, dass es Verstöße findet, die ein Protokoll verschweigt
 
 import importlib.util
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -28,6 +29,12 @@ UMSCHREIBUNG = ("Welche Adresse fungiert als dauerhafter Schlüssel einer "
                 "Wissenseinheit?")
 NEGATIV = "Wie hoch ist der Urlaubsanspruch in Teilzeit?"
 BEGRIFF = "Welche Vertrauensstufen gibt es?"
+# Seit v0.17.0 ist Schritt 4c Pflicht, sobald nach der Vollsichtung etwas
+# ungedeckt bleibt. Im Testtresor ist X-0001 nicht gebunden und X-0002 hinter
+# dem Offline-Schalter: Gelesen wird nichts, und genau das steht in der Zeile.
+EXTERN = ("Extern nicht gelesen: X-0001 (nicht gebunden), X-0002 "
+          "(SKILLSAFE_OFFLINE gesetzt), Zustand unreachable — kein "
+          "Negativbefund")
 
 
 def _cli(root, *args):
@@ -94,17 +101,24 @@ class AntwortCheckTests(unittest.TestCase):
                 f"{fertig['sweep_fingerprint'][:12]}")
 
     def pruefe(self, antworten, stand=None, argumente=(), ort=None,
-               vault=None, cwd=None):
+               vault=None, cwd=None, offline=True):
         ziel = ort or (self.basis / f"protokoll-{self.id().split('.')[-1]}.json")
         daten = {"schema": SCHEMA, "antworten": antworten}
         if stand is not None:
             daten["stand"] = stand
         ziel.write_text(json.dumps(daten, ensure_ascii=False), encoding="utf-8")
+        # Die Nachprüfung von Schritt 4c hängt am Offline-Schalter der
+        # Umgebung; ohne Angabe läuft sie wie in der CI offline.
+        umgebung = dict(os.environ)
+        if offline:
+            umgebung["SKILLSAFE_OFFLINE"] = "1"
+        else:
+            umgebung.pop("SKILLSAFE_OFFLINE", None)
         result = subprocess.run(
             [sys.executable, "-B", str(TOOL), "--vault",
              str(vault or self.root), "--antworten", str(ziel), *argumente],
             cwd=cwd or REPOSITORY, text=True, stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE, check=False, timeout=180,
+            stderr=subprocess.PIPE, check=False, timeout=180, env=umgebung,
         )
         return result
 
@@ -121,7 +135,8 @@ class AntwortCheckTests(unittest.TestCase):
                         "\n\n" + self.zeile_sichtung(fertig)},
             {"id": "N1", "art": "negativ", "frage": NEGATIV, "quittung": negativ,
              "antwort": "Nicht im Bestand. Der Tresor enthält keine Aussage "
-                        "zum Urlaubsanspruch.\n" + self.zeile_sichtung(leer)},
+                        "zum Urlaubsanspruch.\n" + EXTERN + "\n"
+                        + self.zeile_sichtung(leer)},
             {"id": "B1", "frage": BEGRIFF, "erwartet": ["C-0305"],
              "antwort": "Laut Bestand gibt es vier Stufen (C-0305)."},
         ]
@@ -825,6 +840,11 @@ class AntwortCheckTests(unittest.TestCase):
             "id": "P5", "frage": BEGRIFF, "erwartet": ["C-0305"],
             "antwort": "Laut Bestand gibt es vier Stufen (C-0305). Gesichtet "
                        "habe ich 3 von 8 Claims der Kandidaten."})
+        # Schritt 4c ist jeweils ausgewiesen; geprüft werden hier nur die
+        # Angaben zur Sichtung.
+        for eintrag in antworten:
+            if eintrag.get("art") == "negativ":
+                eintrag["antwort"] += "\n" + EXTERN
         result = self.pruefe(antworten, argumente=["--json"])
         zeilen = {zeile["id"]: zeile
                   for zeile in json.loads(result.stdout)["zeilen"]}
@@ -956,7 +976,7 @@ class AntwortCheckTests(unittest.TestCase):
             {"id": "D1", "frage": "Was regelt C-9999 zur Mietminderung?",
              "erwartet": ["C-0401"], "quittung": quittung_frage,
              "antwort": kern + "Nicht im Bestand: Inhalt von C-9999\n"
-                        + self.zeile_sichtung(fertig_frage)},
+                        + EXTERN + "\n" + self.zeile_sichtung(fertig_frage)},
             # Kennungsfall: ein Vorschlag ist ein Zitat.
             {"id": "C1", "art": "negativ", "frage": "Was steht in C-9999?",
              "antwort": "Die Kennung C-9999 gibt es im Bestand nicht. "
@@ -1006,7 +1026,7 @@ class AntwortCheckTests(unittest.TestCase):
              "quittung": quittung_neg,
              "antwort": "Nicht im Bestand.\n" + zeile_neg + "\nHinweise: "
                         "Laut Sichtung stammen alle 10 Claims zu OKF v0.2 aus "
-                        "S-0004."},
+                        "S-0004.\n" + EXTERN},
             # Im Kennungsfall eine Zeile "Sichtung: entfällt".
             {"id": "E1", "art": "negativ", "frage": "Was steht in C-9999?",
              "antwort": "Die Kennung C-9999 gibt es im Bestand nicht.\n\n"
@@ -1122,6 +1142,104 @@ class AntwortCheckTests(unittest.TestCase):
         self.assertIn("zitiert Claim-IDs, die es im Bestand nicht gibt: "
                       "C-9998", zeilen["D2"]["verstoesse"])
 
+    def test_step_4c_is_checked_where_the_contract_makes_it_mandatory(self):
+        """Seit v0.17.0 wird Schritt 4c nie still ausgelassen.
+
+        Bleibt die Frage nach der Vollsichtung ungedeckt und sind Quellen
+        aufgeführt, weist die Antwort aus, was extern gefunden oder nicht
+        gelesen wurde, oder dass der Schritt unterblieb. Das Werkzeug rechnet
+        die Abfrage mit --extern selbst nach, immer offline.
+        """
+        quittung, leer = self.sichtung(NEGATIV)
+        kern = "Nicht im Bestand.\n" + self.zeile_sichtung(leer) + "\n"
+
+        def zeile(antwort, **weiter):
+            ergebnis = self.pruefe([{
+                "id": "N1", "art": "negativ", "frage": NEGATIV,
+                "quittung": quittung, "antwort": antwort}],
+                argumente=["--json"], **weiter)
+            daten = json.loads(ergebnis.stdout)
+            return daten["zeilen"][0], daten["zusammenfassung"]
+
+        still, summe = zeile(kern)
+        self.assertTrue(still["extern_pflicht"])
+        self.assertEqual(summe["pflicht_extern"], 1)
+        self.assertTrue(any(m.startswith("Schritt 4c fehlt")
+                            for m in still["verstoesse"]), still)
+        sauber, _ = zeile(kern + EXTERN)
+        self.assertEqual(sauber["verstoesse"], [])
+        # Als Liste unter dem Etikett, hervorgehoben: dieselbe Angabe.
+        liste, _ = zeile(kern + "**Extern nicht gelesen:**\n- X-0001: nicht "
+                         "gebunden\n- X-0002: SKILLSAFE_OFFLINE gesetzt\n\n"
+                         "Hinweise: keine")
+        self.assertEqual(liste["verstoesse"], [])
+        halb, _ = zeile(kern + "Extern nicht gelesen: X-0001 (nicht gebunden) "
+                        "— kein Negativbefund")
+        self.assertTrue(any("fehlt für X-0002" in m
+                            for m in halb["verstoesse"]), halb)
+        # Unterbleibt der Schritt, nennt die Zeile jede aufgeführte Quelle.
+        verzicht, _ = zeile(kern + "Extern nicht gelesen: X-0001, X-0002 nicht "
+                            "nachgeschlagen (Nutzer wünscht keine externe "
+                            "Suche) — kein Negativbefund")
+        self.assertEqual(verzicht["verstoesse"], [])
+        verzicht_halb, _ = zeile(kern + "Extern nicht gelesen: X-0001 nicht "
+                                 "nachgeschlagen (Nutzerwunsch) — kein "
+                                 "Negativbefund")
+        self.assertTrue(any("X-0002 fehlt" in m
+                            for m in verzicht_halb["verstoesse"]), verzicht_halb)
+        # Ohne Offline-Schalter in der Umgebung bleibt offen, was die
+        # Netzquelle geliefert hätte: ein Hinweis, kein Verstoß.
+        online, _ = zeile(kern + "Extern nicht gelesen: X-0001 (nicht gebunden) "
+                          "— kein Negativbefund", offline=False)
+        self.assertEqual(online["verstoesse"], [])
+        self.assertTrue(any("Netzquelle nicht nachgeprüft (X-0002)" in h
+                            for h in online["hinweise"]), online)
+        # Ein Protokoll vom Stand vor v0.17.0 wird ohne die Regel geprüft.
+        for version, pflicht in (("0.16.0", False), ("0.17.0", True),
+                                 ("1.2.0", True)):
+            with self.subTest(stand=version):
+                alt, _ = zeile(kern, stand={"version": version})
+                self.assertEqual(alt["extern_pflicht"], pflicht)
+                self.assertEqual(any(m.startswith("Schritt 4c fehlt")
+                                     for m in alt["verstoesse"]), pflicht)
+
+    def test_step_4c_with_a_bound_source_needs_the_external_hits(self):
+        """Gebunden liest die Abfrage X-0001; ihre Treffer gehören in die Antwort."""
+        gebunden = self.basis / "gebunden" / "wissenstresor"
+        shutil.copytree(self.root, gebunden)
+        bindung = _cli(gebunden, "extern", "bind", "X-0001",
+                       str(REPOSITORY / "beispiel-extern"))
+        self.assertEqual(bindung.returncode, 0, bindung.stdout + bindung.stderr)
+        frage = "Welche Vektordatenbank empfiehlt der Bestand?"
+        quittung, leer = self.sichtung(frage, root=gebunden)
+        extern = json.loads(subprocess.run(
+            [sys.executable, "-B", str(gebunden / "scripts/vault.py"), "query",
+             "--extern", frage], cwd=gebunden, text=True,
+            stdout=subprocess.PIPE, check=False, timeout=60,
+            env=dict(os.environ, SKILLSAFE_OFFLINE="1")).stdout)["external"]
+        self.assertEqual(extern["state"], "external_candidates_found", extern)
+        kern = "Nicht im Bestand.\n" + self.zeile_sichtung(leer) + "\n"
+        ungelesen = ("Extern nicht gelesen: X-0002 (SKILLSAFE_OFFLINE gesetzt) "
+                     "— kein Negativbefund")
+        treffer = extern["hits"][0]
+        hinweis = (f"Extern (nicht im Bestand): {treffer['source_id']} "
+                   f"{treffer['document']}, Satz {treffer['sentence_index']}")
+
+        def verstoesse(antwort):
+            ergebnis = self.pruefe([{
+                "id": "N1", "art": "negativ", "frage": frage,
+                "quittung": quittung, "antwort": antwort}],
+                argumente=["--json"], vault=gebunden)
+            return json.loads(ergebnis.stdout)["zeilen"][0]["verstoesse"]
+
+        self.assertEqual(verstoesse(kern + hinweis + "\n" + ungelesen), [])
+        ohne_treffer = verstoesse(kern + ungelesen)
+        self.assertTrue(any("keine Zeile „Extern (nicht im Bestand):\"" in m
+                            for m in ohne_treffer), ohne_treffer)
+        ohne_ungelesen = verstoesse(kern + hinweis)
+        self.assertTrue(any("fehlt für X-0002" in m
+                            for m in ohne_ungelesen), ohne_ungelesen)
+
     def test_form_does_not_fool_the_tool(self):
         """Umbruch, Hervorhebung, Doppelpunkt: derselbe Verstoß, andere Form."""
         quittung, fertig = self.sichtung(NEGATIV)
@@ -1199,7 +1317,7 @@ class AntwortCheckTests(unittest.TestCase):
             with self.subTest(form=name):
                 result = self.pruefe([{
                     "id": "N1", "art": "negativ", "frage": NEGATIV,
-                    "quittung": quittung, "antwort": antwort}])
+                    "quittung": quittung, "antwort": antwort + "\n" + EXTERN}])
                 self.assertEqual(
                     result.returncode, 0, result.stdout + result.stderr)
 
@@ -1435,10 +1553,15 @@ class AntwortCheckTests(unittest.TestCase):
                             tool._sichtungsangaben(eintrag["antwort"]),
                             eintrag["id"])
                 self.assertEqual(ergebnis["positiv_gefunden"], gefunden)
+                # Abgelehnt ist „Nicht im Bestand", bei vorgegebenem Umfang
+                # auch „in diesem Umfang nicht gefunden" (antworten.md, 4b).
                 abgelehnt = sum(
                     1 for eintrag in antworten
                     if eintrag.get("art") == "negativ"
-                    and tool._sagt_nicht_im_bestand(eintrag["antwort"]))
+                    and (tool._sagt_nicht_im_bestand(eintrag["antwort"])
+                         or (eintrag.get("umfang_vorgegeben")
+                             and tool._sagt_im_umfang_nicht(
+                                 eintrag["antwort"]))))
                 # Dazu die Antworten auf eine Frage nach einer Kennung, die es
                 # nicht gibt: ohne Formel und ohne Quittung, aber mit der
                 # Kennung im Wortlaut (antworten.md, Schritt 2b).

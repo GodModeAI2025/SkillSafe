@@ -29,7 +29,7 @@ geschützte `dir_fd`-Operationen fail-closed ab.
 📖 **Konzept & Architekturentscheidungen:** [`wissenstresor/KONZEPT.md`](wissenstresor/KONZEPT.md)
 🌐 **Landingpage:** [`index.html`](index.html) (GitHub-Pages-fähig, Source = repo root)
 
-**Aktueller Release: v0.17.0** (Profil `oksv-lite/1.3`) mit Begriffswelten,
+**Aktueller Release: v0.18.0** (Profil `oksv-lite/1.3`) mit Begriffswelten,
 deterministischem Hybrid-Retrieval, geprüften Bild-/PDF-Regionen und einem
 reproduzierbaren `.skill`-Paket für Claude Code und Codex. Der
 Frontmatter-Parser lehnt Verschachtelung fail-closed ab statt sie still
@@ -211,9 +211,24 @@ bleibt `hybrid-local/v4`. Auf `main` meldete v0.12.0 lokal ebenfalls
 „hybrid-local/v2", ein anderes Ranking als das gleichnamige dieser Folge;
 Fingerabdrücke aus beiden sind nicht vergleichbar.
 
-Abnahme: 235 Tests bestanden · 37 manifestierte Dateien · 39 sichere
+v0.18.0 schließt, was nach der Zusammenführung offen war, und setzt um, was
+Abnahmerunde 5 fand. `tools/antwort_check.py` prüft jetzt auch Schritt 4c.
+Titel, Tags, der übrige Seitentext und die Registerangaben einer Quelle
+fallen unter den Stolperdraht für Instruktionssignaturen: `validate` warnt,
+`query` und `sweep` geben ein solches Feld nicht aus und markieren Seite oder
+Quelle mit `suspicious_instruction`. Das Rezept für einen eigenen Tresor
+ersetzt auch `knowledge/demo-extern/` und die Demo-Quellen; ein Test spielt
+es nach. `fallback.external_source_ids` nennt die aufgeführten Quellen auch
+ohne `--extern`, damit ein ausgewiesener Verzicht auf Schritt 4c ihre
+Kennungen kennt. Der Antworten-Vertrag klärt `live: true` ohne Netzabruf,
+die Formel für T3-Quellen, `fallback.page_paths`, den vorgegebenen Umfang
+bei `partial` und die Grenze zwischen Lesart und Zusatz bei einem
+verneinenden Claim und bei einem engeren Begriff. Das lokale Ranking bleibt
+`hybrid-local/v4`, das externe `extern-zweistufig/v2`.
+
+Abnahme: 239 Tests bestanden · 37 manifestierte Dateien · 39 sichere
 Paketeinträge · SHA-256
-`0db94073cb8e10c9ae4e476984434d869e492be62a8fb2c1aa2700fdf08945a6`.
+`ea0aafb1ede2ea0b3e302d0b85736c07b0f2177aa85fc335c3303effcd67f8fb`.
 Dazu 2 aufgeführte externe Bezugsquellen · 2 Satzanker.
 
 Alles läuft mit der Python-Standardbibliothek, gemessen mit CPython 3.9 und
@@ -351,7 +366,7 @@ bewegt.
 
 ### Ende zu Ende: Folgt ein Modell dem Verfahren?
 
-Das misst kein Gold. Zwanzig frische Agenten bekamen je einen entpackten
+Das misst kein Gold. Vierundzwanzig frische Agenten bekamen je einen entpackten
 Skill-Ordner und Nutzerfragen im Wortlaut, ohne Erklärung des Verfahrens.
 Ausgewertet hat ein Werkzeug, das dem Agenten nichts glaubt: Es liest aus dem
 Protokoll nur Frage, Antworttext und Quittungseinträge und fährt jede Quittung
@@ -363,18 +378,24 @@ erneut gegen die Engine.
 | Ende zu Ende, Runde 2 | v0.13.0 | 12 | 8 | 8 | 8 | 8 | 4 | 4 | **0** |
 | Ende zu Ende, Runde 3 | v0.14.0 | 12 | 7 | 7 | 5 | 5 | 5 | 5 | **0** |
 | Ende zu Ende, Runde 4 | v0.15.0 | 12 | 7 | 7 | 4 | 4 | 5 | 5 | **0** |
+| Ende zu Ende, Runde 5 | v0.17.0 | 12 | 5 | 5 | 2 | 2 | 6 | 6 | **0** |
 
 *mit Claim:* Fragen, zu denen ein Claim im Bestand steht · *Ranking verfehlt:*
 davon solche, deren Claim das Ranking nicht lieferte · *negativ:* Fragen, die
 der Bestand nicht beantwortet · *Verstöße:* „Nicht im Bestand" ohne
 vollständige Quittung, ausgelassene Pflicht-Vollsichtung, ungültige Quittung,
-erfundene Claim-ID, übersehener Claim.
+erfundene Claim-ID, übersehener Claim, ab Runde 5 auch ein still
+ausgelassener Schritt 4c.
 
-Alle 36 Fragen, deren Claim das Ranking verfehlte, wurden über die
-Vollsichtung gefunden. Alle 22 Negativfragen wurden korrekt abgelehnt: 21 mit
-gültiger Quittung als „Nicht im Bestand", 1 mit dem Befund des Scripts, dass
-es die erfragte Kennung nicht gibt (Runde 4; dafür braucht es seit v0.15.0
-keine Sichtung). In Runde 2 bis 4 liefen je sechs Sichtungen über drei Stapel.
+Alle 38 Fragen, deren Claim das Ranking verfehlte, wurden über die
+Vollsichtung gefunden. Alle 28 Negativfragen wurden korrekt abgelehnt: 26 mit
+gültiger Quittung als „Nicht im Bestand" oder „in diesem Umfang nicht gefunden", 2 mit
+dem Befund des Scripts, dass es die erfragte Kennung nicht gibt (Runde 4 und 5;
+dafür braucht es seit v0.15.0 keine Sichtung).
+In Runde 2 bis 5 liefen je sechs Sichtungen über drei Stapel. Runde 5 galt der Pflicht zu
+Schritt 4c: X-0001 war gebunden, die Umgebung offline. Bei sieben Antworten
+war der Schritt fällig; sechs schlugen extern nach und wiesen Treffer und
+Ungelesenes aus, eine nannte den Verzicht, um den der Nutzer gebeten hatte.
 Was das nicht zeigt: wie sorgfältig ein Modell einen Bestand mit 189 Stapeln
 liest. Die Messung gilt für 28 Claims und Agenten aus derselben Modellfamilie.
 
@@ -434,8 +455,11 @@ python3 tools/rangfolge_check.py --vault <tresor> --gold <gold.json> --stand <st
 
 Ob ein Agent mit dem eigenen Bestand der Vollsichtung und den Regeln für
 „Nicht im Bestand" folgt (Pflicht-Vollsichtung, gültige Quittung, Zeile
-„Sichtung:", nur vorhandene Kennungen), prüft das dritte Werkzeug. Ob er
-Schritt 4c gefahren oder sichtbar ausgelassen hat, prüft es nicht. Es braucht
+„Sichtung:", nur vorhandene Kennungen), prüft das dritte Werkzeug, seit
+v0.18.0 auch Schritt 4c: Bleibt die Frage nach der Vollsichtung ungedeckt und
+sind Quellen aufgeführt, muss die Antwort externe Treffer und Ungelesenes
+ausweisen oder den Verzicht nennen. Die Abfrage mit `--extern` rechnet es
+dafür selbst nach, immer offline. Es braucht
 ein Protokoll mit Frage, Antworttext und den an
 `--receipt` übergebenen Einträgen; das Format steht in
 [`tests/e2e/LIESMICH.md`](tests/e2e/LIESMICH.md):

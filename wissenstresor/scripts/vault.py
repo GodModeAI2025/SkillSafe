@@ -323,6 +323,36 @@ PROMPT_INJECTION_RE = re.compile(
     r"system\s+prompt|developer\s+message|<\s*system\s*>)",
     re.IGNORECASE,
 )
+
+
+def _hat_signatur(wert):
+    """Trägt ein Textfeld eine offensichtliche Instruktionssignatur?"""
+    return isinstance(wert, str) and bool(PROMPT_INJECTION_RE.search(wert))
+
+
+def _ohne_signatur(eintrag, felder):
+    """Kuratierte Textfelder so, wie query und sweep sie ausgeben.
+
+    Claim und Fundstelle mit Instruktionssignatur sind nie freigabefähig.
+    Titel, Tags und Registerangaben sind kuratierter Text daneben: validate
+    meldet eine Signatur dort als Warnung, und die Ausgabe lässt das Feld weg
+    (None; aus einer Liste nur den betroffenen Eintrag). Der Eintrag trägt
+    dann ``suspicious_instruction: true``. Ohne Treffer bleibt er, wie er ist,
+    auch ohne das Feld."""
+    markiert = False
+    for feld in felder:
+        wert = eintrag.get(feld)
+        if isinstance(wert, list):
+            sauber = [teil for teil in wert if not _hat_signatur(teil)]
+            if len(sauber) != len(wert):
+                eintrag[feld] = sauber
+                markiert = True
+        elif _hat_signatur(wert):
+            eintrag[feld] = None
+            markiert = True
+    if markiert:
+        eintrag["suspicious_instruction"] = True
+    return eintrag
 # Zugangsdaten im ausgelieferten Wissen. Bewusst wenige, präzise Formen statt
 # einer Entropie-Heuristik: ein Fehlalarm blockiert validate und damit jeden
 # Release, also zählt jede Form nur, wenn sie praktisch nie zufällig in Prosa
@@ -2543,9 +2573,13 @@ def lade_seiten(register, typen, reltypen, concepts=None, media=None,
                     f"{rp}: externe Quelle {xid} steht nicht in "
                     f"{rel(EXTERN_REGISTER)}"
                 )
+        if _hat_signatur(fm.get("title")):
+            warnungen.append(
+                f"{rp}: Titel enthält eine offensichtliche "
+                f"Instruktionssignatur — query und sweep geben ihn nicht aus")
         tags = fm.get("tags", [])
         if isinstance(tags, list):
-            for tag in tags:
+            for nummer, tag in enumerate(tags, 1):
                 if not isinstance(tag, str) or not _retrieval_norm(tag):
                     fehler.append(f"{rp}: ungültiger oder leerer Tag {tag!r}")
                 elif any(zeichen in tag for zeichen in ",[]"):
@@ -2553,6 +2587,13 @@ def lade_seiten(register, typen, reltypen, concepts=None, media=None,
                         f"{rp}: Tag {tag!r} enthält ',' '[' oder ']'; in der "
                         f"Inline-Listenform ist das nicht darstellbar und "
                         f"zerlegt den Wert")
+                elif _hat_signatur(tag):
+                    # Ohne Wortlaut: query und sweep geben die Warnungen mit
+                    # aus, und dort darf die Signatur nicht stehen.
+                    warnungen.append(
+                        f"{rp}: Tag Nr. {nummer} enthält eine offensichtliche "
+                        f"Instruktionssignatur — query und sweep geben ihn "
+                        f"nicht aus")
         concept_ids = fm.get("concepts", [])
         if not isinstance(concept_ids, list):
             concept_ids = []
@@ -2571,6 +2612,12 @@ def lade_seiten(register, typen, reltypen, concepts=None, media=None,
         for bn, line in enumerate(body.split("\n"), 1):
             n = offset + bn
             if not line.startswith(CLAIM_START):
+                # Kurzfassung, Kontext und Grenzen: Die Engine gibt sie nicht
+                # aus, der Antworten-Workflow liest die Seite aber ganz.
+                if _hat_signatur(line):
+                    warnungen.append(
+                        f"{rp}:{n}: Instruktionssignatur im Text der Seite "
+                        f"außerhalb der Claims — das Modell liest ihn mit")
                 continue
             m = CLAIM_RE.match(line)
             if not m:
@@ -2877,6 +2924,18 @@ def cmd_validate(still=False):
     except (OSError, UnicodeError) as exc:
         seiten, claims, warnungen = {}, {}, []
         fehler.append(f"knowledge: Seiten können nicht vollständig gelesen werden — {exc}")
+    # Titel, Stand und Rechte einer Quelle gibt query an jedem Beleg aus. Eine
+    # Instruktionssignatur dort ist eine Warnung; ausgegeben wird das Feld dann
+    # nicht (_ohne_signatur).
+    for name, reg in ((rel(REGISTER), register), (rel(EXTERN_REGISTER), extern)):
+        for kennung, zeile in sorted(reg.items()):
+            for feld, schluessel in (("Titel", "titel"),
+                                     ("Stand/Version", "stand"),
+                                     ("Rechte", "rechte")):
+                if _hat_signatur(zeile.get(schluessel)):
+                    warnungen.append(
+                        f"{name}: {kennung} {feld} enthält eine offensichtliche "
+                        f"Instruktionssignatur — query gibt das Feld nicht aus")
 
     for concept_id, concept in sorted(concepts.items()):
         claim_id = concept.get("definition_claim")
@@ -3153,6 +3212,7 @@ def _query_base(query, state, *, manifest_digest=None, version=None,
             # Antwort-Workflow genau dann entscheiden muss, ob Schritt 4c
             # existiert. '…_used' ist das ERGEBNIS (wurde live gelesen?).
             "external_lookup_available": False,
+            "external_source_ids": [],
             "external_live_lookup_used": False,
             "external_reason": None,
             "external_document_paths": [],
@@ -3490,7 +3550,7 @@ def _evidence_item(snapshot, path, claim, score, reasons,
         "reasons": sorted(set(reasons)),
         "kind": claim["art"],
         "text": claim["text"],
-        "source": {
+        "source": _ohne_signatur({
             "id": claim["quelle"],
             "kind": source.get("kind"),
             "title": source.get("titel"),
@@ -3498,7 +3558,7 @@ def _evidence_item(snapshot, path, claim, score, reasons,
             "trust": source.get("trust"),
             "rights": source.get("rechte"),
             "locator": claim["fundstelle"],
-        },
+        }, ("title", "stand", "rights")),
         "signals": [],
         "media": None,
         "anchor": None,
@@ -3573,7 +3633,7 @@ def _seiten_relationen(pages):
 
 def _page_summary(snapshot, path, score, reasons, kanten):
     fm = snapshot["pages"][path]["fm"]
-    return {
+    return _ohne_signatur({
         "path": path,
         "title": fm.get("title"),
         "domain": fm.get("domain"),
@@ -3587,7 +3647,7 @@ def _page_summary(snapshot, path, score, reasons, kanten):
         "reasons": sorted(set(reasons)),
         "concepts": sorted(fm.get("concepts", [])),
         "relations": kanten[path],
-    }
+    }, ("title",))
 
 
 def _wortform_varianten(terms, tokenmengen):
@@ -4272,6 +4332,9 @@ def build_query_result(snapshot, world=None, limit=8):
             },
             "external_lookup_available": bool(
                 snapshot["extern"]["register"]),
+            # Welche Quellen aufgeführt sind, auch ohne --extern: Unterbleibt
+            # Schritt 4c, nennt die Antwort genau diese Kennungen.
+            "external_source_ids": sorted(snapshot["extern"]["register"]),
             "external_live_lookup_used": False,
             "external_reason": None,
             "external_document_paths": [],
@@ -4573,8 +4636,10 @@ def build_sweep_result(snapshot, batch=None, receipt=None,
         result = _sweep_basis(query, "batch", snapshot, warnings=warnings)
         result.update(kopf)
         result["batch"] = batch
+        # Jeder Stapel wird ganz gelesen: Titel und Tags mit
+        # Instruktionssignatur stehen deshalb nicht darin (_ohne_signatur).
         result["pages"] = [
-            {
+            _ohne_signatur({
                 "path": pfad,
                 "title": snapshot["pages"][pfad]["fm"].get("title"),
                 "domain": snapshot["pages"][pfad]["fm"].get("domain"),
@@ -4590,7 +4655,7 @@ def build_sweep_result(snapshot, batch=None, receipt=None,
                     }
                     for claim in claims
                 ],
-            }
+            }, ("title", "tags"))
             for pfad, claims in gruppe
         ]
         result["seal"] = siegel[batch - 1]
@@ -5756,13 +5821,13 @@ def build_external_result(snapshot, query, quellen_filter=None):
         if quellen_filter and xid not in quellen_filter:
             continue
         status = _extern_quelle_status(xid, zeile, bindung)
-        eintrag = {
+        eintrag = _ohne_signatur({
             "id": xid, "title": zeile["titel"], "kind": zeile["art"],
             "scope": zeile["scope"], "trust": zeile["trust"],
             "rights": zeile["rechte"], "target": zeile["ziel"],
             "bound": status["modus"] != "unbound",
             "mode": status["modus"],
-        }
+        }, ("title", "rights"))
         block["sources"].append(eintrag)
         if status["modus"] == "unbound":
             nicht_gelesen("not_bound", status["grund"])

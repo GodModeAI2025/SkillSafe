@@ -325,8 +325,15 @@ vollständige Quittung, eine ausgelassene Pflicht-Vollsichtung, eine ungültige
 Quittung, eine Zeile „Sichtung:" mit anderen Zahlen oder einer fremden
 Kennung, eine Angabe „Sichtung:" ohne eingereichte Quittung, eine
 erfundene Claim-ID und, wenn das Protokoll `erwartet` führt, ein
-übersehener Claim. Ob Schritt 4c lief oder sichtbar ausgelassen wurde, prüft
-das Werkzeug nicht. Exit 1 bei einem Verstoß, 2 bei unbrauchbarem
+übersehener Claim. Seit v0.18.0 auch ein still ausgelassener Schritt 4c:
+Bleibt die Frage nach der Vollsichtung ungedeckt und sind Quellen aufgeführt,
+verlangt das Werkzeug die Zeile „Extern (nicht im Bestand):" für jeden
+Treffer, den die Abfrage mit `--extern` liefert, „Extern nicht gelesen:" für
+jede ungelesene Quelle, oder den ausgewiesenen Verzicht mit allen
+Kennungen. Die Abfrage rechnet es selbst nach, immer offline; was eine
+Netzquelle geliefert hätte, prüft es nur, wenn auch die Umgebung
+`SKILLSAFE_OFFLINE` setzt. Für Protokolle, deren Stand älter ist als v0.17.0,
+gilt die Regel nicht. Exit 1 bei einem Verstoß, 2 bei unbrauchbarem
 Protokoll oder falschem Stand.
 
 **Siegel gelten für ihren Stand.** Nach jedem Release sind alte Quittungen
@@ -537,13 +544,13 @@ Der ausgelieferte Bestand dokumentiert SkillSafe selbst (`knowledge/demo-okf/`)
 und zeigt an einer Seite, wie ein extern belegter Claim aussieht
 (`knowledge/demo-extern/`, dazu X-0001 und X-0002 in `sources/EXTERN.md`). Für
 den praktischen Einsatz gehört er ersetzt. Das Rezept steht in
-`wissenstresor/references/mehrere-tresore.md`, Abschnitt 4. Nachgefahren wurde
-es mit v0.10.0, vor den externen Quellen; seit v0.11.0 reicht es allein nicht.
-Bleibt `knowledge/demo-extern/` stehen, bricht `release major` ab („Domäne
-'demo-extern' hat keinen Abschnitt"). Bleibt X-0002 aufgeführt, schlägt der
-neue Tresor bei jeder Antwort, die nach der Vollsichtung etwas offenlässt, im
-SkillSafe-Repositorium nach (Schritt 4c). Mit den Ergänzungen unten endet das
-Rezept grün: `release major` ergibt v1.0.0, `doctor` meldet nichts.
+`wissenstresor/references/mehrere-tresore.md`, Abschnitt 4. Von v0.11.0 bis
+v0.17.0 ließ es `knowledge/demo-extern/` und die Demo-Quellen stehen: Dann
+brach `release major` ab („Domäne 'demo-extern' hat keinen Abschnitt"), und
+mit X-0002 schlüge der neue Tresor bei jeder Antwort, die nach der
+Vollsichtung etwas offenlässt, im SkillSafe-Repositorium nach (Schritt 4c).
+Seit v0.18.0 nennt Schritt 3 beides; ein Test spielt das Rezept nach und
+verlangt `release major` mit v1.0.0 und ein grünes `doctor`.
 
 Zwei Dinge, die dort noch nicht stehen:
 

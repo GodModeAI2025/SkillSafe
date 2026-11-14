@@ -12,6 +12,7 @@ der Antwort und die Einträge, die er an `sweep --receipt` übergeben hat.
 | `runde-2.json` | v0.13.0 | `3896b9f` | 4 | 12 |
 | `runde-3.json` | v0.14.0 | `94c8481` | 4 | 12 |
 | `runde-4.json` | v0.15.0 | `ddb9924` | 4 | 12 |
+| `runde-5.json` | v0.17.0 | `d275b06` | 4 | 12 |
 
 ## Nachrechnen
 
@@ -29,6 +30,25 @@ python3 tools/antwort_check.py --vault /tmp/stand-runde-1/wissenstresor \
 
 Für Runde 2 dasselbe mit `3896b9f` und `runde-2.json`, für Runde 3 mit
 `94c8481` und `runde-3.json`, für Runde 4 mit `ddb9924` und `runde-4.json`.
+Runde 5 lief mit gebundener Quelle X-0001 und ohne Netz; so wird sie auch
+nachgerechnet:
+
+```bash
+mkdir -p /tmp/stand-runde-5
+git archive d275b06 wissenstresor beispiel-extern | tar -x -C /tmp/stand-runde-5
+(cd /tmp/stand-runde-5/wissenstresor && python3 scripts/vault.py extern bind \
+    X-0001 /tmp/stand-runde-5/beispiel-extern)
+SKILLSAFE_OFFLINE=1 python3 tools/antwort_check.py \
+    --vault /tmp/stand-runde-5/wissenstresor --antworten tests/e2e/runde-5.json
+```
+
+Seit v0.18.0 prüft das Werkzeug auch Schritt 4c: Bleibt eine Frage nach der
+Vollsichtung ungedeckt und sind Quellen aufgeführt, muss die Antwort externe
+Treffer und Ungelesenes ausweisen oder den Verzicht nennen. Für Protokolle,
+deren Stand älter ist als v0.17.0, prüft es den Schritt nicht; ihr Vertrag
+stellte ihn frei. Die Abfrage mit `--extern` rechnet es selbst nach, immer
+offline: Was eine Netzquelle geliefert hätte, prüft es nur, wenn auch die
+Umgebung `SKILLSAFE_OFFLINE` setzt.
 Das Werkzeug glaubt dem Protokoll nichts: Es fragt die Trefferstärke jeder
 Frage neu ab, fährt jede Quittung erneut gegen die Engine und liest die
 zitierten Claim-IDs aus dem Antworttext.
@@ -44,12 +64,14 @@ Gegenstand der Antwort und kein Zitat; `ergebnis` stammt aus dieser Fassung.
 
 ## Was die Zahlen sagen und was nicht
 
-68 Fragen, ein Demo-Bestand mit 28 Claims, Agenten aus derselben
-Modellfamilie, und die Fragen stammen bis auf sieben aus
+80 Fragen, ein Demo-Bestand mit 28 Claims, Agenten aus derselben
+Modellfamilie, und die Fragen stammen bis auf fünfzehn aus
 `tests/gold/recall-demo.json`; Runde 3 und 4 fragten zusätzlich nach zwei
 kuratierten Begriffen in einer Frage, nach Kennungen, die es nicht gibt,
 nach einem unvertretenen Begriff, mit einem Vergleichsoperator und nach dem
-Werkzeug selbst. Gemessen ist damit, dass der
+Werkzeug selbst; Runde 5 nach Fragen, die nach der Vollsichtung ganz oder
+teilweise offen bleiben, mit und ohne externen Treffer, nach einer Domäne im
+Wortlaut und mit einem erbetenen Verzicht auf externe Quellen. Gemessen ist damit, dass der
 Antworten-Vertrag befolgbar ist und befolgt wurde: keine Abstention ohne
 vollständige Quittung, keine ausgelassene Pflicht-Vollsichtung, kein
 erfundener Claim. Nicht gemessen ist, wie sorgfältig ein Modell einen Bestand

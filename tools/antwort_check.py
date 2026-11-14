@@ -19,8 +19,9 @@ hat. Alles andere rechnet die Engine hier neu:
 Ein Verstoß ist, was der Vertrag verbietet: „Nicht im Bestand" ohne
 vollständige Quittung, eine ausgelassene Pflicht-Vollsichtung, eine ungültige
 Quittung, eine Zeile „Sichtung:", die andere Zahlen oder eine andere Kennung
-nennt als die Quittung, eine erfundene Claim-ID. Trägt ein Eintrag
-``erwartet``, kommt die Messfrage dazu: Wurde der erwartete Claim gefunden?
+nennt als die Quittung, eine erfundene Claim-ID, ein still ausgelassener
+Schritt 4c. Trägt ein Eintrag ``erwartet``, kommt die Messfrage dazu: Wurde
+der erwartete Claim gefunden?
 
 Eine einzige Antwort kommt ohne Vollsichtung aus, obwohl das Ranking nichts
 verstanden hat: die auf eine Frage, die nichts als Kennungen nennt, die es
@@ -49,6 +50,22 @@ oder Seite als Umfang, erfüllt die Sichtung dieses Umfangs die Pflicht, und
 „in diesem Umfang nicht gefunden" ist eine korrekte Ablehnung. Das weiß nur,
 wer die Messung baut: Der Eintrag trägt dann ``umfang_vorgegeben: true`` und
 den Umfang in ``sweep_args``.
+
+Schritt 4c ist seit dem Vertrag von v0.17.0 Pflicht. Bleibt eine Frage nach
+der Vollsichtung des ganzen Bestands ganz oder teilweise ungedeckt (die
+Antwort sagt „Nicht im Bestand", auch als Zeile „Nicht im Bestand: …") und
+sind externe Quellen aufgeführt (``fallback.external_lookup_available``),
+weist die Antwort aus, was extern gefunden oder nicht gelesen wurde: je
+Treffer eine Zeile „Extern (nicht im Bestand):", für jede ungelesene Quelle
+„Extern nicht gelesen:", oder den Verzicht („… nicht nachgeschlagen
+(<Grund>) — kein Negativbefund") mit jeder aufgeführten Quelle. Nie im
+Kennungsfall, nie bei begrenztem Umfang. Die Abfrage mit ``--extern`` rechnet
+das Werkzeug selbst nach, mit gesetztem Offline-Schalter: Es ruft nichts ab
+und schreibt nichts in log.md. Was eine Netzquelle geliefert hätte, weiß es
+deshalb nur, wenn auch der Lauf offline war (``SKILLSAFE_OFFLINE`` in seiner
+Umgebung); sonst bleibt sie ein Hinweis. Ein Protokoll, dessen
+``stand.version`` älter ist als 0.17.0, wird ohne diese Regel geprüft: Sein
+Vertrag stellte den Schritt frei.
 
 Kennungen mit typografischem Strich (C‑0001 mit U+2011, C–0001) liest das
 Werkzeug als Kennung. Eine Angabe zur Sichtung ist die Zeile „Sichtung:" in
@@ -87,6 +104,7 @@ falschem Stand.
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
@@ -130,13 +148,23 @@ FORMEL_STOERER = re.compile(r"[*_`\u00ad\u200b\u200c\u200d\u2060\ufeff]")
 SWEEP_SCHALTER = {"--size", "--domain", "--page"}
 # Kanten, denen der Antworten-Workflow zu einer weiteren Seite folgt.
 LESEKANTEN = {"ersetzt", "widerspricht"}
+# Schritt 4c (externer Fallback) ist seit dem Vertrag von v0.17.0 Pflicht.
+# Ein Protokoll, dessen Stand älter ist, wird ohne diese Regel geprüft: Seine
+# Agenten arbeiteten nach einem Vertrag, der den Schritt freistellte.
+VERTRAG_4C = (0, 17, 0)
+# Die Zeilen, mit denen eine Antwort Schritt 4c ausweist (antworten.md, 4c).
+EXTERN_TREFFER_RE = re.compile(r"(?i)^extern\s*\(\s*nicht\s+im\s+bestand\s*\)\s*:")
+EXTERN_UNGELESEN_RE = re.compile(r"(?i)^extern\s+nicht\s+gelesen\s*:")
+X_KENNUNG_RE = re.compile(r"(?i)(?<![A-Za-z0-9])X-\d{4}(?!\d)")
+# So liest die Engine den Offline-Schalter (vault.py, _netz_erlaubt).
+OFFLINE_WERTE = {"1", "true", "yes"}
 
 
 class ProtokollFehler(ValueError):
     """Das Protokoll ist kaputt oder passt nicht zum Stand des Tresors."""
 
 
-def lauf(vault, *argv):
+def lauf(vault, *argv, umgebung=None):
     """Die Engine so aufrufen, wie ein Agent es täte: als Prozess, über JSON."""
     vault = Path(vault).resolve()
     ergebnis = subprocess.run(
@@ -147,6 +175,7 @@ def lauf(vault, *argv):
         stderr=subprocess.PIPE,
         check=False,
         timeout=120,
+        env=dict(os.environ, **umgebung) if umgebung else None,
     )
     try:
         return json.loads(ergebnis.stdout)
@@ -775,7 +804,125 @@ def _gilt_allein_der_kennung(abfrage, antwort, belegt, abstention):
     return True
 
 
-def pruefe(vault, eintrag, bestand):
+def _version(text):
+    teile = re.findall(r"\d+", str(text or ""))
+    return tuple(int(teil) for teil in teile[:3]) if teile else None
+
+
+def vertrag_4c(stand):
+    """Gilt für dieses Protokoll schon die Pflicht zu Schritt 4c?
+
+    Maßgeblich ist der Stand, an den das Protokoll gebunden ist. Nennt es
+    keinen, gilt der heutige Vertrag."""
+    version = _version((stand or {}).get("version"))
+    return version is None or version >= VERTRAG_4C
+
+
+def _extern_angaben(antwort):
+    """Die Zeilen, mit denen eine Antwort Schritt 4c ausweist.
+
+    Je Treffer eine Zeile „Extern (nicht im Bestand):", für Ungelesenes eine
+    Zeile „Extern nicht gelesen:". Zu dieser zählt, was bis zur nächsten
+    Leerzeile oder zum nächsten Etikett darunter steht, etwa eine Liste der
+    Quellen. Hervorhebung, Zitatzeichen, Listen- und Überschriftszeichen
+    davor ändern nichts."""
+    text = FORMEL_STOERER.sub("", _ohne_zitatzeichen(_striche(antwort)))
+    treffer, bloecke, block = [], [], None
+    for zeile in text.splitlines():
+        rumpf = LISTENPUNKT_RE.sub("", re.sub(r"^\s*#{1,6}\s*", "", zeile))
+        rumpf = rumpf.strip()
+        if not rumpf:
+            block = None
+        elif EXTERN_TREFFER_RE.match(rumpf):
+            treffer.append(rumpf)
+            block = None
+        elif EXTERN_UNGELESEN_RE.match(rumpf):
+            block = [rumpf]
+            bloecke.append(block)
+        elif block is not None and not ETIKETT_RE.match(rumpf):
+            block.append(rumpf)
+        else:
+            block = None
+    return treffer, [" ".join(block) for block in bloecke]
+
+
+def _pruefe_extern(vault, frage, antwort):
+    """Schritt 4c nachrechnen: Was hätte die Antwort ausweisen müssen?
+
+    Das Werkzeug fragt die externen Quellen selbst ab, aber nie übers Netz:
+    Es setzt den Offline-Schalter, damit die Nachprüfung weder abruft noch
+    in log.md schreibt. Was eine Netzquelle geliefert hätte, weiß es deshalb
+    nur, wenn auch der Lauf offline war (SKILLSAFE_OFFLINE in der Umgebung
+    des Werkzeugs); sonst bleibt die Netzquelle ungeprüft und das ein
+    Hinweis. Zurück kommen Verstöße und Hinweise."""
+    verstoesse, hinweise = [], []
+    offline = os.environ.get("SKILLSAFE_OFFLINE", "").strip() in OFFLINE_WERTE
+    extern = lauf(vault, "query", "--extern", frage,
+                  umgebung={"SKILLSAFE_OFFLINE": "1"}).get("external") or {}
+    zustand = extern.get("state")
+    quellen = {str(quelle["id"]).upper(): quelle
+               for quelle in extern.get("sources", []) if quelle.get("id")}
+    if zustand in ("external_candidates_found", "no_external_candidates"):
+        rest = (extern.get("reason") or "").split("Nicht gelesen:", 1)
+        ungelesen = ({kennung.upper() for kennung in X_KENNUNG_RE.findall(rest[1])}
+                     if len(rest) > 1 else set())
+    elif zustand in ("not_bound", "unreachable", "budget_exceeded",
+                     "invalid_external_source"):
+        ungelesen = set(quellen)
+    else:
+        hinweise.append(f"Schritt 4c nicht nachprüfbar: Die Abfrage mit "
+                        f"--extern liefert den Zustand {zustand}")
+        return verstoesse, hinweise
+    netz = {kennung for kennung, quelle in quellen.items()
+            if quelle.get("mode") == "netz"}
+    ungeprueft = set() if offline else (ungelesen & netz)
+    if ungeprueft:
+        hinweise.append(
+            f"Netzquelle nicht nachgeprüft ({', '.join(sorted(ungeprueft))}): "
+            f"Ohne SKILLSAFE_OFFLINE in der Umgebung ist offen, was der Lauf "
+            f"dort gelesen hat")
+    pflicht_ungelesen = ungelesen - ungeprueft
+    treffer = [stelle for stelle in extern.get("hits", [])
+               if stelle.get("source_id")]
+
+    treffer_zeilen, bloecke = _extern_angaben(antwort)
+    blocktext = " ".join(bloecke)
+    genannt = {kennung.upper() for kennung in X_KENNUNG_RE.findall(blocktext)}
+    if "nicht nachgeschlagen" in " ".join(blocktext.split()).casefold():
+        # Der ausgewiesene Verzicht (Nutzerwunsch, Vorgabe der Umgebung):
+        # Dann nennt die Zeile jede aufgeführte Quelle, gelesen ist keine.
+        fehlend = sorted(set(quellen) - genannt)
+        if fehlend:
+            verstoesse.append(
+                f"Zeile „Extern nicht gelesen:\" weist aus, dass Schritt 4c "
+                f"unterblieb, nennt aber nicht jede aufgeführte Quelle: "
+                f"{', '.join(fehlend)} fehlt")
+        return verstoesse, hinweise
+    if not treffer_zeilen and not bloecke:
+        if treffer or pflicht_ungelesen:
+            verstoesse.append(
+                "Schritt 4c fehlt: Nach der Vollsichtung bleibt die Frage "
+                "ungedeckt, und externe Quellen sind aufgeführt; die Antwort "
+                "hat weder eine Zeile „Extern (nicht im Bestand):\" noch "
+                "„Extern nicht gelesen:\"")
+        return verstoesse, hinweise
+    if treffer and not treffer_zeilen:
+        orte = sorted({f"{stelle['source_id']} {stelle.get('document', '')}".strip()
+                       for stelle in treffer})
+        verstoesse.append(
+            f"Die Abfrage mit --extern findet {len(treffer)} Stelle"
+            f"{'' if len(treffer) == 1 else 'n'} ({'; '.join(orte)}), die "
+            f"Antwort hat keine Zeile „Extern (nicht im Bestand):\"")
+    fehlend = sorted(pflicht_ungelesen - genannt)
+    if fehlend:
+        verstoesse.append(
+            f"Zeile „Extern nicht gelesen:\" fehlt für {', '.join(fehlend)}: "
+            f"Diese Quelle hat die Abfrage mit --extern nicht gelesen, und "
+            f"nicht gelesen ist kein Negativbefund")
+    return verstoesse, hinweise
+
+
+def pruefe(vault, eintrag, bestand, mit_4c=True):
     """Eine Antwort gegen die Engine nachrechnen."""
     antwort = _striche(eintrag["antwort"])
     quittung = [teil.strip() for teil in eintrag["quittung"] if teil.strip()]
@@ -822,6 +969,7 @@ def pruefe(vault, eintrag, bestand):
         "stapel": None,
         "unbekannte_ids": unbekannte_ids,
         "kennung_unbekannt": False,
+        "extern_pflicht": False,
         "verstoesse": [],
         "hinweise": [],
     }
@@ -924,6 +1072,18 @@ def pruefe(vault, eintrag, bestand):
         zeile["verstoesse"].append(
             "„in diesem Umfang nicht gefunden\" ohne vollständige Quittung "
             "über diesen Umfang")
+    # Schritt 4c: Bleibt die Frage nach der Vollsichtung des ganzen Bestands
+    # ganz oder teilweise ungedeckt („Nicht im Bestand"), und sind externe
+    # Quellen aufgeführt, schlägt der Agent extern nach oder sagt, dass es
+    # unterblieb. Nie im Kennungsfall, nie bei begrenztem Umfang.
+    if (mit_4c and zeile["abstention"] and ganzer_bestand
+            and not zeile["kennung_unbekannt"]
+            and rueckfall.get("unknown_ids_only") is not True
+            and rueckfall.get("external_lookup_available") is True):
+        zeile["extern_pflicht"] = True
+        verstoesse, hinweise = _pruefe_extern(vault, eintrag["frage"], antwort)
+        zeile["verstoesse"].extend(verstoesse)
+        zeile["hinweise"].extend(hinweise)
 
     angaben = _sichtungsangaben(antwort)
     # Ein Satz behauptet eine Vollsichtung, wenn er so viele Claims nennt,
@@ -1064,6 +1224,7 @@ def zusammenfassung(zeilen):
         "negativ": len(negativ),
         "negativ_korrekt": sum(1 for z in negativ if urteil(z) in ABGELEHNT),
         "pflicht_vollsichtung": sum(1 for z in zeilen if z["pflicht"]),
+        "pflicht_extern": sum(1 for z in zeilen if z.get("extern_pflicht")),
         "quittungen": len(mit_quittung),
         "quittungen_gueltig": sum(1 for z in mit_quittung if z["vollstaendig"]),
         "ohne_verstoss": sum(1 for z in zeilen if not z["verstoesse"]),
@@ -1098,6 +1259,8 @@ def bericht(zeilen, bestand, ausfuehrlich):
         print(f"  Negativfragen                 {summe['negativ']:>3}, "
               f"korrekt abgelehnt {summe['negativ_korrekt']}")
     print(f"  Vollsichtung war Pflicht      {summe['pflicht_vollsichtung']:>3}")
+    if summe["pflicht_extern"]:
+        print(f"  Schritt 4c war Pflicht        {summe['pflicht_extern']:>3}")
     print(f"  Quittungen eingereicht        {summe['quittungen']:>3}, "
           f"gültig und vollständig {summe['quittungen_gueltig']}")
     stapel = Counter(z["stapel"] for z in zeilen if z["stapel"])
@@ -1130,7 +1293,9 @@ def main(argv=None):
                 + f", der Tresor steht auf {bestand['manifest'][:12]}. Siegel "
                 f"gelten nur für ihren Stand: auf dem gebundenen Stand prüfen."
             )
-        zeilen = [pruefe(vault, eintrag, bestand) for eintrag in antworten]
+        mit_4c = vertrag_4c(stand)
+        zeilen = [pruefe(vault, eintrag, bestand, mit_4c=mit_4c)
+                  for eintrag in antworten]
     except ProtokollFehler as exc:
         print(f"🔴 antwort-check: {exc}")
         return 2

@@ -36,8 +36,9 @@ namentlich aufgeführten, gepinnten Quelle des eigenen Bestands.
 Damit das überprüfbar bleibt statt behauptet: nur `GET` unter dem
 registrierten Präfix, geprüft an Pfadgrenzen; einer Weiterleitung folgt die
 HTTP-Schicht nie selbst, ihr Ziel wird geprüft, bevor die nächste Anfrage
-hinausgeht; höchstens 20 Abrufe je Abfrage; und jeder Abruf steht mit URL,
-Prüfsumme, Bytezahl und Zeitpunkt in `log.md`. Kann `log.md` nicht geschrieben
+hinausgeht; höchstens 20 Abrufe je Abfrage; und jedes abgerufene Dokument steht
+mit URL, Prüfsumme, Bytezahl und Datum in `log.md`, ein gescheiterter
+Versuch nur in der Ausgabe des Aufrufs. Kann `log.md` nicht geschrieben
 werden, findet der Abruf nicht statt.
 
 ## Zwei Allowlists, zwei Fragen

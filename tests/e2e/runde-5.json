@@ -1,0 +1,201 @@
+{
+ "schema": "skillsafe.antwort-protokoll/v1",
+ "hinweis": "Ende-zu-Ende-Messung vom 2026-11-14, Runde 5. Vier frische Agenten, je drei Fragen; die Agenten 3 und 4 mit vorgegebener Stapelgröße 10 (drei Stapel). Jeder Agent bekam nur den entpackten Skill-Ordner und die Fragen im Wortlaut. X-0001 war an das Beispielhandbuch gebunden, die Umgebung offline (SKILLSAFE_OFFLINE=1), X-0002 blieb damit ungelesen. Erstmals galt die Pflicht zu Schritt 4c: Bei sieben Antworten war er fällig, sechs schlugen extern nach, eine wies den Verzicht aus, um den der Nutzer bei dieser Frage gebeten hatte. Vier Fragen stammen aus tests/gold/recall-demo.json, acht sind eigens für diese Runde gestellt: Negativfragen mit und ohne externen Treffer, zwei nur teilweise gedeckte Fragen, eine Kennung, die es nicht gibt, eine Frage mit Domäne im Wortlaut und ein ausdrücklicher Verzicht auf externe Quellen. Die Siegel gelten ausschließlich für den Stand unter 'stand': nachprüfen lässt sich das Protokoll mit tools/antwort_check.py gegen den Tresor dieses Commits, mit derselben Bindung von X-0001 und offline (siehe tests/e2e/LIESMICH.md). 'ergebnis' ist die Ausgabe des Werkzeugs aus v0.18.0, das Schritt 4c mitprüft.",
+ "runde": 5,
+ "agenten": 4,
+ "stand": {
+  "version": "0.17.0",
+  "manifest_sha256": "223e391389fd5540395496d2295cf6c694db2931479b40f2594b01f773907ddc",
+  "commit": "d275b06"
+ },
+ "ergebnis": {
+  "antworten": 12,
+  "davon_gefunden": 2,
+  "negativ": 6,
+  "negativ_korrekt": 6,
+  "ohne_verstoss": 12,
+  "pflicht_extern": 7,
+  "pflicht_vollsichtung": 10,
+  "positiv": 5,
+  "positiv_gefunden": 5,
+  "quittungen": 11,
+  "quittungen_gueltig": 11,
+  "verstoesse": 0,
+  "vom_ranking_verfehlt": 2
+ },
+ "antworten": [
+  {
+   "id": "F1",
+   "art": "positiv",
+   "frage": "In welchem Berufsfeld entstand die Einteilung in Menschen, Dinge, Orte und Geschehnisse, und weshalb kam später noch ein Baustein für Firmen und Verbände hinzu?",
+   "erwartet": [
+    "C-0290"
+   ],
+   "sweep_args": [],
+   "quittung": [
+    "1:3e4c6b92bd520939=C-0202,C-0290"
+   ],
+   "antwort": "Laut S-0003, einer Einzelquelle der Trust-Stufe T3, stammt die Einteilung POLE aus der Ermittlungs- und Nachrichtendienstanalyse; das O für Organization wurde für die allgemeine Entitäten-Extraktion ergänzt (C-0290). Die Buchstaben stehen für Person, Object, Location, Event und Organization; die Quelle empfiehlt dieses POLE+O als kleine, fixe, generische Basis, die per Subtypen additiv erweitert wird (C-0202).\n\nBelege:\n- C-0290 (S-0003, „The POLE+O Data Model“, Wortlaut) — Stand 2026-07-04\n- C-0202 (S-0003, „The POLE+O Data Model“, Wortlaut) — Stand 2026-07-04\n\nStand: 2026-07-04; Konfidenz: mittel\nHinweise: Lesart der Frage: „Menschen, Dinge, Orte und Geschehnisse“ verstanden als Person, Object, Location, Event (POLE), „Baustein für Firmen und Verbände“ als das O für Organization, „Berufsfeld“ als das Herkunftsgebiet, das C-0290 nennt. Beide genutzten Seiten sind von niemandem gegengeprüft (trust_tier unverified). Gefunden hat die Claims erst die Vollsichtung, nicht das Ranking; dem Bestand fehlt für diese Wortwahl ein Alias oder Tag.\nSichtung: 28 von 28 Claims, Quittung 77bcd151ee42"
+  },
+  {
+   "id": "F2",
+   "art": "positiv",
+   "frage": "Kann ich bei Schimmel in der Wohnung die Miete kürzen, und um wie viel Prozent?",
+   "erwartet": [
+    "C-0401"
+   ],
+   "sweep_args": [],
+   "quittung": [
+    "1:9e933fe9ce17a3e9=C-0401,C-0402"
+   ],
+   "antwort": "Nach dem Bestand ja, wenn der Schimmelbefall erheblich ist: Laut dem Beispielhandbuch X-0001, einer Quelle der Trust-Stufe T3, ist erheblicher Schimmelbefall in Wohnräumen ein Mangel, der zur Mietminderung berechtigt (C-0401). Den Mangel muss man dem Vermieter danach unverzüglich anzeigen (C-0402). Eine Prozentzahl für die Minderung kann ich aus dem Bestand nicht nennen.\n\nBelege:\n- C-0401 (X-0001, A-0004, Wortlaut) — Stand 2026-08-06, externe Bezugsquelle\n- C-0402 (X-0001, A-0007, Wortlaut) — Stand 2026-08-06, externe Bezugsquelle\n\nStand: 2026-08-06; Konfidenz: mittel\nHinweise: Lesart der Frage: „Schimmel in der Wohnung“ verstanden als Schimmelbefall in Wohnräumen, „die Miete kürzen“ als Mietminderung. Laut Abschnitt „Kontext und Grenzen“ der Seite (Angabe ohne Belegkraft) dient sie nur der Demonstration satzweiser externer Belege, nicht dem Mietrecht; X-0001 ist ein erfundenes Beispielhandbuch, und seine Aussagen sind keine Rechtsauskunft. Die Seite ist von niemandem gegengeprüft (trust_tier unverified).\nNicht im Bestand: um wie viel Prozent die Miete gemindert werden darf; ob auch Schimmel, der nicht erheblich ist, zur Mietminderung berechtigt.\nSichtung: 28 von 28 Claims, Quittung c5ca2fd3cdb6\nExtern (nicht im Bestand): X-0001, handbuch/mietminderung.md, Satzposition 3, bei dieser Abfrage lokal gelesen\nExtern nicht gelesen: X-0002 (SKILLSAFE_OFFLINE gesetzt) — kein Negativbefund\n\nSoll ich eine Quelle zur Höhe der Mietminderung aufnehmen?"
+  },
+  {
+   "id": "F3",
+   "art": "negativ",
+   "frage": "Was steht in C-7777?",
+   "erwartet": [],
+   "sweep_args": [],
+   "quittung": [],
+   "antwort": "Die Kennung C-7777 gibt es im Bestand nicht. Falls eine andere Kennung gemeint war, bitte nennen."
+  },
+  {
+   "id": "F4",
+   "art": "negativ",
+   "frage": "Wie hoch darf die Mietkaution höchstens sein?",
+   "erwartet": [],
+   "sweep_args": [],
+   "quittung": [
+    "1:5c188c696502028b=-"
+   ],
+   "antwort": "Nicht im Bestand. Der Tresor enthält keine Aussage zur Mietkaution und damit auch keine Höchstgrenze für sie.\n\nSichtung: 28 von 28 Claims, Quittung 2004035b613e\nExtern nicht gelesen: X-0002 (SKILLSAFE_OFFLINE gesetzt) — kein Negativbefund\n\nSoll ich eine Quelle zur Mietkaution aufnehmen?"
+  },
+  {
+   "id": "F5",
+   "art": "negativ",
+   "frage": "Welche Versicherung braucht ein Mieter?",
+   "erwartet": [],
+   "sweep_args": [],
+   "quittung": [
+    "1:5c8de80fc8c0b1e6=-"
+   ],
+   "antwort": "Nicht im Bestand. Der Tresor enthält keine Aussage dazu, welche Versicherung ein Mieter braucht.\n\nSichtung: 28 von 28 Claims, Quittung 81538e1632d2\nExtern nicht gelesen: X-0001, X-0002 nicht nachgeschlagen (auf deinen ausdrücklichen Wunsch) — kein Negativbefund\n\nWenn du eine Quelle dazu hast, kann ich sie aufnehmen."
+  },
+  {
+   "id": "F6",
+   "art": "positiv",
+   "frage": "Wird die Vertrauenswürdigkeit einer herangezogenen Unterlage als Zahl mitgeliefert, oder muss der Leser sie sich selbst erschließen?",
+   "erwartet": [
+    "C-0303"
+   ],
+   "sweep_args": [],
+   "quittung": [
+    "1:f028f49c4fc54b54=C-0302,C-0303,C-0304,C-0305"
+   ],
+   "antwort": "Selbst erschließen, jedenfalls nach OKF v0.2: Die Spezifikation speichert bewusst keinen Glaubwürdigkeitswert, sondern nur objektive Signale pro Quelle; die Glaubwürdigkeit wird vom Konsumenten abgeleitet. Begründet wird das damit, dass ein gespeicherter Wert subjektiv, zwischen Konsumenten nicht portabel und schnell veraltet wäre (C-0303). Pro Quelle steht im Frontmatter-Feld `sources` ein Eintrag mit der Pflichtangabe `resource` und den optionalen Angaben `id`, `title`, `author`, `usage_count` und `last_modified`; ein `usage_window` rahmt als Geschwisterfeld jeden `usage_count` mit einem Zeitraum aus `from` und `to` (C-0302).\n\nIst mit der Unterlage das Wissensdokument selbst gemeint, gilt für seine Vertrauensstufe Entsprechendes: Das Feld `verified` hält unabhängige Bestätigungen als Liste von `by`- und `at`-Einträgen fest (C-0304), und daraus leiten Konsumenten eine von drei Trust-Tiers ab — unverified, wenn das Feld fehlt; machine-confirmed, wenn nur Akteure ohne `human:`-Präfix bestätigen; human-reviewed, sobald mindestens ein `human:`-Akteur bestätigt. Die Tiers sind beratende Signale und keine Zugriffskontrolle (C-0305).\n\nBelege:\n- C-0302 (S-0004, §5.1, Wortlaut) — Stand 2026-07-28\n- C-0303 (S-0004, §5.1, Abschnitt Source credibility signals, Wortlaut) — Stand 2026-07-28\n- C-0304 (S-0004, §5.2 und §7, Wortlaut) — Stand 2026-07-28\n- C-0305 (S-0004, §5.3, Wortlaut) — Stand 2026-07-28\n\nStand: 2026-07-28; Konfidenz: hoch\nHinweise: Die Frage nennt kein Format; der Bestand beantwortet sie nur für die Spezifikation OKF v0.2 (laut „Kontext und Grenzen“ der Seite für die Spezifikation selbst, nicht für ihre Abbildung im Profil dieses Tresors). Verstanden als: „Vertrauenswürdigkeit einer herangezogenen Unterlage“ = Glaubwürdigkeit einer Quelle, im zweiten Absatz die Vertrauensstufe (Trust-Tier) des Dokuments selbst; „als Zahl mitgeliefert“ = als gespeicherter Glaubwürdigkeitswert (C-0303 sagt „Wert“, nicht ausdrücklich „Zahl“); „der Leser“ = der Konsument. Die Seite hat Konfidenz hoch, ist aber von niemandem gegengeprüft (trust_tier:unverified); die hohe Konfidenz ist damit eine Kuratierungsentscheidung ohne Gegenprüfung.\nSichtung: 28 von 28 Claims, Quittung b4ecf5956aa2"
+  },
+  {
+   "id": "F7",
+   "art": "negativ",
+   "frage": "Welche Kündigungsfrist hat der Vermieter bei Eigenbedarf?",
+   "erwartet": [],
+   "sweep_args": [
+    "--size",
+    "10"
+   ],
+   "quittung": [
+    "1:d63a7c4bb06de62f=-",
+    "2:537c2756cec9db89=-",
+    "3:d45a4e736f74ce3f=-"
+   ],
+   "antwort": "Nicht im Bestand. Der Tresor enthält keine Aussage zur Kündigungsfrist des Vermieters bei Eigenbedarf, weder zu Kündigungsfristen noch zur Kündigung wegen Eigenbedarf.\n\nSichtung: 28 von 28 Claims, Quittung e26817532b26\nExtern (nicht im Bestand): X-0001, handbuch/mietminderung.md, Satzposition 7, bei dieser Abfrage lokal gelesen. Das ist nur ein Zeiger, der über das Wort „Vermieter“ lexikalisch nahe liegt; zur Kündigungsfrist sagt er nichts.\nExtern nicht gelesen: X-0002 (SKILLSAFE_OFFLINE gesetzt) — kein Negativbefund\n\nSoll ich eine Quelle dazu aufnehmen?"
+  },
+  {
+   "id": "F8",
+   "art": "positiv",
+   "frage": "Was ist OKF, und wie viele Unternehmen nutzen es?",
+   "erwartet": [],
+   "sweep_args": [
+    "--size",
+    "10"
+   ],
+   "quittung": [
+    "1:85ff56fd1f1657ef=-",
+    "2:9315596fe735728a=C-0301,C-0302,C-0303,C-0304,C-0305,C-0306,C-0307,C-0309",
+    "3:4c89659088533484=C-0001,C-0004"
+   ],
+   "antwort": "OKF stellt Wissen als Verzeichnisbaum von UTF-8-Markdown-Dateien mit YAML-Frontmatter dar. Maßgeblich ist die Fassung v0.2: Ein Bundle ist konform, wenn jede nicht reservierte .md-Datei einen parsebaren Frontmatter-Block mit nicht leerem `type` enthält. `type` ist das einzige stets erforderliche Feld (C-0301). v0.2 löst v0.1 ab, nach der Regel major.minor als Minor-Sprung mit zwei benannten Bruchstellen: `timestamp` wird durch `generated.at` ersetzt, die Rumpfliste `# Citations` durch das Frontmatter-Feld `sources` (C-0309).\n\nWeitere Bausteine von v0.2:\n- Provenienz im Frontmatter-Feld `sources`, einer Liste von Einträgen mit dem Pflichtfeld `resource` (C-0302)\n- `generated` (wer den aktuellen Inhalt erzeugt hat) und `verified` (unabhängige Bestätigungen) mit einer gemeinsamen Aktorkonvention für Agenten, Personen und automatisierte Prozesse (C-0304)\n- Trust-Tiers (unverified, machine-confirmed, human-reviewed), die Konsumenten aus `verified` ableiten; sie sind beratende Signale, keine Zugriffskontrolle (C-0305)\n- Lebenszyklus über `status` (draft, stable, deprecated) und `stale_after`, ein absolutes Datum, ab dem ein Konzept als veraltet gilt (C-0306)\n- bewusst kein gespeicherter Glaubwürdigkeitswert, nur objektive Signale pro Quelle; die Glaubwürdigkeit leitet der Konsument ab (C-0303)\n- der Konzepttyp Attested Computation für sanktionierte Berechnungen; OKF legt die Schnittstelle fest und führt selbst nichts aus (C-0307)\n\nDie Vorgängerfassung v0.1 ist überholt, bleibt aber im Bestand. Sie stellt Wissen als Verzeichnis von Markdown-Dateien mit YAML-Frontmatter dar, wobei jede Datei genau ein Konzept beschreibt (C-0001). Google bezeichnet OKF v0.1 als Ausgangspunkt und nicht als fertigen Standard; die Spezifikation formalisiert das LLM-Wiki-Muster in ein portables, interoperables Format (C-0004).\n\nBelege:\n- C-0301 (S-0004, §3, §4, §4.1 und §11, Wortlaut) — Stand 2026-07-28\n- C-0309 (S-0004, §12, §13 und §13.1, Wortlaut) — Stand 2026-07-28\n- C-0302 (S-0004, §5.1, Wortlaut) — Stand 2026-07-28\n- C-0304 (S-0004, §5.2 und §7, Wortlaut) — Stand 2026-07-28\n- C-0305 (S-0004, §5.3, Wortlaut) — Stand 2026-07-28\n- C-0306 (S-0004, §5.4 und §5.5, Wortlaut) — Stand 2026-07-28\n- C-0303 (S-0004, §5.1, Abschnitt Source credibility signals, Wortlaut) — Stand 2026-07-28\n- C-0307 (S-0004, §10.1 und §10.2, Wortlaut) — Stand 2026-07-28\n- C-0001 (S-0001, Abschnitt \"How it works\", Wortlaut) — Stand 2026-07-28, überholte Fassung\n- C-0004 (S-0001, Einleitung und Abschluss, Wortlaut) — Stand 2026-07-28, überholte Fassung\n\nStand: 2026-07-28; Konfidenz: hoch\nHinweise: Maßgeblich ist okf-v02.md (OKF v0.2). Sie ersetzt okf.md (OKF v0.1, Status veraltet), aus der C-0001 und C-0004 stammen. Zwei Aussagen stehen nur in der überholten Fassung: dass jede Datei genau ein Konzept beschreibt (C-0001), sowie Googles Einordnung und die Formalisierung des LLM-Wiki-Musters (C-0004). Die maßgebliche Fassung sagt dazu nichts Eigenes; ob sie fortgelten, lässt der Bestand offen. Die Langform „Open Knowledge Format“ steht nur in Seiten- und Quellentiteln und in der Begriffsbenennung B-0001, in keinem Claim (Angabe ohne Belegkraft). Beide Seiten tragen Konfidenz hoch, aber das Signal trust_tier:unverified: Die Aussagen sind belegt, aber von niemandem gegengeprüft. Das Feld `usage_count` (C-0302) ist eine optionale Angabe eines Quelleneintrags in `sources`, keine Angabe darüber, wie viele Unternehmen OKF nutzen.\nNicht im Bestand: Wie viele Unternehmen OKF nutzen; der Bestand enthält dazu keine Angabe.\nSichtung: 28 von 28 Claims, Quittung 5544223235c8\nExtern nicht gelesen: X-0002 (SKILLSAFE_OFFLINE gesetzt) — kein Negativbefund\n\nSoll ich für die Nutzerzahl eine Quelle mit Angaben zur Verbreitung von OKF aufnehmen?"
+  },
+  {
+   "id": "F9",
+   "art": "positiv",
+   "frage": "Verfallstag für Wissenseinträge – wie angeben, und ab wann zählt etwas als überholt?",
+   "erwartet": [
+    "C-0306"
+   ],
+   "sweep_args": [
+    "--size",
+    "10"
+   ],
+   "quittung": [
+    "1:59a03a556b8db2b7=-",
+    "2:d75f0ab020016281=C-0306,C-0310",
+    "3:a7df15a57de31a66=-"
+   ],
+   "antwort": "In OKF v0.2 gibt man den Verfallstag mit `stale_after` an, als absolutes Datum im Format JJJJ-MM-TT. Ein Konzept gilt als veraltet, sobald das heutige Datum größer oder gleich `stale_after` ist, also schon an dem angegebenen Tag selbst. Daneben läuft der Lebenszyklus über `status` mit den Werten draft, stable und deprecated; fehlt das Feld, bedeutet das stable (C-0306).\n\nEigene Einordnung des Bestands (Auslegung): OKF v0.2 regelt den Lebenszyklus anders als das Profil dieses Tresors. Dessen gleichnamiges Feld `status` nutzt aktiv, veraltet und in-pruefung statt draft, stable und deprecated. Jede Aussage über OKF-Kompatibilität muss deshalb die Zielversion nennen (C-0310).\n\nBelege:\n- C-0306 (S-0004, §5.4 und §5.5, Wortlaut) — Stand 2026-07-28\n- C-0310 (S-0004, §5 und §13.2, Auslegung) — Stand 2026-07-28, eigene Einordnung\n\nStand: 2026-07-28; Konfidenz: hoch\nHinweise: Verstanden als „Verfallstag“ = `stale_after`, „Wissenseintrag“ = Konzept eines OKF-v0.2-Bundles und „überholt“ = „veraltet“ im Sinne von C-0306. Beantwortet ist damit die Lesart OKF v0.2; laut „Kontext und Grenzen“ ist der Geltungsbereich der Seite die Spezifikation v0.2 selbst, nicht ihre Abbildung im hiesigen Profil. C-0306 hat erst die Vollsichtung gefunden, nicht das Ranking: Für die Wortwahl „Verfallstag“ und „überholt“ fehlt dem Bestand ein Alias oder Tag (Pflegehinweis). Die Seite okf-v02.md trägt Konfidenz hoch, aber das Signal trust_tier:unverified: Die Aussagen sind belegt, aber von niemandem gegengeprüft.\nSichtung: 28 von 28 Claims, Quittung cd041f84223d"
+  },
+  {
+   "id": "F10",
+   "art": "negativ",
+   "frage": "Was steht in demo-okf zur Mietkaution?",
+   "erwartet": [],
+   "sweep_args": [
+    "--size",
+    "10",
+    "--domain",
+    "demo-okf"
+   ],
+   "umfang_vorgegeben": true,
+   "quittung": [
+    "1:13790ec143a87f79=-",
+    "2:d59cd96fef6e1e92=-",
+    "3:d3efd0655c0a9501=-"
+   ],
+   "antwort": "In diesem Umfang nicht gefunden. In der Domäne demo-okf steht keine Aussage zur Mietkaution.\n\nSichtung: Domäne demo-okf, 26 von 28 Claims, Quittung 9b3cf6050abb\n\nSoll ich über demo-okf hinaus den ganzen Bestand sichten?"
+  },
+  {
+   "id": "F11",
+   "art": "negativ",
+   "frage": "Darf der Vermieter die Wohnung ohne Ankündigung betreten?",
+   "erwartet": [],
+   "sweep_args": [
+    "--size",
+    "10"
+   ],
+   "quittung": [
+    "1:b6ec19991dd92852=-",
+    "2:d5040be9c34ff375=-",
+    "3:214276c3276a20d1=-"
+   ],
+   "antwort": "Nicht im Bestand. Der Tresor enthält keine Aussage dazu, ob der Vermieter die Wohnung betreten darf, weder mit noch ohne Ankündigung.\n\nSichtung: 28 von 28 Claims, Quittung 5083f0eeccaf\nExtern (nicht im Bestand): X-0001, handbuch/mietminderung.md, Satzposition 3, bei dieser Abfrage lokal gelesen\nExtern (nicht im Bestand): X-0001, handbuch/begriffsarbeit.md, Satzposition 9, bei dieser Abfrage lokal gelesen\nExtern nicht gelesen: X-0002 (SKILLSAFE_OFFLINE gesetzt, nicht abgerufen) — kein Negativbefund\n\nSoll ich eine Quelle dazu aufnehmen?"
+  },
+  {
+   "id": "F12",
+   "art": "positiv",
+   "frage": "Sind lose abgelegte Einzelangaben mit anderen Einträgen verbunden, oder stößt man nur per Volltextrecherche auf sie?",
+   "erwartet": [
+    "C-0204"
+   ],
+   "sweep_args": [
+    "--size",
+    "10"
+   ],
+   "quittung": [
+    "1:2fa1b587666f43ca=-",
+    "2:f491b3aebe790de5=-",
+    "3:54953a944a314663=C-0204,C-0205"
+   ],
+   "antwort": "Laut S-0003, einer Quelle der Trust-Stufe T3, sind solche Angaben nicht verbunden: „Facts“ sind das generische Fallback-Primitiv für alles, was in keinen Typ passt, also atomare, einzeln gespeicherte Aussagen ohne Kanten, die nur über Suche auffindbar sind (C-0204). Mit reifendem Graph migrieren solche Aussagen von Facts zu typisierten Entitäten und Kanten (C-0204).\n\nFür den Wissenstresor begründet das nach eigener Einordnung des Bestands den Typ faktensammlung als Fallback: Atomare Claims ohne eigene Seite landen in fakten.md der jeweiligen Domäne und werden bei Verdichtung zu Konzeptseiten befördert (C-0205).\n\nBelege:\n- C-0204 (S-0003, „Facts: The Trick You Haven't Thought Of“, Wortlaut) — Stand 2026-07-04\n- C-0205 (S-0003, Gesamtdokument, Auslegung) — Stand 2026-07-04, eigene Einordnung\n\nStand: 2026-07-04; Konfidenz: mittel\nHinweise: Verstanden als Frage nach diesen „Facts“: „lose abgelegte Einzelangaben“ als atomare, einzeln gespeicherte Aussagen, „mit anderen Einträgen verbunden“ als Kanten. Laut Abschnitt „Kontext und Grenzen“ der Seite argumentiert die Quelle im Kontext von Neo4j/GraphRAG mit Embeddings; das ordnet nur ein und belegt nichts über die Art der Suche.\nNicht im Bestand: Ob diese Suche eine Volltextrecherche ist, denn C-0204 spricht nur von Suche, ohne deren Art zu nennen; ebenso wenig, ob die Einträge in fakten.md dieses Tresors mit anderen Seiten verknüpft sind.\nSichtung: 28 von 28 Claims, Quittung 3488b8121003\nExtern (nicht im Bestand): X-0001, README.md, Satzposition 4, bei dieser Abfrage lokal gelesen\nExtern (nicht im Bestand): X-0001, handbuch/begriffsarbeit.md, Satzposition 4, bei dieser Abfrage lokal gelesen\nExtern (nicht im Bestand): X-0001, handbuch/schiffshypothek.md, Satzposition 4, bei dieser Abfrage lokal gelesen\nExtern nicht gelesen: X-0002 (SKILLSAFE_OFFLINE gesetzt, nicht abgerufen) — kein Negativbefund"
+  }
+ ]
+}

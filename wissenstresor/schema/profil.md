@@ -165,9 +165,13 @@ eine aufgeführte externe Bezugsquelle.
 * Offensichtliche Instruktionssignaturen sind weder im Aussagetext noch in
   der Fundstelle freigabefähig. Sie bleiben als markierte Quelldaten in der
   Medienrepräsentation oder Quarantäne, erscheinen aber nie als Claim.
-  Titel, Tags, Kurzfassung und Registerangaben prüft der Stolperdraht nicht;
-  sie sind kuratierter Text, und die Vollsichtung gibt Titel und Tags jeder
-  Seite mit aus.
+  Titel, Tags, der übrige Text einer Seite und die Registerangaben einer
+  Quelle (Titel, Stand, Rechte) sind kuratierter Text daneben. Eine Signatur
+  dort meldet `validate` als Warnung, ohne den Wortlaut zu wiederholen
+  (`query` und `sweep` geben die Warnungen mit aus); ein Release bleibt
+  möglich. Ausgegeben wird ein solches Feld nicht (siehe „Maschinenabfrage");
+  den übrigen Text einer Seite gibt die Engine ohnehin nicht aus, der
+  Antworten-Workflow liest ihn aber mit.
 * Eine Wissensseite liegt nie unter einem Pfad, den das Manifest ausnimmt
   (`__pycache__`). Ihr Wortlaut wäre sonst nach dem Release änderbar, ohne
   dass Sperre oder Siegel es bemerken.
@@ -282,7 +286,9 @@ Mögliche Zustände sind:
   `fallback.external_lookup_available` sagt zusätzlich, ob überhaupt externe
   Bezugsquellen aufgeführt sind — das Feld steht auch ohne `--extern`, weil
   der Antwort-Workflow daran erkennt, ob nach der Vollsichtung noch ein
-  Schritt möglich ist. `fallback.external_live_lookup_used` sagt danach, ob
+  Schritt möglich ist; `fallback.external_source_ids` nennt dazu ihre
+  Kennungen, ebenfalls ohne `--extern`. `fallback.external_live_lookup_used`
+  sagt danach, ob
   tatsächlich live gelesen wurde. Zwei Felder, zwei Fragen: Angebot und
   Ergebnis;
 * `ambiguous` — Alias ist über Begriffswelten mehrdeutig;
@@ -306,6 +312,14 @@ Bezugsquellen — dann live, gekennzeichnet und in einem eigenen Block. Im
 **manifestierten Bestand** gibt es weiterhin keinen Cache; der TTL-Abzug einer
 Netzquelle liegt außerhalb des Skill-Ordners im Nutzer-Cache-Verzeichnis und
 meldet sein Alter in jeder Ausgabe.
+
+Kuratierter Text mit Instruktionssignatur geht nicht in die Ausgabe. Trägt
+ein Seitentitel, ein Tag oder eine Registerangabe einer Quelle (Titel, Stand,
+Rechte) eine Signatur, steht das Feld als `null` da; aus `tags` fehlt nur der
+betroffene Eintrag. Die Seite in `pages[]`, die Quelle unter
+`evidence[].source`, die Seite eines Stapels von `sweep` und die Quelle unter
+`external.sources[]` tragen dann `suspicious_instruction: true`. Ohne
+Signatur fehlt das Feld ganz, und die Ausgabe ist dieselbe wie vorher.
 
 ### Wortform `wortform/v1`
 

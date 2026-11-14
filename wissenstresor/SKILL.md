@@ -91,8 +91,9 @@ Diese sechs Regeln gelten in jedem Workflow und stechen jede Bequemlichkeit:
    mit Titel, Ziel, Trust und Rechten in `sources/EXTERN.md` und ist über
    `MANIFEST.sha256` gepinnt; erreichbar ist ausschließlich das. Deshalb
    wird eine aufgeführte Netzquelle behandelt wie eine interne Quelle, auch
-   wenn im Umfeld ausdrücklich keine Internetrecherche erlaubt ist. Jeder
-   Abruf steht mit URL, Prüfsumme und Zeitpunkt in `log.md`.
+   wenn im Umfeld ausdrücklich keine Internetrecherche erlaubt ist. Jedes
+   abgerufene Dokument steht mit URL, Prüfsumme und Datum in `log.md`,
+   ein gescheiterter Versuch nur in der Ausgabe des Aufrufs.
 
 ## Workflows
 

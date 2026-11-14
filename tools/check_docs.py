@@ -344,6 +344,11 @@ def e2e_stand():
                 # es nicht gibt (antworten.md, Schritt 2b).
                 "negativ_quittiert": sum(
                     1 for antwort in quittiert if antwort["art"] == "negativ"),
+                # Davon im vorgegebenen Umfang abgelehnt: „in diesem Umfang
+                # nicht gefunden", nicht „Nicht im Bestand" (antworten.md, 4b).
+                "negativ_umfang": sum(
+                    1 for antwort in quittiert if antwort["art"] == "negativ"
+                    and antwort.get("umfang_vorgegeben")),
                 # Wie viele Sichtungen über wie viele Stapel liefen.
                 "stapel": dict(Counter(
                     len(antwort["quittung"]) for antwort in quittiert)),
@@ -734,28 +739,36 @@ def pruefe_summen(stand, runden, readme, landing, abweichungen, konzept=None,
 
     # "In den ersten drei Runden reichte jeder Agent zu jeder Frage eine
     # gültige, vollständige Quittung ein, in Runde 4 zu zehn von zwölf
-    # Fragen": die ersten Runden ohne Lücke, die genannte mit genau so
-    # vielen Quittungen, alle gültig, und danach keine weitere Runde.
+    # Fragen, in Runde 5 zu elf von zwölf": die ersten Runden ohne Lücke,
+    # jede danach genannt, mit genau so vielen Quittungen, alle gültig, und
+    # keine Runde ausgelassen oder erfunden.
+    teil = r"in Runde (\w+) zu (\w+) von (\w+)(?: Fragen)?"
+    teil_still = r"in Runde \w+ zu \w+ von \w+(?: Fragen)?"
     if "KONZEPT.md" in texte:
         for treffer in fundstellen(
-                "KONZEPT.md", r"In den ersten (\w+) Runden reichte jeder Agent "
-                r"zu jeder Frage eine gültige, vollständige Quittung ein, in "
-                r"Runde (\w+) zu (\w+) von (\w+) Fragen; die (\w+) übrigen",
+                "KONZEPT.md", r"In den ersten (?P<erste>\w+) Runden reichte "
+                r"jeder Agent zu jeder Frage eine gültige, vollständige "
+                rf"Quittung ein, (?P<liste>(?:{teil_still}, )*{teil_still}); "
+                r"die (?P<uebrig>\w+) übrigen",
                 "Quittungen je Runde"):
-            erste, letzte, mit, von, uebrig = (zahl_aus_wort(wert)
-                                               for wert in treffer.groups())
+            erste = zahl_aus_wort(treffer.group("erste"))
+            uebrig = zahl_aus_wort(treffer.group("uebrig"))
+            genannt = [tuple(zahl_aus_wort(wert) for wert in teiltreffer.groups())
+                       for teiltreffer in re.finditer(teil, treffer.group("liste"))]
             echt = {runde: (stand[f"e2e_runde_{runde}"][0],)
                     + tuple(stand[f"e2e_quittungen_{runde}"])
                     for runde in runden}
+            lueckenhaft = [runde for runde, _, _ in genannt]
             stimmt = (
-                None not in (erste, letzte, mit, von, uebrig)
-                and letzte == max(runden)
-                and runden == list(range(1, letzte + 1))
-                and erste == letzte - 1
-                and uebrig == von - mit
+                None not in (erste, uebrig)
+                and all(None not in eintrag for eintrag in genannt)
+                and runden == list(range(1, max(runden) + 1))
+                and lueckenhaft == list(range(erste + 1, max(runden) + 1))
+                and uebrig == sum(von - mit for _, mit, von in genannt)
                 and all(echt[runde] == (echt[runde][0],) * 3
                         for runde in runden[:erste])
-                and echt[letzte] == (von, mit, mit))
+                and all(echt[runde] == (von, mit, mit)
+                        for runde, mit, von in genannt))
             if not stimmt:
                 melde("KONZEPT.md", f"{treffer.group(0)!r}, die Protokolle "
                                     f"(Fragen, Quittungen, gültig): {echt!r}")
@@ -764,13 +777,23 @@ def pruefe_summen(stand, runden, readme, landing, abweichungen, konzept=None,
     # Befund über eine Kennung, die es nicht gibt.
     negativ, korrekt = summe(5), summe(6)
     quittiert = sum(stand[f"e2e_negativ_quittiert_{runde}"] for runde in runden)
+    # Lehnte eine davon im vorgegebenen Umfang ab, sagt der Satz das; sonst
+    # stünde jede Quittung als „Nicht im Bestand" da.
+    im_umfang = sum(stand.get(f"e2e_negativ_umfang_{runde}", 0)
+                    for runde in runden)
+    umfang_zusatz = r'( oder "in diesem Umfang nicht gefunden")?'
     quittungen = [stand[f"e2e_quittungen_{runde}"] for runde in runden]
     erwartet = (negativ, quittiert, korrekt - quittiert)
     for treffer in fundstellen(
             "README.md", r'Alle (\w+) Negativfragen wurden korrekt abgelehnt: '
-            r'(\w+) mit gültiger Quittung als "Nicht im Bestand", (\w+) mit '
-            r'dem Befund des Scripts', "Summe der Negativfragen"):
-        ist = tuple(zahl_aus_wort(wert) for wert in treffer.groups())
+            r'(\w+) mit gültiger Quittung als "Nicht im Bestand"' + umfang_zusatz
+            + r', (\w+) mit dem Befund des Scripts', "Summe der Negativfragen"):
+        ist = tuple(zahl_aus_wort(treffer.group(nummer)) for nummer in (1, 2, 4))
+        if bool(treffer.group(3)) != bool(im_umfang):
+            melde("README.md", f"Negativfragen: {im_umfang} im vorgegebenen "
+                               f"Umfang abgelehnt, der Satz nennt 'in diesem "
+                               f"Umfang nicht gefunden' "
+                               f"{'' if treffer.group(3) else 'nicht'}")
         if ist != erwartet or korrekt != negativ:
             melde("README.md", f"Negativfragen {ist!r}, die Protokolle zählen "
                                f"{erwartet!r} bei {korrekt} korrekt "
@@ -778,9 +801,14 @@ def pruefe_summen(stand, runden, readme, landing, abweichungen, konzept=None,
     seite = (quittiert, negativ, korrekt - quittiert)
     for treffer in fundstellen(
             "index.html", r'(\w+) von (\w+) mit gültiger Quittung als "Nicht '
-            r'im Bestand", (\w+) mit dem Befund des Scripts',
+            r'im Bestand"' + umfang_zusatz + r', (\w+) mit dem Befund des Scripts',
             "Summe der Negativfragen"):
-        ist = tuple(zahl_aus_wort(wert) for wert in treffer.groups())
+        ist = tuple(zahl_aus_wort(treffer.group(nummer)) for nummer in (1, 2, 4))
+        if bool(treffer.group(3)) != bool(im_umfang):
+            melde("index.html", f"Negativfragen: {im_umfang} im vorgegebenen "
+                                f"Umfang abgelehnt, der Satz nennt 'in diesem "
+                                f"Umfang nicht gefunden' "
+                                f"{'' if treffer.group(3) else 'nicht'}")
         if ist != seite:
             melde("index.html", f"Negativfragen {ist!r}, die Protokolle "
                                 f"zählen {seite!r}")

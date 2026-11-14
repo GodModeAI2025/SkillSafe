@@ -229,3 +229,29 @@ Die Pruefung der End-URL nach dem Lesen kam zu spaet: das fremde Ziel hatte
 die Anfrage da schon gesehen. Ersatz: ein Opener ohne automatische
 Weiterleitung; das Ziel wird aufgeloest und an Pfadgrenzen gegen das Praefix
 geprueft, bevor die naechste Anfrage hinausgeht.
+
+## [2026-11-14] Stolperdraht fuer Titel, Tags und Registerangaben als Fehler — verworfen
+Ein Titel oder Tag mit Instruktionssignatur steht in jedem Stapel der
+Vollsichtung, und das Modell liest jeden Stapel ganz. Als Fehler haette die
+Pruefung aber jeden vorhandenen Bestand mit so einem Titel rot gemacht; nach
+der Stufenwahl in BETRIEB.md waere das ein Major-Release. Ersatz in v0.18.0:
+validate warnt (ohne den Wortlaut, weil query und sweep die Warnungen mit
+ausgeben), und query und sweep geben das Feld nicht aus, sondern markieren
+Seite oder Quelle mit suspicious_instruction. Den uebrigen Seitentext gibt
+die Engine ohnehin nicht aus; dort bleibt es bei der Warnung.
+
+## [2026-11-14] Katalog von X-0002 von Hand neu erzeugen — verworfen
+sources/derived/X-0002__orchestrator.json fuehrt unter top_tokens noch "fuer",
+erzeugt vor der Normalisierung der Stoppwoerter. orchestrator-template baut
+Kataloge nur aus einem lokal gebundenen Baum; X-0002 ist eine Netzquelle mit
+sha256: null, ihr Katalog also ohnehin ein Schnappschuss, der mit dem
+Hauptzweig driftet. Auf das Ranking wirkt der Eintrag nicht: Eine Anfrage
+enthaelt das Token nicht mehr. Ein von Hand nachgebauter Katalog waere
+Modellarbeit an einer Datei, die das Script nachrechnen koennen soll.
+
+## [2026-11-14] Externe Stoppwoerter an die lokale Liste angleichen — zurueckgestellt
+Abnahmerunde 5 fiel auf, dass der externe Grund "darf" und "sein" als
+Anfragebegriffe fuehrt, waehrend die lokale Abfrage sie als Funktionswoerter
+ueberliest (FUNKTIONSWOERTER gilt nur lokal). Fuer die Antworten war das
+folgenlos. Angleichen hiesse, die externe Rangfolge zu aendern, also
+extern-zweistufig/v3 mit neuer Messung; das gehoert in ein eigenes Release.

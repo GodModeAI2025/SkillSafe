@@ -61,15 +61,19 @@ aufgeführt (``fallback.external_lookup_available``), weist die Antwort aus,
 was extern gefunden oder nicht gelesen wurde: je Treffer eine Angabe
 „Extern (nicht im Bestand):" mit Quelle und Dokument, für jede ungelesene
 Quelle „Extern nicht gelesen:". Beide Etiketten gelten am Anfang einer Zeile
-oder eines Satzes, auch als Überschrift mit einer Liste darunter. Umgekehrt
-nennt eine Trefferzeile nur, was die Abfrage liefert: Bei bekannter Bindung
-(lokale Quelle) und bei einem Lauf ohne Netz (Netzquelle) ist eine
-Trefferzeile ohne Treffer ein Verstoß, sonst ein Hinweis. Den
+oder eines Satzes, auch als Überschrift mit einer Liste darunter; dann ist
+jeder Listenpunkt eine eigene Angabe. Umgekehrt nennt jede Angabe zu einem
+Treffer ein Dokument, das die Abfrage für eine genannte Quelle geliefert hat:
+Bei bekannter Bindung (lokale Quelle) und bei einem Lauf ohne Netz
+(Netzquelle) ist eine Angabe ohne geliefertes Dokument ein Verstoß, sonst
+ein Hinweis. Weist eine Antwort eine Quelle als ungelesen aus, die die
+Nachrechnung bei bekannter Bindung gelesen hat, oder nennt sie einen
+Zustand, den die Abfrage nicht meldet, ist das ein Hinweis. Den
 Verzicht („Extern nicht gelesen: X-0001, X-0002 nicht nachgeschlagen
 (<Grund>) — kein Negativbefund") nimmt es an, wenn das Protokoll die Vorgabe
 dafür festhält (``vorgabe``: den Wunsch des Nutzers oder die Vorgabe der
-Umgebung im Wortlaut) oder wenn eine solche Zeile jede aufgeführte Quelle
-nennt; ohne Vorgabe ist der Verzicht ein Verstoß. Nie im Kennungsfall, nie
+Umgebung im Wortlaut) oder wenn solche Zeilen zusammen jede aufgeführte
+Quelle nennen; ohne Vorgabe ist der Verzicht ein Verstoß. Nie im Kennungsfall, nie
 bei begrenztem Umfang. Die Abfrage mit ``--extern`` rechnet das Werkzeug
 selbst nach, mit gesetztem Offline-Schalter: Es ruft nichts ab und schreibt
 nichts in log.md. Was eine Netzquelle geliefert hätte, weiß es deshalb nur,
@@ -178,14 +182,13 @@ EXTERN_TREFFER_RE = re.compile(
     r"(?i)^extern\s*\(\s*nicht\s+im\s+bestand\s*\)\s*(?::|$)")
 EXTERN_UNGELESEN_RE = re.compile(r"(?i)^extern\s+nicht\s+gelesen\s*(?::|$)")
 X_KENNUNG_RE = re.compile(r"(?i)(?<![A-Za-z0-9])X-\d{4}(?!\d)")
-# Ein Dokumentpfad in einer Trefferzeile, etwa handbuch/mietminderung.md.
-DOKUMENT_RE = re.compile(
-    r"(?<![\w/.-])((?:[\w-]+/)*[\w.-]+\.(?:md|markdown|txt))(?![\w/-])",
-    re.IGNORECASE)
-# Ein zitierter Treffersatz: Was darin steht, nennt die Antwort nicht als
-# Fundstelle.
-ZITAT_RE = re.compile(
-    r"„[^“”\"\n]*[“”\"]|“[^”\n]*”|«[^»\n]*»|»[^«\n]*«|\"[^\"\n]*\"")
+# Satzgrenze in einer Angabe zu Schritt 4c, auch hinter einer schließenden
+# Klammer oder einem Anführungszeichen („… gelesen.) Extern nicht gelesen: …").
+SATZGRENZE_RE = re.compile(
+    r"(?:(?<=[.!?])|(?<=[.!?][)\]“”\"'»]))\s+(?=\S)")
+# Die Zustände von external.state, die nichts gelesen haben (antworten.md, 4c).
+EXTERN_ZUSTAENDE = ("not_bound", "unreachable", "budget_exceeded",
+                    "invalid_external_source", "invalid_query")
 # So liest die Engine den Offline-Schalter (vault.py, _netz_erlaubt).
 OFFLINE_WERTE = {"1", "true", "yes"}
 
@@ -916,69 +919,117 @@ def _extern_angaben(antwort):
     Ein Etikett „Extern (nicht im Bestand):" oder „Extern nicht gelesen:"
     zählt am Anfang einer Zeile und am Anfang eines Satzes, wie die Beispiele
     im Vertrag es schreiben; als Überschrift oder Hervorhebung auch ohne
-    Doppelpunkt. Zur Angabe gehört, was bis zur nächsten Leerzeile oder zum
-    nächsten Etikett folgt, etwa eine Liste darunter. Zitatzeichen, Listen-
-    und Überschriftszeichen davor ändern nichts. Zurück kommen zwei Listen von
-    Texten: die Angaben zu Treffern und die zu Ungelesenem."""
-    text = FORMEL_STOERER.sub("", _ohne_zitatzeichen(_striche(antwort)))
-    treffer, ungelesen, block = [], [], None
-    # Ein nacktes Etikett ohne Text dahinter wartet über Leerzeilen hinweg
-    # auf seine Liste; sonst endet eine Angabe an der Leerzeile.
-    wartet = False
+    Doppelpunkt. Steht Text hinter dem Etikett, ist das eine Angabe; was in
+    derselben Zeile folgt oder die Zeile umbrochen fortsetzt, gehört dazu.
+    Unter einem Etikett ist jeder Listenpunkt eine eigene Angabe, auch in
+    einer Liste mit Leerzeilen; steht hinter dem Etikett schon Text (etwa die
+    Kennung der Quelle), gilt er für jeden Punkt der Liste darunter mit und
+    ist keine eigene Angabe. Eine Frage setzt keine Angabe fort, ein
+    anderes Etikett und eine Leerzeile vor anderem Text beenden sie.
+    Zitatzeichen, Listen- und Überschriftszeichen davor ändern nichts; die
+    Hervorhebung zählt nur beim Erkennen des Etiketts, der Text der Angabe
+    bleibt, wie er ist (ein Dateiname behält seine Unterstriche). Zurück
+    kommen zwei Listen von Texten: die Angaben zu Treffern und die zu
+    Ungelesenem."""
+    text = _ohne_zitatzeichen(_striche(antwort))
+    treffer, ungelesen = [], []
+    ziel = angabe = kopf = None
+    wartet = leer = liste_im_block = False
     for zeile in text.splitlines():
+        listenpunkt = bool(LISTENPUNKT_RE.match(zeile))
         rumpf = LISTENPUNKT_RE.sub("", re.sub(r"^\s*#{1,6}\s*", "", zeile))
         rumpf = rumpf.strip()
         if not rumpf:
-            if not wartet:
-                block = None
+            leer = ziel is not None
             continue
-        for satz in re.split(r"(?<=[.!?])\s+(?=\S)", rumpf):
-            etikett = (EXTERN_TREFFER_RE.match(satz)
-                       or EXTERN_UNGELESEN_RE.match(satz))
+        if leer and not (listenpunkt and (wartet or liste_im_block)):
+            ziel = angabe = kopf = None
+            wartet = liste_im_block = False
+        leer = False
+        for nummer, satz in enumerate(SATZGRENZE_RE.split(rumpf)):
+            kern = FORMEL_STOERER.sub("", satz).strip()
+            etikett = (EXTERN_TREFFER_RE.match(kern)
+                       or EXTERN_UNGELESEN_RE.match(kern))
             if etikett:
-                block = [satz]
-                (treffer if EXTERN_TREFFER_RE.match(satz)
-                 else ungelesen).append(block)
-                wartet = not satz[etikett.end():].strip(" :")
-            elif block is not None and not ETIKETT_RE.match(satz):
-                block.append(satz)
-                wartet = False
+                ziel = treffer if EXTERN_TREFFER_RE.match(kern) else ungelesen
+                liste_im_block = False
+                kopf = None
+                if kern[etikett.end():].strip(" :—–-"):
+                    angabe = [satz]
+                    ziel.append(angabe)
+                    wartet = False
+                else:
+                    angabe = None
+                    wartet = True
+            elif (ziel is not None and not ETIKETT_RE.match(kern)
+                  and not kern.endswith("?")):
+                if listenpunkt and nummer == 0:
+                    # Der erste Punkt unter einer Etikettzeile mit Text: Die
+                    # Zeile wird zum Kopf jedes Punkts.
+                    if (not liste_im_block and angabe is not None
+                            and ziel and ziel[-1] is angabe):
+                        kopf = ziel.pop()
+                    angabe = list(kopf or []) + [satz]
+                    ziel.append(angabe)
+                    liste_im_block = True
+                    wartet = False
+                elif angabe is None:
+                    angabe = [satz]
+                    ziel.append(angabe)
+                    wartet = False
+                else:
+                    angabe.append(satz)
             else:
-                block = None
-                wartet = False
-    return ([" ".join(block) for block in treffer],
-            [" ".join(block) for block in ungelesen])
+                ziel = angabe = kopf = None
+                wartet = liste_im_block = False
+    return ([" ".join(teile) for teile in treffer],
+            [" ".join(teile) for teile in ungelesen])
 
 
 def _kennungen(text):
     return {kennung.upper() for kennung in X_KENNUNG_RE.findall(text)}
 
 
-def _trefferpaare(block):
-    """(Quelle, Dokument) je Nennung in einer Angabe „Extern (nicht im
-    Bestand):". Ein Dokument gehört zur Kennung davor; was in einem Zitat
-    steht, etwa im wiedergegebenen Treffersatz, zählt nicht."""
-    paare = set()
-    block = ZITAT_RE.sub(" ", block)
-    funde = list(X_KENNUNG_RE.finditer(block))
-    for nummer, fund in enumerate(funde):
-        ende = funde[nummer + 1].start() if nummer + 1 < len(funde) else len(block)
-        for dokument in DOKUMENT_RE.findall(block[fund.end():ende]):
-            paare.add((fund.group(0).upper(), dokument))
-    return paare
+def _wortlaut(text):
+    """Text für den Abgleich einer Formel: ohne Hervorhebung, in einer Zeile,
+    kleingeschrieben."""
+    return " ".join(FORMEL_STOERER.sub("", text).split()).casefold()
 
 
-def bindung_pruefen(vault, lauf_extern):
+def _nennt_dokument(angabe, dokument):
+    """Nennt die Angabe das Dokument, mit vollem Pfad oder Dateinamen? In
+    jeder Schreibung; der Name bleibt, wie er ist, Unterstriche inklusive."""
+    dokument = str(dokument or "")
+    namen = {dokument.casefold(), dokument.rsplit("/", 1)[-1].casefold()} - {""}
+    angabe = angabe.casefold()
+    return any(name in angabe for name in namen)
+
+
+def _auszug(angabe):
+    """Eine Angabe kurz für eine Meldung, ohne ihr Etikett."""
+    text = re.sub(r"(?i)^\W*extern\s*\(\s*nicht\s+im\s+bestand\s*\)\W*", "",
+                  " ".join(angabe.split()))
+    return text if len(text) <= 90 else text[:87] + "…"
+
+
+def bindung_pruefen(vault, lauf_extern, frage):
     """Bindung des Laufs gegen den Prüfhost halten (Protokoll: stand.extern).
 
     Welche Quellen ein Lauf lesen konnte, hängt an der host-lokalen Bindung
     in .vault-extern.json, die außerhalb des Manifests liegt. Weicht sie ab,
     hieße jede Abweichung im Urteil über Schritt 4c „Verstoß des Agenten";
-    deshalb bricht das Werkzeug dann ab wie bei einem falschen Manifest."""
+    deshalb bricht das Werkzeug dann ab wie bei einem falschen Manifest.
+    Gefragt wird mit einer Frage aus dem Protokoll: Die nimmt die Engine an
+    (sonst bricht die Prüfung ohnehin ab), und kein festes Suchwort kann in
+    einem fremden Bestand mehrdeutig sein."""
     if "gebunden" not in lauf_extern:
         return
-    probe = lauf(vault, "query", "--extern", "Bindung",
+    probe = lauf(vault, "query", "--extern", frage,
                  umgebung={"SKILLSAFE_OFFLINE": "1"})
+    if probe.get("state") not in ("candidates_found", "no_candidates"):
+        raise ProtokollFehler(
+            f"Die Bindung lässt sich nicht nachlesen: Die Engine nimmt die "
+            f"Frage {frage!r} nicht an ({probe.get('state')})")
     gebunden = sorted(str(quelle.get("id")).upper()
                       for quelle in (probe.get("external") or {}).get("sources", [])
                       if quelle.get("mode") == "lokal")
@@ -1035,17 +1086,16 @@ def _pruefe_extern(vault, frage, antwort, aufgefuehrt, offline, bindung_bekannt,
     ungelesen_text = " ".join(ungelesen_bloecke)
     genannt = _kennungen(ungelesen_text)
     verzichtszeilen = [block for block in ungelesen_bloecke
-                       if "nicht nachgeschlagen"
-                       in " ".join(block.split()).casefold()]
+                       if "nicht nachgeschlagen" in _wortlaut(block)]
     # Der ausgewiesene Verzicht: Der Schritt unterblieb auf Wunsch des
-    # Nutzers oder nach einer Vorgabe der Umgebung, und die Zeile nennt jede
-    # aufgeführte Quelle. Ohne Vorgabe im Protokoll gilt nur die Zeile als
-    # Verzicht, die selbst jede Kennung nennt; sonst ist „nicht
-    # nachgeschlagen" der Wortlaut einer Zeile nach dem Aufruf, und es gilt
-    # der normale Weg.
+    # Nutzers oder nach einer Vorgabe der Umgebung, und die Angaben nennen
+    # jede aufgeführte Quelle. Ohne Vorgabe im Protokoll gilt als Verzicht,
+    # was zusammen jede Kennung „nicht nachgeschlagen" nennt, auch auf
+    # mehrere Zeilen verteilt; sonst ist „nicht nachgeschlagen" der Wortlaut
+    # einer Zeile nach dem Aufruf, und es gilt der normale Weg.
     verzicht = bool(not treffer_bloecke and verzichtszeilen and (
-        vorgabe or any(aufgefuehrt <= _kennungen(block)
-                       for block in verzichtszeilen)))
+        vorgabe or aufgefuehrt <= set().union(
+            *(_kennungen(block) for block in verzichtszeilen))))
     if verzicht:
         if not vorgabe:
             verstoesse.append(
@@ -1075,9 +1125,8 @@ def _pruefe_extern(vault, frage, antwort, aufgefuehrt, offline, bindung_bekannt,
     fehlende_treffer = []
     for stelle in treffer:
         dokument = str(stelle.get("document") or "")
-        namen = {dokument.casefold(), dokument.rsplit("/", 1)[-1].casefold()} - {""}
         if not any(str(stelle["source_id"]).upper() in _kennungen(block)
-                   and any(name in block.casefold() for name in namen)
+                   and _nennt_dokument(block, dokument)
                    for block in treffer_bloecke):
             fehlende_treffer.append(f"{stelle['source_id']} {dokument}".strip())
     if fehlende_treffer:
@@ -1085,36 +1134,50 @@ def _pruefe_extern(vault, frage, antwort, aufgefuehrt, offline, bindung_bekannt,
             f"Treffer ohne Zeile „Extern (nicht im Bestand):\": "
             f"{'; '.join(sorted(set(fehlende_treffer)))}. Je Treffer nennt die "
             f"Antwort Quelle und Dokument")
-    # Umgekehrt: Was eine solche Zeile nennt, muss die Abfrage liefern; die
-    # Zeilen kommen aus external.hits. Sicher sagen lässt sich das nur bei
-    # bekannter Bindung (lokale Quelle) und bei einem Lauf ohne Netz
-    # (Netzquelle); sonst bleibt es ein Hinweis.
-    # Nachsichtig gelesen: in jeder Schreibung, und ein Name zählt auch als
-    # Ende eines längeren Pfads (ein Dateiname mit Leerzeichen zerfällt beim
-    # Lesen in Stücke).
-    geliefert = [(str(stelle["source_id"]).upper(),
-                  str(stelle.get("document") or "").casefold())
-                 for stelle in treffer]
+    # Umgekehrt: Jede Angabe „Extern (nicht im Bestand):" nennt einen Treffer
+    # der Abfrage, also ein geliefertes Dokument einer Quelle, die sie nennt
+    # (nennt sie keine, einer der aufgeführten). Sicher sagen lässt sich das
+    # nur bei bekannter Bindung (lokale Quelle) und bei einem Lauf ohne Netz
+    # (Netzquelle); sonst bleibt es ein Hinweis. Weitere Wörter, Pfade oder
+    # Sätze in der Angabe ändern daran nichts.
     erfunden, offen = [], []
-    for kennung, name in sorted(set().union(
-            *(_trefferpaare(block) for block in treffer_bloecke))):
-        if kennung not in aufgefuehrt or any(
-                quelle == kennung and dokument.endswith(name.casefold())
-                for quelle, dokument in geliefert):
+    for angabe in treffer_bloecke:
+        bezug = (_kennungen(angabe) & aufgefuehrt) or set(aufgefuehrt)
+        if any(str(stelle["source_id"]).upper() in bezug
+               and _nennt_dokument(angabe, stelle.get("document"))
+               for stelle in treffer):
             continue
-        netzquelle = kennung in netz
-        if (offline if netzquelle else bindung_bekannt):
-            erfunden.append(f"{kennung} {name}")
-        else:
-            offen.append(f"{kennung} {name}")
+        pruefbar = all((offline if kennung in netz else bindung_bekannt)
+                       for kennung in bezug)
+        (erfunden if pruefbar else offen).append(_auszug(angabe))
     if erfunden:
         verstoesse.append(
-            f"Zeile „Extern (nicht im Bestand):\" ohne Treffer der Abfrage: "
-            f"{'; '.join(erfunden)}. Sie nennt nur, was query --extern liefert")
+            f"Angabe „Extern (nicht im Bestand):\" ohne Treffer der Abfrage: "
+            f"{'; '.join(erfunden)}. Sie nennt nur, was query --extern liefert, "
+            f"mit Quelle und Dokument")
     if offen:
         hinweise.append(
             f"Trefferzeile nicht nachprüfbar ({'; '.join(offen)}): Bindung "
             f"oder Netzlage des Laufs stehen nicht im Protokoll")
+    # Als ungelesen ausgewiesen, aber gelesen; oder ein Zustand, den die
+    # Abfrage nicht meldet. Ob die Angabe das wirklich behauptet, liest das
+    # Werkzeug nicht sicher heraus: ein Hinweis, kein Verstoß.
+    if bindung_bekannt:
+        gelesen = (set(quellen) - ungelesen - netz
+                   if zustand in ("external_candidates_found",
+                                  "no_external_candidates") else set())
+        doch_gelesen = sorted(genannt & gelesen)
+        if doch_gelesen:
+            hinweise.append(
+                f"Als nicht gelesen ausgewiesen, aber gelesen: "
+                f"{', '.join(doch_gelesen)}. Die Abfrage mit --extern hat die "
+                f"Quelle gelesen ({zustand})")
+        fremde = sorted({name for name in EXTERN_ZUSTAENDE
+                         if name in _wortlaut(ungelesen_text)} - {zustand})
+        if fremde:
+            hinweise.append(
+                f"Zustand {', '.join(fremde)} genannt, die Abfrage meldet "
+                f"{zustand}")
     fehlend = pflicht_ungelesen - genannt
     # Nennt die Antwort Treffer aus einer Quelle, die hier ungelesen blieb,
     # war sie beim Lauf vermutlich anders gebunden. Ohne Angabe zur Bindung
@@ -1536,7 +1599,7 @@ def main(argv=None):
             hinweise_lauf.append(vertrag_4c_hinweis(vault))
         lauf_extern = stand.get("extern") or {}
         if mit_4c:
-            bindung_pruefen(vault, lauf_extern)
+            bindung_pruefen(vault, lauf_extern, antworten[0]["frage"])
         zeilen = [pruefe(vault, eintrag, bestand, mit_4c=mit_4c,
                          offline=lauf_extern.get("offline"),
                          bindung_bekannt="gebunden" in lauf_extern)

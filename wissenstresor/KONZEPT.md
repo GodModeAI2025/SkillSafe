@@ -370,7 +370,8 @@ geöffnete Dokument ein Abruf ist; eine lokale Quelle wird vollständig gelesen,
 der Katalog ordnet sie nur. Ein Dokument ohne einen einzigen Anfragebegriff
 fällt heraus, unabhängig vom Katalog-Score. Bleibt nichts übrig, kommt nichts
 zurück. Funktionswörter der Frage sind seit v3 kein Anfragebegriff: Ein Satz,
-den nur ein „sie" oder ein „ohne" trifft, ist kein Fund.
+den nur ein „sie" oder ein „ohne" trifft, ist kein Fund. Großgeschrieben
+mitten im Satz ist so ein Wort ein Substantiv und zählt („Waren").
 
 **Begründung:** Der Katalogtext ist ein schwaches Signal, der Bestand dahinter
 das starke. Im Demo-Bestand liefert „Minderung Mangel Wohnung" in Stufe 1 das

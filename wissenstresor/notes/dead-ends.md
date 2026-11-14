@@ -239,8 +239,10 @@ validate warnt (ohne den Wortlaut, weil query und sweep die Warnungen mit
 ausgeben), und query und sweep geben das Feld nicht aus, sondern markieren
 Seite oder Quelle mit suspicious_instruction. Den uebrigen Seitentext gibt
 die Engine ohnehin nicht aus; seit v0.18.1 markiert eine Signatur dort die
-Seite ebenso, und validate prueft ihn je Abschnitt als einen Text, damit ein
-Zeilenumbruch keine Signatur teilt.
+Seite ebenso. Ihn ueber Absatzgrenzen hinweg als einen Text zu pruefen,
+ergab Fehlalarme (eine Ueberschrift "System" vor einem Absatz, der mit
+"Prompt" beginnt); seit v0.18.2 prueft validate je Absatz, ohne Zitat- und
+Kommentarzeichen am Zeilenanfang und mit der Fortsetzung einer Claim-Zeile.
 
 ## [2026-11-14] Katalog von X-0002 von Hand neu erzeugen — verworfen
 sources/derived/X-0002__orchestrator.json fuehrt unter top_tokens noch "fuer",
@@ -260,8 +262,10 @@ Gegenteil: Von den sieben Zeilen "Extern (nicht im Bestand):" der Runde kamen
 vier nur ueber "ohne", "nur" und "sie" zustande, und seit Schritt 4c je
 Treffer eine Zeile verlangt, ist jeder solche Rauschtreffer Pflicht. Ersatz
 in v0.18.1: extern-zweistufig/v3 nimmt die Funktionswoerter der Frage aus den
-Anfragebegriffen (Kuerzel ausgenommen); die Dokumentseite und die
-Katalogzahlen bleiben. Gemessen an den 117 verschiedenen Fragen aus Runde 1
+Anfragebegriffen; die Dokumentseite und die Katalogzahlen bleiben. Ein
+Kuerzel bleibt Begriff, seit v0.18.2 auch ein grossgeschriebenes Wort mitten
+im Satz (sonst fiel "Was sind Waren?" ganz aus), und eine Frage aus lauter
+Funktionswoertern sucht wie in v2. Gemessen an den 117 verschiedenen Fragen aus Runde 1
 bis 5 und dem Gold gegen das gebundene Beispielhandbuch: 62 behalten ihre
 Treffer, bei 49 fallen nur Treffer weg (113 insgesamt), bei 6 tritt ein
 Satz mit mehr Inhaltswoertern an die Stelle. Die Stichprobe zum Routing

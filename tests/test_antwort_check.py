@@ -1208,6 +1208,17 @@ class AntwortCheckTests(unittest.TestCase):
         eigenmaechtig, _ = zeile(verzichtszeile)
         self.assertTrue(any(m.startswith("Verzicht auf Schritt 4c ohne Vorgabe")
                             for m in eigenmaechtig["verstoesse"]), eigenmaechtig)
+        verteilt, _ = zeile(kern + "Extern nicht gelesen: X-0001 nicht "
+                            "nachgeschlagen (auf Wunsch).\nExtern nicht gelesen: "
+                            "X-0002 nicht nachgeschlagen (auf Wunsch).")
+        self.assertTrue(any(m.startswith("Verzicht auf Schritt 4c ohne Vorgabe")
+                            for m in verteilt["verstoesse"]), verteilt)
+        # Eine Frage danach weist keine Quelle aus.
+        nachfrage, _ = zeile(kern + "Extern nicht gelesen: X-0002 (offline) — "
+                             "kein Negativbefund\nSoll ich X-0001 auf diesem "
+                             "Host binden?")
+        self.assertTrue(any("fehlt für X-0001" in m
+                            for m in nachfrage["verstoesse"]), nachfrage)
         verzicht_halb, _ = zeile(kern + "Extern nicht gelesen: X-0001 nicht "
                                  "nachgeschlagen (Nutzerwunsch) — kein "
                                  "Negativbefund", vorgabe=bitte)
@@ -1302,10 +1313,35 @@ class AntwortCheckTests(unittest.TestCase):
         self.assertEqual(tool._kennungen(ungelesen[0]), {"X-0001", "X-0002"})
         treffer, ungelesen = tool._extern_angaben(beispiel("Teilweise gelesen"))
         self.assertEqual(len(treffer), 1, treffer)
-        self.assertEqual(tool._trefferpaare(treffer[0]),
-                         {("X-0001", "handbuch/mietminderung.md")})
+        self.assertEqual(tool._kennungen(treffer[0]), {"X-0001"})
+        self.assertTrue(tool._nennt_dokument(treffer[0],
+                                             "handbuch/mietminderung.md"))
         self.assertEqual(len(ungelesen), 1, ungelesen)
         self.assertEqual(tool._kennungen(ungelesen[0]), {"X-0002"})
+        # Formen, die die zweite Prüfung fand: Ein Dateiname behält seine
+        # Unterstriche; eine lockere Liste ergibt je Punkt eine Angabe; eine
+        # Etikettzeile mit Kennung gilt für die Punkte darunter; ein Etikett
+        # hinter einer schließenden Klammer beginnt einen neuen Satz; eine
+        # Frage setzt keine Angabe fort.
+        treffer, _ = tool._extern_angaben(
+            "Extern (nicht im Bestand): X-0001, handbuch/miet_recht.md, Satz 2")
+        self.assertTrue(tool._nennt_dokument(treffer[0], "handbuch/miet_recht.md"))
+        treffer, _ = tool._extern_angaben(
+            "**Extern (nicht im Bestand):**\n\n- X-0001, a.md, Satz 3\n\n"
+            "- X-0001, b.md, Satz 9\n\nHinweise: keine")
+        self.assertEqual(treffer, ["X-0001, a.md, Satz 3", "X-0001, b.md, Satz 9"])
+        treffer, _ = tool._extern_angaben(
+            "Extern (nicht im Bestand): X-0001\n- a.md, Satz 3\n- b.md, Satz 9")
+        self.assertEqual([tool._kennungen(t) for t in treffer],
+                         [{"X-0001"}, {"X-0001"}])
+        treffer, ungelesen = tool._extern_angaben(
+            "Nicht im Bestand: „Darf er das?“ Extern (nicht im Bestand): X-0001, "
+            "a.md (Satz 3, lokal gelesen.) Extern nicht gelesen: X-0002 (offline).")
+        self.assertEqual((len(treffer), len(ungelesen)), (1, 1))
+        _, ungelesen = tool._extern_angaben(
+            "Extern nicht gelesen: X-0002 (offline) — kein Negativbefund\n"
+            "Soll ich X-0001 auf diesem Host binden?")
+        self.assertEqual(tool._kennungen(" ".join(ungelesen)), {"X-0002"})
 
     def test_step_4c_follows_the_contract_of_the_checked_vault(self):
         """Ob 4c Pflicht ist, sagt der Vertrag des Tresors, nicht VERSION."""
@@ -1437,6 +1473,34 @@ class AntwortCheckTests(unittest.TestCase):
         zitiert = zeile(kern + zeilen[0] + ": „Mehr steht in anhang/weiteres.md.“\n"
                         + "\n".join(zeilen[1:]) + "\n" + ungelesen, stand=lauf)
         self.assertEqual(zitiert["verstoesse"], [])
+        # Dokument vor der Kennung, eine Erläuterung mit einer Bestandsseite
+        # und eine lockere Liste: alles sauber.
+        umgestellt = "\n".join(
+            f"Extern (nicht im Bestand): {stelle['document']} aus "
+            f"{stelle['source_id']} (Satz {stelle['sentence_index']}). Auch "
+            f"knowledge/demo-okf/okf.md sagt dazu nichts."
+            for stelle in extern["hits"])
+        self.assertEqual(zeile(kern + umgestellt + "\n" + ungelesen,
+                               stand=lauf)["verstoesse"], [])
+        locker = ("**Extern (nicht im Bestand):**\n\n"
+                  + "\n\n".join("- " + z.split(": ", 1)[1] for z in zeilen)
+                  + "\n\n" + ungelesen)
+        self.assertEqual(zeile(kern + locker, stand=lauf)["verstoesse"], [])
+        # Eine Angabe ohne geliefertes Dokument ist erfunden, auch ohne Pfad.
+        ohne_pfad = zeile(alles + "\nExtern (nicht im Bestand): X-0001, "
+                          "Abschnitt Kaution, Satzposition 2", stand=lauf)
+        self.assertTrue(any("ohne Treffer der Abfrage: X-0001, Abschnitt Kaution"
+                            in m for m in ohne_pfad["verstoesse"]), ohne_pfad)
+        # Als ungelesen ausgewiesen, obwohl gelesen, und ein fremder Zustand:
+        # Hinweise.
+        vorlage = zeile(kern + "\n".join(zeilen) + "\nExtern nicht gelesen: "
+                        "X-0001 (nicht gebunden), X-0002 (SKILLSAFE_OFFLINE "
+                        "gesetzt), Zustand unreachable — kein Negativbefund",
+                        stand=lauf)
+        self.assertTrue(any("aber gelesen: X-0001" in h
+                            for h in vorlage["hinweise"]), vorlage)
+        self.assertTrue(any("Zustand unreachable genannt" in h
+                            for h in vorlage["hinweise"]), vorlage)
         abweichend = ergebnis(alles, stand={"extern": {"gebunden": [],
                                                        "offline": True}})
         self.assertEqual(abweichend.returncode, 2, abweichend.stdout)

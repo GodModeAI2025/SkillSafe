@@ -147,10 +147,13 @@ Abgeglichen wird ausschließlich an Tokengrenzen. „himmel" findet deshalb kein
 vermieden. Stoppwörter wie „für" zählen nicht, auch nicht als „fuer". Seit
 `extern-zweistufig/v3` gilt das auch für die Funktionswörter des lokalen
 Rankings (Artikel, Pronomen, Präpositionen, Hilfs- und Modalverben,
-Partikeln): In der Frage sind sie kein Anfragebegriff, ein Kürzel in
-Großbuchstaben wie „IT" bleibt einer. Die Dokumente tokenisiert die Suche
-unverändert. In v2 trafen „sie", „nur" oder „ohne" beliebige Sätze, und
-jeder externe Treffer verlangt in der Antwort eine eigene Zeile.
+Partikeln): In der Frage sind sie kein Anfragebegriff. Ein Kürzel in
+Großbuchstaben wie „IT" bleibt einer, ebenso ein großgeschriebenes Wort
+mitten im Satz, denn das ist ein Substantiv („Was sind Waren?"); die Pronomen
+der Anrede („Können Sie …") zählen nie. Besteht die Frage nur aus
+Funktionswörtern, sucht sie wie in v2 mit allen. Die Dokumente tokenisiert
+die Suche unverändert. In v2 trafen „sie", „nur" oder „ohne" beliebige
+Sätze, und jeder externe Treffer verlangt in der Antwort eine eigene Zeile.
 
 ## Ehrlich scheitern
 

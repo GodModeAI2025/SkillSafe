@@ -29,7 +29,7 @@ geschützte `dir_fd`-Operationen fail-closed ab.
 📖 **Konzept & Architekturentscheidungen:** [`wissenstresor/KONZEPT.md`](wissenstresor/KONZEPT.md)
 🌐 **Landingpage:** [`index.html`](index.html) (GitHub-Pages-fähig, Source = repo root)
 
-**Aktueller Release: v0.18.1** (Profil `oksv-lite/1.3`) mit Begriffswelten,
+**Aktueller Release: v0.18.2** (Profil `oksv-lite/1.3`) mit Begriffswelten,
 deterministischem Hybrid-Retrieval, geprüften Bild-/PDF-Regionen und einem
 reproduzierbaren `.skill`-Paket für Claude Code und Codex. Der
 Frontmatter-Parser lehnt Verschachtelung fail-closed ab statt sie still
@@ -244,9 +244,25 @@ Verzicht auf Schritt 4c nur an, wenn das Protokoll die Bitte des Nutzers
 festhält (`vorgabe`). Ob der Schritt Pflicht ist, liest es aus dem Vertrag
 des geprüften Tresors.
 
-Abnahme: 246 Tests bestanden · 37 manifestierte Dateien · 39 sichere
+v0.18.2 trägt nach, was eine zweite Prüfung dieser Nachbesserungen fand,
+ebenfalls vor `main`. Ein großgeschriebenes Wort mitten im Satz bleibt in der
+externen Suche ein Begriff, denn es ist ein Substantiv: „Was sind Waren?"
+fand sonst nichts mehr; eine Frage aus lauter Funktionswörtern sucht wie
+vorher. Der Stolperdraht liest den Seitentext je Absatz, wie ein Leser:
+Zitat- und Kommentarzeichen am Zeilenanfang trennen keine Signatur, die
+Fortsetzung einer Claim-Zeile gehört zu ihr, und über Überschriften und
+Leerzeilen hinweg entsteht kein Fehlalarm mehr. Eine Kante unter
+`relations`, die auf eine markierte Seite zeigt, trägt die Markierung; ein
+Seitenpfad und ein externer Dokumentpfad fallen unter den Stolperdraht; eine
+Fehlermeldung bleibt auch dann geschwärzt, wenn sie den Wert in der
+Schreibweise von `repr` zitiert. Das Prüfwerkzeug liest Dateinamen mit
+Unterstrich richtig, je Listenpunkt eine Angabe, lockere Listen und einen
+auf mehrere Zeilen verteilten Verzicht; eine Angabe zu einem Treffer muss ein
+geliefertes Dokument nennen.
+
+Abnahme: 248 Tests bestanden · 37 manifestierte Dateien · 39 sichere
 Paketeinträge · SHA-256
-`94d958d82bed3274343365708146813865f3d96d986aa2bea197e04cb905d5ee`.
+`7f3e05ee91f08c67c5873c5dd55b38c82fcffcba56d8394af32a1c138f9c3fca`.
 Dazu 2 aufgeführte externe Bezugsquellen · 2 Satzanker.
 
 Alles läuft mit der Python-Standardbibliothek, gemessen mit CPython 3.9 und

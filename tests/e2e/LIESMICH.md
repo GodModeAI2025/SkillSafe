@@ -119,9 +119,9 @@ ist eine eingeschränkte Sichtung bei `weak` und `none` eine ausgelassene
 Pflicht. Bittet der Mensch darum, nicht extern nachzuschlagen, oder lässt
 die Umgebung den Aufruf nicht zu, trägt der Eintrag diese Vorgabe im
 Wortlaut unter `vorgabe`. Nur dann zählt ein ausgewiesener Verzicht auf
-Schritt 4c; ohne Vorgabe ist er ein Verstoß, und eine Zeile „… nicht
-nachgeschlagen", die nicht jede aufgeführte Quelle nennt, liest das Werkzeug
-als Zeile nach dem Aufruf. Ein optionaler Block `stand` mit
+Schritt 4c; ohne Vorgabe ist er ein Verstoß, und Zeilen „… nicht
+nachgeschlagen", die zusammen nicht jede aufgeführte Quelle nennen, liest das
+Werkzeug als Zeilen nach dem Aufruf. Ein optionaler Block `stand` mit
 `manifest_sha256` bindet das Protokoll an einen Stand. Hing der Lauf an
 gebundenen externen Quellen oder an der Netzlage, hält `stand.extern` beides
 fest: `{"gebunden": ["X-0001"], "offline": true}`. Bindet der prüfende Host

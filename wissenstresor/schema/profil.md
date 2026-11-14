@@ -170,13 +170,17 @@ eine aufgeführte externe Bezugsquelle.
   Ziel) sind kuratierter Text daneben. Eine Signatur dort meldet `validate`
   als Warnung, ohne den Wortlaut zu wiederholen (`query` und `sweep` geben
   die Warnungen mit aus); ein Release bleibt möglich. Den übrigen Text prüft
-  `validate` je zusammenhängendem Abschnitt als einen Text, damit ein
-  Zeilenumbruch keine Signatur teilt; eine Claim-Zeile trennt. Ausgegeben
-  wird ein solches Feld nicht (siehe „Maschinenabfrage"); den übrigen Text
-  einer Seite gibt die Engine ohnehin nicht aus, der Antworten-Workflow
-  liest ihn aber mit. Zitiert eine Fehlermeldung eine Signatur, geben
-  `query` und `sweep` von ihr nur den Ort aus; den Wortlaut zeigt
-  `validate`.
+  `validate` je Absatz als einen Text, wie ein Leser ihn zusammenliest:
+  Ein Zeilenumbruch teilt keine Signatur, Zitat- und Kommentarzeichen am
+  Zeilenanfang fallen weg, und die Fortsetzung einer Claim-Zeile gehört zu
+  ihr; eine Leerzeile, eine Überschrift oder ein neuer Listenpunkt trennt.
+  Ein Seitenpfad mit Signatur ist ebenfalls eine Warnung. Ausgegeben wird
+  ein solches Feld nicht (siehe „Maschinenabfrage"); den übrigen Text einer
+  Seite gibt die Engine ohnehin nicht aus, der Antworten-Workflow liest ihn
+  aber mit, und den Pfad braucht sie als Kennung. Zitiert eine Fehlermeldung
+  eine Signatur, auch in der Schreibweise von `repr` („ignore\xa0all …"),
+  geben `query` und `sweep` von ihr nur den Ort oder die Kennung aus; den
+  Wortlaut zeigt `validate`.
 * Eine Wissensseite liegt nie unter einem Pfad, den das Manifest ausnimmt
   (`__pycache__`). Ihr Wortlaut wäre sonst nach dem Release änderbar, ohne
   dass Sperre oder Siegel es bemerken.
@@ -324,10 +328,13 @@ Rechte, Ziel) eine Signatur, steht das Feld als `null` da; aus `tags` fehlt
 nur der betroffene Eintrag. Die Seite in `pages[]`, die Quelle unter
 `evidence[].source`, die Seite eines Stapels von `sweep` und die Quelle unter
 `external.sources[]` tragen dann `suspicious_instruction: true`. Eine
-Signatur in einem Tag oder im übrigen Text der Seite markiert die Seite
-ebenso, auch wo das Feld gar nicht ausgegeben wird: in `pages[]` von `query`
-und der Quittung. Ohne Signatur fehlt das Feld ganz, und die Ausgabe ist
-dieselbe wie vorher.
+Signatur in einem Tag, im übrigen Text der Seite oder im Pfad markiert die
+Seite ebenso, auch wo das Feld gar nicht ausgegeben wird: in `pages[]` von
+`query` und der Quittung, im Stapel und an jeder Kante unter `relations`, die
+auf sie zeigt. Ein externer Treffer, dessen Dokumentpfad eine Signatur
+trägt, hat das Signal `suspicious_instruction`; der Pfad bleibt als Kennung
+stehen. Ohne Signatur fehlt das Feld ganz, und die Ausgabe ist dieselbe wie
+vorher.
 
 ### Wortform `wortform/v1`
 
@@ -679,9 +686,11 @@ normalisiert (wie im lokalen Ranking), eine lokale Quelle wird vollständig
 statt in den besten 24 Katalogeinträgen gelesen, und ein Dokument zählt, sobald
 es einen Anfragebegriff enthält — v1 rundete das bei mehr als 100 Begriffen auf
 0 % Abdeckung ab und verwarf es. v3 nimmt die Funktionswörter der Frage
-(dieselbe Liste wie im lokalen Ranking, Kürzel ausgenommen) aus den
-Anfragebegriffen; Dokumentseite und Rezept des Fingerprints bleiben, die
-Nummer im Fingerprint wechselt.
+(dieselbe Liste wie im lokalen Ranking) aus den Anfragebegriffen. Es bleiben
+ein Kürzel in Großbuchstaben und ein großgeschriebenes Wort mitten im Satz,
+denn das ist ein Substantiv („Was sind Waren?"); die Pronomen der Anrede
+zählen nie. Bleibt nichts übrig, gelten die Tokens wie in v2. Dokumentseite
+und Rezept des Fingerprints bleiben, die Nummer im Fingerprint wechselt.
 
 Geprüft wird das Ziel jeder Netzanfrage vor dem Socket: unter dem Präfix an
 Pfadgrenzen, ohne Punktsegmente, auch percent-kodiert. Einer Weiterleitung

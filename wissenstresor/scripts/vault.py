@@ -359,27 +359,71 @@ def _ohne_signatur(eintrag, felder):
     return eintrag
 
 
-def _freitext_signaturen(zeilen):
-    """Dateizeilen, in denen im Freitext eine Instruktionssignatur beginnt.
+# Eine Zeile, die im Rumpf einen eigenen Block beginnt: Überschrift,
+# Listenpunkt, Tabellenzeile, Code-Zaun.
+FREITEXT_BLOCKSTART_RE = re.compile(
+    r"^\s{0,3}(?:#{1,6}\s|[-*+]\s|\d{1,3}[.)]\s|\||```|~~~)")
+FREITEXT_UEBERSCHRIFT_RE = re.compile(r"^\s{0,3}#{1,6}\s")
+FREITEXT_ZITAT_RE = re.compile(r"^\s{0,3}(?:>\s?)+")
 
-    ``zeilen`` ist eine Folge von (Zeilennummer, Text oder None); None
-    trennt. Jeder zusammenhängende Lauf wird als ein Text geprüft: Die
-    Signatur verlangt Leerraum zwischen den Wörtern, und ein Zeilenumbruch
-    ist Leerraum. Je Zeile höchstens ein Treffer."""
-    treffer, lauf = set(), []
 
-    def lauf_pruefen():
-        text = "\n".join(zeile for _, zeile in lauf)
+def _freitext_laeufe(datei_zeilen, offset, rumpf_zeilen):
+    """Der Freitext einer Seite in Läufen, wie ein Leser ihn zusammenliest.
+
+    Ein Lauf ist ein Absatz: Zeilen, die ein weicher Umbruch trennt. Eine
+    Leerzeile beendet ihn, ein neuer Block (Überschrift, Listenpunkt,
+    Tabellenzeile, Code-Zaun) beginnt einen neuen, eine Überschrift steht für
+    sich. Zitat- und Kommentarzeichen am Zeilenanfang fallen weg, damit eine
+    Signatur über zwei Zitat- oder Kommentarzeilen zusammenhängt. Eine
+    Claim-Zeile beginnt einen Lauf wie ein Listenpunkt; ihre Fortsetzung
+    gehört dazu. Im Frontmatter zählen nur Kommentarzeilen. Zurück kommen
+    Läufe aus (Zeilennummer, Text, ist_claim)."""
+    laeufe, lauf = [], []
+
+    def schliessen():
+        if lauf:
+            laeufe.append(list(lauf))
+            lauf.clear()
+
+    if offset:
+        for nummer, zeile in enumerate(datei_zeilen[:offset], 1):
+            if 1 < nummer < offset and zeile.lstrip().startswith("#"):
+                lauf.append((nummer, zeile.lstrip().lstrip("#").strip(), False))
+            else:
+                schliessen()
+        schliessen()
+    for bn, zeile in enumerate(rumpf_zeilen, 1):
+        if not zeile.strip():
+            schliessen()
+            continue
+        ist_claim = zeile.startswith(CLAIM_START)
+        if ist_claim or FREITEXT_BLOCKSTART_RE.match(zeile):
+            schliessen()
+        lauf.append((offset + bn, FREITEXT_ZITAT_RE.sub("", zeile), ist_claim))
+        if FREITEXT_UEBERSCHRIFT_RE.match(zeile):
+            schliessen()
+    schliessen()
+    return laeufe
+
+
+def _freitext_signaturen(laeufe):
+    """Dateizeilen, an denen im Freitext eine Instruktionssignatur liegt.
+
+    Jeder Lauf wird als ein Text geprüft: Die Signatur verlangt Leerraum
+    zwischen den Wörtern, und ein Zeilenumbruch ist Leerraum. Gemeldet wird
+    die erste Zeile des Fundes außerhalb einer Claim-Zeile; ein Fund ganz in
+    einer Claim-Zeile ist dort schon ein Fehler. Je Zeile höchstens ein
+    Treffer."""
+    treffer = set()
+    for lauf in laeufe:
+        text = "\n".join(teil for _, teil, _ in lauf)
         for fund in PROMPT_INJECTION_RE.finditer(text):
-            treffer.add(lauf[text.count("\n", 0, fund.start())][0])
-        lauf.clear()
-
-    for nummer, zeile in zeilen:
-        if zeile is None:
-            lauf_pruefen()
-        else:
-            lauf.append((nummer, zeile))
-    lauf_pruefen()
+            erste = text.count("\n", 0, fund.start())
+            letzte = text.count("\n", 0, max(fund.end() - 1, fund.start()))
+            ausserhalb = [lauf[i][0] for i in range(erste, letzte + 1)
+                          if not lauf[i][2]]
+            if ausserhalb:
+                treffer.add(ausserhalb[0])
     return sorted(treffer)
 
 
@@ -1321,16 +1365,47 @@ def _lokale_tokens(value):
     )
 
 
+# Pronomen der Anrede: großgeschrieben, aber kein Sachwort ("Können Sie …").
+ANREDE_PRONOMEN = frozenset("""
+sie ihnen ihr ihre ihrem ihren ihrer ihres du dich dir dein deine deinem
+deinen deiner deines euch euer eure eurem euren eurer eures
+""".split())
+SATZZEICHEN_VOR_SATZANFANG = ".!?:;"
+
+
+def _sachwoerter_gross(text):
+    """Normalisierte Tokens großgeschriebener Wörter mitten in einem Satz.
+
+    Im Deutschen ist so ein Wort ein Substantiv und damit ein Sachwort, auch
+    wenn es kleingeschrieben ein Funktionswort wäre ("Waren", "Soll und
+    Haben", "Macht"). Am Satzanfang sagt die Großschreibung nichts, und die
+    Pronomen der Anrede zählen nie."""
+    gross = set()
+    for fund in WORT_RE.finditer(text):
+        davor = text[:fund.start()].rstrip(" \t\r\n\"'„“”‚‘’»«()[]")
+        if davor and davor[-1] not in SATZZEICHEN_VOR_SATZANFANG \
+                and fund.group(0)[:1].isupper():
+            gross.update(_retrieval_norm(fund.group(0)).split())
+    return gross - ANREDE_PRONOMEN
+
+
 def _anfragebegriffe(query):
     """Anfragebegriffe der externen Suche (seit extern-zweistufig/v3).
 
     Die Tokens der Frage wie bisher (_retrieval_tokens), ohne die
-    Funktionswörter des lokalen Rankings; ein Kürzel in Großbuchstaben bleibt.
-    Die Dokumentseite tokenisiert unverändert: Katalogzahlen, Satzbestand und
-    Fingerprint-Rezept hängen nicht an dieser Liste."""
-    kuerzel = _kuerzel_tokens(str(query))
-    return tuple(token for token in _retrieval_tokens(query)
-                 if token not in FUNKTIONSWOERTER or token in kuerzel)
+    Funktionswörter des lokalen Rankings. Es bleiben ein Kürzel in
+    Großbuchstaben ("IT") und ein großgeschriebenes Wort mitten im Satz
+    ("Was sind Waren?"). Bleibt danach nichts übrig, gelten die Tokens wie in
+    v2: Eine Frage aus lauter Funktionswörtern wird gesucht, statt als
+    unbrauchbar zu gelten. Die Dokumentseite tokenisiert unverändert:
+    Katalogzahlen, Satzbestand und Fingerprint-Rezept hängen nicht an dieser
+    Liste."""
+    text = str(query)
+    tokens = _retrieval_tokens(text)
+    behalten = _kuerzel_tokens(text) | _sachwoerter_gross(text)
+    begriffe = tuple(token for token in tokens
+                     if token not in FUNKTIONSWOERTER or token in behalten)
+    return begriffe or tokens
 
 
 def _inhaltstokens(value):
@@ -2622,22 +2697,20 @@ def lade_seiten(register, typen, reltypen, concepts=None, media=None,
                     f"{rel(EXTERN_REGISTER)}"
                 )
         # Freitext der Seite: die Kommentarzeilen des Frontmatters, die der
-        # Parser überspringt, und der Rumpf ohne die Claims (Kurzfassung,
+        # Parser überspringt, und der Rumpf außerhalb der Claims (Kurzfassung,
         # Kontext, Grenzen). Die Engine gibt beides nicht aus, der
-        # Antworten-Workflow liest die Seite aber ganz. Jeder zusammenhängende
-        # Abschnitt wird als ein Text geprüft, damit ein Zeilenumbruch eine
-        # Signatur nicht teilt; eine Claim- oder Frontmatter-Zeile trennt.
-        freitext = []
-        if offset:
-            for nummer, zeile in enumerate(read(p).split("\n")[:offset], 1):
-                kommentar = (1 < nummer < offset
-                             and zeile.lstrip().startswith("#"))
-                freitext.append((nummer, zeile if kommentar else None))
-        for bn, zeile in enumerate(body.split("\n"), 1):
-            freitext.append(
-                (offset + bn,
-                 None if zeile.startswith(CLAIM_START) else zeile))
-        freitext_treffer = _freitext_signaturen(freitext)
+        # Antworten-Workflow liest die Seite aber ganz. Geprüft wird je
+        # Absatz, damit ein Zeilenumbruch eine Signatur nicht teilt
+        # (_freitext_laeufe).
+        freitext_treffer = _freitext_signaturen(_freitext_laeufe(
+            read(p).split("\n"), offset, body.split("\n")))
+        if _hat_signatur(rp):
+            teile = rp.split("/")
+            ort = ("knowledge/" + teile[1] if len(teile) > 2
+                   and not _hat_signatur(teile[1]) else "knowledge")
+            warnungen.append(
+                f"{ort}: Der Pfad einer Seite enthält eine offensichtliche "
+                f"Instruktionssignatur — query und sweep markieren die Seite")
         for nummer in freitext_treffer:
             if nummer <= offset:
                 warnungen.append(
@@ -3009,6 +3082,22 @@ def cmd_validate(still=False):
                     warnungen.append(
                         f"{name}: {kennung} {feld} enthält eine offensichtliche "
                         f"Instruktionssignatur — query gibt das Feld nicht aus")
+    # Dokumentpfade aus einem Katalog oder einer Ankerdatei nennt query
+    # --extern als Kennung eines Treffers; eine Signatur darin ist eine
+    # Warnung, und der Treffer trägt das Signal suspicious_instruction.
+    for kennung, katalog in sorted(orchestrators.items()):
+        for nummer, dok in enumerate(katalog["documents"], 1):
+            if _hat_signatur(dok.get("path")):
+                warnungen.append(
+                    f"Katalog {kennung}: Dokument Nr. {nummer} hat einen Pfad "
+                    f"mit offensichtlicher Instruktionssignatur — query --extern "
+                    f"markiert seine Treffer")
+    for kennung, eintrag in sorted(anchors.items()):
+        for aid, anker in sorted(eintrag["anchors"].items()):
+            if _hat_signatur(anker.get("document")):
+                warnungen.append(
+                    f"Anker {aid} ({kennung}): Dokumentpfad mit offensichtlicher "
+                    f"Instruktionssignatur")
 
     for concept_id, concept in sorted(concepts.items()):
         claim_id = concept.get("definition_claim")
@@ -3316,25 +3405,39 @@ def _query_base(query, state, *, manifest_digest=None, version=None,
 
 MELDUNG_MIT_SIGNATUR = ("Meldung enthält eine offensichtliche "
                         "Instruktionssignatur — Wortlaut nur in validate")
+MELDUNG_EXTERN_MIT_SIGNATUR = ("Meldung enthält eine offensichtliche "
+                               "Instruktionssignatur — Wortlaut nicht "
+                               "ausgegeben")
 MELDUNG_ORT_RE = re.compile(r"[\w./-]+(?::\d+)?")
+MELDUNG_KENNUNG_RE = re.compile(r"(?:[SX]-\d{4}|[A-Z]-\d{4})(?![\w-])")
+# So zitiert repr() nicht druckbaren Leerraum: \t, \xa0, \u2009 …
+MELDUNG_ESCAPE_RE = re.compile(
+    r"\\(?:[tnrfv]|x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8})")
 
 
-def _meldung_ohne_signatur(text):
+def _meldung_ohne_signatur(text, ersatz=MELDUNG_MIT_SIGNATUR):
     """Eine Meldung so, wie query und sweep sie ausgeben.
 
     Fehler und Warnungen zitieren mitunter kuratierten Text (eine
     Frontmatter-Zeile, eine Registerspalte). Trägt eine Meldung eine
     Instruktionssignatur, ersetzt die Ausgabe sie ganz: Nur die Phrase zu
     schwärzen ließe den Rest des zitierten Werts stehen, und das ist gerade
-    die Anweisung. Stehen bleibt nur der Ort (Pfad, optional mit Zeile), wenn
-    die Meldung mit einem beginnt. validate behält den Wortlaut, damit die
-    Stelle zu finden ist."""
-    if not _hat_signatur(text):
+    die Anweisung. Geprüft wird auch die Form, in der repr() nicht
+    druckbaren Leerraum zitiert ('ignore\\xa0all …'). Stehen bleibt nur der
+    Ort (Pfad, optional mit Zeile), wenn die Meldung mit einem beginnt, sonst
+    eine führende Kennung (X-0001). validate behält den Wortlaut der Fehler
+    und Warnungen, damit die Stelle zu finden ist."""
+    if not isinstance(text, str) or not (
+            _hat_signatur(text)
+            or _hat_signatur(MELDUNG_ESCAPE_RE.sub(" ", text))):
         return text
     ort, trenner, _ = text.partition(": ")
     if trenner and MELDUNG_ORT_RE.fullmatch(ort):
-        return f"{ort}: {MELDUNG_MIT_SIGNATUR}"
-    return MELDUNG_MIT_SIGNATUR
+        return f"{ort}: {ersatz}"
+    kennung = MELDUNG_KENNUNG_RE.match(text)
+    if kennung:
+        return f"{kennung.group(0)}: {ersatz}"
+    return ersatz
 
 
 def _emit_query_json(result):
@@ -3345,14 +3448,16 @@ def _emit_query_json(result):
     extern = result.get("external")
     if isinstance(extern, dict):
         if isinstance(extern.get("notes"), list):
-            extern["notes"] = [_meldung_ohne_signatur(m)
-                               for m in extern["notes"]]
+            extern["notes"] = [
+                _meldung_ohne_signatur(m, MELDUNG_EXTERN_MIT_SIGNATUR)
+                for m in extern["notes"]]
         if "reason" in extern:
-            extern["reason"] = _meldung_ohne_signatur(extern["reason"])
+            extern["reason"] = _meldung_ohne_signatur(
+                extern["reason"], MELDUNG_EXTERN_MIT_SIGNATUR)
     rueckfall = result.get("fallback")
     if isinstance(rueckfall, dict) and "external_reason" in rueckfall:
         rueckfall["external_reason"] = _meldung_ohne_signatur(
-            rueckfall["external_reason"])
+            rueckfall["external_reason"], MELDUNG_EXTERN_MIT_SIGNATUR)
     print(json.dumps(
         result, ensure_ascii=False, indent=2, sort_keys=True
     ))
@@ -3728,13 +3833,23 @@ def _seiten_relationen(pages):
     auf Rang oder Fingerabdruck.
     """
     kanten = {path: {"outgoing": [], "incoming": []} for path in pages}
+    # Eine Nachbarseite, die Schritt 4 zu lesen verlangt, kann außerhalb von
+    # pages[] liegen; ihre Kante trägt deshalb ihre Markierung.
+    markiert = {path: _seite_mit_signatur(path, page)
+                for path, page in pages.items()}
+
+    def kante(typ, seite):
+        eintrag = {"type": typ, "page": seite}
+        if markiert.get(seite):
+            eintrag["suspicious_instruction"] = True
+        return eintrag
+
     for path, page in sorted(pages.items()):
         for relation in page["relationen"]:
-            kanten[path]["outgoing"].append(
-                {"type": relation["typ"], "page": relation["ziel"]})
+            kanten[path]["outgoing"].append(kante(relation["typ"], relation["ziel"]))
             if relation["ziel"] in kanten:
                 kanten[relation["ziel"]]["incoming"].append(
-                    {"type": relation["typ"], "page": path})
+                    kante(relation["typ"], path))
     for eintrag in kanten.values():
         for richtung in ("outgoing", "incoming"):
             eintrag[richtung].sort(
@@ -3742,15 +3857,25 @@ def _seiten_relationen(pages):
     return kanten
 
 
+def _seite_mit_signatur(pfad, seite):
+    """Trägt eine Seite irgendwo eine Instruktionssignatur: im Titel, in einem
+    Tag, im Freitext oder im Pfad?"""
+    fm = seite["fm"]
+    tags = fm.get("tags", [])
+    return bool(seite.get("freitext_signatur") or _hat_signatur(fm.get("title"))
+                or (isinstance(tags, list)
+                    and any(_hat_signatur(tag) for tag in tags))
+                or _hat_signatur(pfad))
+
+
 def _seite_markieren(eintrag, seite):
     """Markiert eine Seite, deren Signatur in keinem ausgegebenen Feld steht.
 
-    Den Freitext gibt die Engine nie aus, die Tags nicht in ``pages[]``. Die
-    Seite liest der Agent aber ganz (antworten.md, Schritt 4); also trägt sie
-    die Markierung, wo immer sie erscheint."""
-    tags = seite["fm"].get("tags", [])
-    if seite.get("freitext_signatur") or (
-            isinstance(tags, list) and any(_hat_signatur(tag) for tag in tags)):
+    Den Freitext gibt die Engine nie aus, die Tags nicht in ``pages[]``, und
+    den Pfad braucht sie als Kennung. Die Seite liest der Agent aber ganz
+    (antworten.md, Schritt 4); also trägt sie die Markierung, wo immer sie
+    erscheint, auch als Ziel einer Kante (_seiten_relationen)."""
+    if _seite_mit_signatur(eintrag.get("path"), seite):
         eintrag["suspicious_instruction"] = True
     return eintrag
 
@@ -5909,9 +6034,8 @@ def build_external_result(snapshot, query, quellen_filter=None):
     if not tokens:
         block["state"] = "invalid_query"
         block["reason"] = (
-            f"Die Frage enthält keinen suchbaren Begriff (nur Stopp- und "
-            f"Funktionswörter oder Einzelzeichen). Es wurde nichts durchsucht "
-            f"— {EXTERN_KEIN_BEFUND}."
+            f"Die Frage enthält keinen suchbaren Begriff (nur Stoppwörter oder "
+            f"Einzelzeichen). Es wurde nichts durchsucht — {EXTERN_KEIN_BEFUND}."
         )
         return block
 
@@ -6204,6 +6328,9 @@ def _extern_treffer(xid, relpfad, bestand, katalog_score, zeile):
     """Einen externen Treffer bauen — immer als Zeiger, nie als Evidenz."""
     index, art, satz = bestand["satz"]
     verdaechtig = bool(PROMPT_INJECTION_RE.search(satz))
+    # Ein Dokumentpfad mit Signatur wird ausgegeben, denn er ist die Kennung
+    # des Treffers; der Treffer trägt dann das Signal.
+    pfad_verdaechtig = _hat_signatur(relpfad)
     return {
         "source_id": xid,
         # Redundant an JEDEM Treffer: der Unterschied zu einem Claim darf
@@ -6221,7 +6348,8 @@ def _extern_treffer(xid, relpfad, bestand, katalog_score, zeile):
         "score_inventory": int(bestand["score"]),
         "coverage_percent": int(bestand["coverage"]),
         "trust": zeile["trust"],
-        "signals": ["suspicious_instruction"] if verdaechtig else [],
+        "signals": (["suspicious_instruction"]
+                    if verdaechtig or pfad_verdaechtig else []),
     }
 
 

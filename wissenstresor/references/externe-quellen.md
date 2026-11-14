@@ -148,13 +148,17 @@ vermieden. Stoppwörter wie „für" zählen nicht, auch nicht als „fuer". Sei
 `extern-zweistufig/v3` gilt das auch für die Funktionswörter des lokalen
 Rankings (Artikel, Pronomen, Präpositionen, Hilfs- und Modalverben,
 Partikeln): In der Frage sind sie kein Anfragebegriff. Ein Kürzel in
-Großbuchstaben wie „IT" bleibt einer, ebenso ein Wort einer kurzen,
-geschlossenen Liste von Homographen („Waren", „Soll", „Haben", „Würde" …),
-wenn es mitten im Satz großgeschrieben steht: Dann ist es ein Substantiv
-(„Was sind Waren?"). Sonst macht Großschreibung kein Funktionswort zum
-Begriff, weder am Satzanfang noch in Versalien, in Titelschreibung oder bei
-der Anrede („Können Sie …"). Besteht die Frage nur aus Funktionswörtern,
-ergibt sie `invalid_query` (siehe unten). Die Dokumente tokenisiert die
+Großbuchstaben wie „IT" bleibt einer (die Pronomen der Anrede wie „SIE"
+nicht), ebenso ein Wort einer kurzen, geschlossenen Liste von Homographen
+(„Waren", „Soll", „Haben", „Würde" …), wenn es mitten im Satz
+großgeschrieben steht: Dann ist es ein Substantiv („Was sind Waren?"). Am
+Satzanfang, auch nach Doppelpunkt, Gedankenstrich oder „1)", zählt es nur
+für sich stehend („Begriffsfrage: Waren – …"), nicht vor einem Satz
+(„Frage: Muss ich …"), und in Versalien oder Titelschreibung nie. Sonst
+macht Großschreibung kein Funktionswort zum Begriff, auch nicht bei der
+Anrede („Können Sie …"). Eine Frage nur aus Homographen („Würde") sucht mit
+ihnen; besteht sie sonst nur aus Funktionswörtern, ergibt sie
+`invalid_query` (siehe unten). Die Dokumente tokenisiert die
 Suche unverändert. In v2 trafen „sie", „nur" oder „ohne" beliebige Sätze,
 und jeder externe Treffer verlangt in der Antwort eine eigene Zeile.
 
@@ -223,9 +227,10 @@ Stufeneffekt ablesbar bleibt und nicht in einer Summe verschwindet.
 
 Ein Satz mit Instruktionssignatur wird mit `text: null` und dem Signal
 `suspicious_instruction` zurückgegeben — gemeldet, nie ausgeliefert. Ein
-Dokumentpfad mit Signatur, auch mit Bindestrichen oder Unterstrichen
-zwischen den Wörtern, bleibt als Kennung des Treffers stehen; der Treffer
-trägt dann dasselbe Signal, und `validate` warnt schon am Katalog.
+Dokumentpfad mit Signatur bleibt als Kennung des Treffers stehen; der
+Treffer trägt dann dasselbe Signal, und `validate` warnt schon am Katalog.
+Mit Bindestrichen oder Unterstrichen zwischen den Wörtern zählt dabei nur
+„ignore … instructions"; die Zweiwortformeln sind als Dateiname üblich.
 
 ## Drift
 

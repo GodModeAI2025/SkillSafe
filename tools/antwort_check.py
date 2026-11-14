@@ -64,11 +64,16 @@ Quelle „Extern nicht gelesen:". Beide Etiketten gelten am Anfang einer Zeile
 oder eines Satzes, auch als Überschrift mit einer Liste darunter; dann ist
 jeder Listenpunkt eine eigene Angabe. Eine Rückfrage ist keine Angabe, auch
 umbrochen oder in Klammern („Soll ich X-0001 binden lassen?"): Eine Kennung
-darin weist die Quelle nicht als ungelesen aus. Umgekehrt nennt jede Angabe zu einem
-Treffer ein Dokument, das die Abfrage für eine genannte Quelle geliefert hat:
-Bei bekannter Bindung (lokale Quelle) und bei einem Lauf ohne Netz
-(Netzquelle) ist eine Angabe ohne geliefertes Dokument ein Verstoß, sonst
-ein Hinweis. Weist eine Antwort eine Quelle als ungelesen aus, die die
+darin weist die Quelle nicht als ungelesen aus, ebenso wenig in einem
+Listenpunkt, der als Ganzes fragt, oder als Teilsatz. Umgekehrt nennt jede
+Angabe zu einem Treffer ein Dokument, das die Abfrage für eine genannte
+Quelle geliefert hat, und jeder Pfad darin ist ein solches Dokument
+(ausgenommen Zitate und Dateien des geprüften Tresors). Eine Angabe ohne
+geliefertes Dokument behauptet nur dann nichts, wenn sie ausdrücklich keinen
+Treffer meldet („keine Treffer") und nichts nennt, was nach einer Fundstelle
+aussieht (Datei, Pfad, URL, Kapitel, Abschnitt, Satzposition). Bei bekannter
+Bindung (lokale Quelle) und bei einem Lauf ohne Netz (Netzquelle) ist eine
+erfundene Angabe ein Verstoß, sonst ein Hinweis. Weist eine Antwort eine Quelle als ungelesen aus, die die
 Nachrechnung bei bekannter Bindung gelesen hat, oder nennt sie einen
 Zustand, den die Abfrage nicht meldet, ist das ein Hinweis. Den
 Verzicht („Extern nicht gelesen: X-0001, X-0002 nicht nachgeschlagen
@@ -83,7 +88,9 @@ wenn auch der Lauf offline war. Das sagt ``stand.extern.offline`` im
 Protokoll, sonst ``SKILLSAFE_OFFLINE`` in der Umgebung des Werkzeugs; ohne
 beides bleibt die Netzquelle ein Hinweis. Welche Quellen der Lauf gebunden
 hatte, sagt ``stand.extern.gebunden``: Bindet der prüfende Host andere,
-bricht das Werkzeug ab wie bei einem fremden Manifest. Fehlt die Angabe und
+bricht das Werkzeug ab wie bei einem fremden Manifest. Endet jede Frage des
+Protokolls extern in invalid_query, liest keine etwas, und die Probe
+entfällt. Fehlt die Angabe und
 nennt die Antwort Treffer einer Quelle, die die Nachrechnung nicht lesen
 kann, ist das ein Hinweis auf eine abweichende Bindung. Nennt das Protokoll
 eine Version, die nicht zum Tresor passt, bricht das Werkzeug bei gebundenem
@@ -181,11 +188,14 @@ VERTRAG_4C_RE = re.compile(
 VERTRAG_4C_KOPF_RE = re.compile(r"4c\.\s*\*\*Externer Fallback\.\*\*")
 # Die Zeilen, mit denen eine Antwort Schritt 4c ausweist (antworten.md, 4c).
 # Ein Zusatz in Klammern vor dem Doppelpunkt gehört zum Etikett
-# („Extern nicht gelesen (Zustand unreachable):").
+# („Extern nicht gelesen (Zustand unreachable):"); nennt er eine Kennung
+# oder einen Pfad, gehört er auch zur Angabe („Extern nicht gelesen
+# (X-0002, offline)").
 EXTERN_TREFFER_RE = re.compile(
-    r"(?i)^extern\s*\(\s*nicht\s+im\s+bestand\s*\)\s*(?:\([^)]*\)\s*)?(?::|$)")
+    r"(?i)^extern\s*\(\s*nicht\s+im\s+bestand\s*\)\s*"
+    r"(?P<zusatz>\([^)]*\)\s*)?(?::|$)")
 EXTERN_UNGELESEN_RE = re.compile(
-    r"(?i)^extern\s+nicht\s+gelesen\s*(?:\([^)]*\)\s*)?(?::|$)")
+    r"(?i)^extern\s+nicht\s+gelesen\s*(?P<zusatz>\([^)]*\)\s*)?(?::|$)")
 X_KENNUNG_RE = re.compile(r"(?i)(?<![A-Za-z0-9])X-\d{4}(?!\d)")
 # Satzgrenze in einer Angabe zu Schritt 4c, auch hinter bis zu zwei
 # schließenden Zeichen: Klammer, Anführungszeichen, Hervorhebung
@@ -198,15 +208,43 @@ SATZGRENZE_RE = re.compile(
 FRAGE_RE = re.compile(rf"\?[{_SCHLIESSER}]*$")
 # Eine Zeile, deren letzter Satz zu Ende ist (oder die ein Etikett einleitet).
 SATZENDE_RE = re.compile(rf"[.!?…:][{_SCHLIESSER}]*\s*$")
-# Ein Dokumentpfad in einer Angabe, etwa handbuch/mietminderung.md.
+# Ein Dokumentpfad in einer Angabe, etwa handbuch/mietminderung.md, auch
+# mit ./, ../ oder absolutem Präfix und mit einer anderen Dokumentendung.
+DOKUMENT_ENDUNGEN = ("md|markdown|txt|pdf|html?|rst|adoc|docx?|odt|rtf|json|"
+                     "ya?ml|csv|xml")
 DOKUMENT_RE = re.compile(
-    r"(?<![\w/.-])((?:[\w-]+/)*[\w.-]+\.(?:md|markdown|txt))(?![\w/-])",
-    re.IGNORECASE)
+    r"(?<![\w/.-])((?:\.{1,2}/|/)?(?:[\w.-]+/)*[\w.-]+\.(?:"
+    + DOKUMENT_ENDUNGEN + r"))(?![\w/-])", re.IGNORECASE)
+# Eine Angabe, die ausdrücklich keinen Treffer meldet …
+KEIN_TREFFER_RE = re.compile(
+    r"(?i)\b(?:keine?n?|ohne|null|0)\s+(?:externen?\s+)?"
+    r"(?:treffer|funde?|fundstellen?)\b"
+    r"|\bnichts\s+(?:gefunden|getroffen)\b"
+    r"|\bkein(?:e|en)?\s+(?:gelesenes\s+)?dokument\s+enth(?:ä|ae)lt\b"
+    r"|\bno_external_candidates\b"
+    r"|\bno\s+(?:external\s+)?(?:hits?|candidates|matches)\b")
+# … und dabei nichts nennt, was nach einer Fundstelle aussieht: keine URL,
+# keine Datei, keinen Pfad, kein Kapitel, keinen Abschnitt, keine
+# Satzposition.
+DOKUMENTARTIG_RE = re.compile(
+    r"(?i)\b[a-z][a-z0-9+.-]*://"
+    r"|(?<![\w/.-])[\w.-]+\.(?:" + DOKUMENT_ENDUNGEN + r")\b"
+    r"|(?<![\w/.-])(?!und/oder\b)[\w.-]*[a-z][\w.-]*/[\w./-]*\w"
+    r"|\b(?:kapitel|abschnitt)\s+\S"
+    r"|\b(?:absatz|satz(?:position|nummer)?|sentence(?:_index)?)\s*[:=]?\s*\d"
+    r"|§")
+# Eine Rückfrage in einer Angabe: in Klammern oder als letzter Teilsatz
+# nach Semikolon oder Gedankenstrich („X-0002: offline — soll ich …?").
+RUECKFRAGE_KLAMMER_RE = re.compile(r"\s*[(\[][^()\[\]]*\?[^()\[\]]*[)\]]")
+RUECKFRAGE_TEIL_RE = re.compile(
+    r"\s*(?:;|\s[—–-]\s)[^;—–]*\?[)\]“”\"'»«’‘›‹*_`]*\s*$")
+# Hervorhebung an Wortgrenzen; ein Unterstrich im Wort bleibt
+# (miet_kaution.md, not_bound).
+HERVORHEBUNG_RE = re.compile(
+    r"[*`\u00ad\u200b\u200c\u200d\u2060\ufeff]|(?<![^\W_])_+|_+(?![^\W_])")
 # Ein zitierter Satz: Was darin steht, nennt die Angabe nicht als Fundstelle.
 ZITAT_RE = re.compile(
     r"„[^“”\"\n]*[“”\"]|“[^”\n]*”|«[^»\n]*»|»[^«\n]*«|\"[^\"\n]*\"")
-# Eine Satzposition: Wer sie nennt, behauptet einen Treffer.
-SATZPOSITION_RE = re.compile(r"(?i)\b(?:satz(?:position|nummer)?|sentence)\b")
 # Die Zustände von external.state, die nichts gelesen haben (antworten.md, 4c).
 EXTERN_ZUSTAENDE = ("not_bound", "unreachable", "budget_exceeded",
                     "invalid_external_source", "invalid_query")
@@ -939,6 +977,28 @@ def _angabeartig(text):
     return bool(X_KENNUNG_RE.search(text) or DOKUMENT_RE.search(text))
 
 
+def _ohne_hervorhebung(text):
+    """Text ohne Hervorhebung an Wortgrenzen (*, `, _ um ein Wort) und ohne
+    unsichtbare Zeichen. Anders als FORMEL_STOERER bleibt ein Unterstrich im
+    Wort stehen, damit Dateinamen und Zustandsnamen bleiben, wie sie sind."""
+    return HERVORHEBUNG_RE.sub("", str(text))
+
+
+def _ohne_rueckfragen(satz):
+    """Ein Satz ohne eingebettete Rückfrage: ohne Klammer mit Fragezeichen
+    und ohne letzten Teilsatz, der nach Semikolon oder Gedankenstrich als
+    Frage endet. Was übrig bleibt, ist die Angabe; ist es selbst eine Frage
+    oder leer, war der ganze Satz eine Rückfrage."""
+    return RUECKFRAGE_TEIL_RE.sub("", RUECKFRAGE_KLAMMER_RE.sub("", satz))
+
+
+def _letzter_satz(zeile):
+    """Der letzte Satz einer Zeile, ohne Listen-, Überschrifts- und
+    Hervorhebungszeichen: Ihn setzt eine umbrochene Folgezeile fort."""
+    rumpf = LISTENPUNKT_RE.sub("", re.sub(r"^\s*#{1,6}\s*", "", zeile)).strip()
+    return FORMEL_STOERER.sub("", SATZGRENZE_RE.split(rumpf)[-1]).strip()
+
+
 def _logische_zeilen(text):
     """Die Zeilen eines Texts, umbrochene Sätze wieder in einer Zeile.
 
@@ -947,20 +1007,28 @@ def _logische_zeilen(text):
     fort („Soll ich X-0001 auf diesem Host" / „binden lassen?"): Erst
     zusammen ist er als Frage zu erkennen. Eine Zeile mit großem Anfang
     bleibt eine eigene Zeile, denn eine Hüllzeile endet im Vertrag ohne
-    Punkt, und was danach groß beginnt, ist ein neuer Satz. Einen
-    Listenpunkt setzt nur eine eingerückte Zeile fort; ohne Einrückung ist
-    sie ein Nachsatz zu jedem Punkt der Liste, wie in _extern_angaben."""
+    Punkt, und was danach groß beginnt, ist ein neuer Satz. Aus demselben
+    Grund setzt nichts eine Überschrift fort und keinen Satz, der mit einem
+    Etikett beginnt: Was danach kommt, ist eine neue Zeile, auch
+    kleingeschrieben. Einen Listenpunkt setzt nur eine eingerückte Zeile
+    fort; ohne Einrückung ist sie ein Nachsatz zu der Liste, wie in
+    _extern_angaben."""
     zeilen = []
     for zeile in text.splitlines():
         kern = FORMEL_STOERER.sub("", zeile).strip()
         vorher = zeilen[-1] if zeilen else ""
+        letzter = _letzter_satz(vorher) if vorher.strip() else ""
         if (kern[:1].islower() and vorher.strip()
                 and not LISTENPUNKT_RE.match(zeile)
                 and not (LISTENPUNKT_RE.match(vorher) and not zeile[:1].isspace())
                 and not re.match(r"\s*#", zeile)
+                and not re.match(r"\s*#", vorher)
                 and not (EXTERN_TREFFER_RE.match(kern)
                          or EXTERN_UNGELESEN_RE.match(kern)
                          or ETIKETT_RE.match(kern))
+                and not (EXTERN_TREFFER_RE.match(letzter)
+                         or EXTERN_UNGELESEN_RE.match(letzter)
+                         or ETIKETT_RE.match(letzter))
                 and not SATZENDE_RE.search(vorher)):
             zeilen[-1] = vorher.rstrip() + " " + zeile.strip()
         else:
@@ -974,23 +1042,27 @@ def _extern_angaben(antwort):
     Ein Etikett „Extern (nicht im Bestand):" oder „Extern nicht gelesen:"
     zählt am Anfang einer Zeile und am Anfang eines Satzes, wie die Beispiele
     im Vertrag es schreiben; als Überschrift oder Hervorhebung auch ohne
-    Doppelpunkt. Steht Text hinter dem Etikett, ist das eine Angabe; was in
-    derselben Zeile folgt oder die Zeile fortsetzt, gehört dazu. Unter einem
-    Etikett ist jeder Listenpunkt, der eine Kennung oder einen Pfad nennt,
-    eine eigene Angabe, auch in einer Liste mit Leerzeilen; ein Punkt ohne
-    beides erläutert die Angabe davor. Steht hinter dem Etikett schon Text
-    (etwa die Kennung der Quelle), gilt er für jeden Punkt darunter mit und
-    ist keine eigene Angabe, auch über eine Leerzeile. Ein Nachsatz ohne
-    Listenzeichen und ohne Einrückung nach einer Liste gilt für jeden Punkt.
+    Doppelpunkt. Steht Text hinter dem Etikett oder nennt sein Klammerzusatz
+    eine Kennung oder einen Pfad, ist das eine Angabe; was in derselben
+    Zeile folgt oder die Zeile fortsetzt, gehört dazu. Unter einem Etikett
+    ist jeder Listenpunkt, der eine Kennung oder einen Pfad nennt, eine
+    eigene Angabe, auch in einer Liste mit Leerzeilen; ein Punkt ohne beides
+    erläutert die Angabe davor. Steht hinter dem Etikett schon Text (etwa
+    die Kennung der Quelle), gilt er für jeden Punkt darunter mit und ist
+    keine eigene Angabe, auch über eine Leerzeile. Ein Nachsatz ohne
+    Listenzeichen und ohne Einrückung nach einer Liste gilt für die Punkte
+    mit den Kennungen, die er nennt, und ohne Kennung für jeden Punkt.
     Unter einem nackten Etikett zählt auch ein Absatz nach einer Leerzeile.
-    Ein Fragesatz setzt keine Angabe fort, beendet sie aber nicht, auch über
-    einen Zeilenumbruch (``_logische_zeilen``); ein anderes Etikett beendet
-    sie, ebenso eine Leerzeile vor anderem Text.
-    Zitatzeichen, Listen- und Überschriftszeichen davor ändern nichts; die
-    Hervorhebung zählt nur beim Erkennen des Etiketts, der Text der Angabe
-    bleibt, wie er ist (ein Dateiname behält seine Unterstriche). Zurück
-    kommen zwei Listen von Texten: die Angaben zu Treffern und die zu
-    Ungelesenem."""
+    Eine Rückfrage ist keine Angabe: weder ein Fragesatz, auch über einen
+    Zeilenumbruch (``_logische_zeilen``), noch ein Listenpunkt, der als
+    Ganzes fragt, noch eine Frage in Klammern oder als letzter Teilsatz
+    (``_ohne_rueckfragen``). Eine Fragezeile für sich beendet den Block;
+    eine Liste danach gehört zur Frage. Ein anderes Etikett beendet ihn
+    ebenso, und eine Leerzeile vor anderem Text. Zitatzeichen, Listen- und
+    Überschriftszeichen davor ändern nichts; die Hervorhebung zählt nur beim
+    Erkennen des Etiketts, der Text der Angabe bleibt, wie er ist (ein
+    Dateiname behält seine Unterstriche). Zurück kommen zwei Listen von
+    Texten: die Angaben zu Treffern und die zu Ungelesenem."""
     text = _ohne_zitatzeichen(_striche(antwort))
     treffer, ungelesen = [], []
     ziel = angabe = kopf = kandidat = None
@@ -1030,8 +1102,10 @@ def _extern_angaben(antwort):
             if etikett:
                 ziel = treffer if EXTERN_TREFFER_RE.match(kern) else ungelesen
                 block, kopf, liste_im_block = [], None, False
-                if kern[etikett.end():].strip(" :—–-"):
-                    neue_angabe([satz])
+                zusatz = etikett.group("zusatz") or ""
+                if (kern[etikett.end():].strip(" :—–-")
+                        or _angabeartig(_ohne_rueckfragen(zusatz))):
+                    neue_angabe([_ohne_rueckfragen(satz)])
                     kandidat = angabe
                 else:
                     angabe = kandidat = None
@@ -1043,8 +1117,21 @@ def _extern_angaben(antwort):
                 zuruecksetzen()
                 continue
             erster = nummer == 0
-            if FRAGE_RE.search(kern) and not (
-                    listenpunkt and erster and _angabeartig(kern)):
+            ohne_klammer = RUECKFRAGE_KLAMMER_RE.sub("", satz)
+            satz = RUECKFRAGE_TEIL_RE.sub("", ohne_klammer)
+            kern = FORMEL_STOERER.sub("", satz).strip()
+            # Vor einer abgetrennten Rückfrage zählt der Rest nur, wenn er
+            # außerhalb von Code eine Kennung oder einen Pfad nennt („X-0001:
+            # nicht gebunden — soll ich …?"); ein Befehl davor ist Teil der
+            # Frage.
+            if (not kern or FRAGE_RE.search(kern)
+                    or (satz != ohne_klammer
+                        and not _angabeartig(re.sub(r"`[^`]*`", " ", satz)))):
+                if (erster and not listenpunkt
+                        and not (eingerueckt and liste_im_block)):
+                    # Eine Fragezeile für sich: Eine Liste danach gehört zur
+                    # Frage, nicht zum Etikett davor.
+                    zuruecksetzen()
                 continue
             if listenpunkt and erster:
                 if _angabeartig(kern) or angabe is None:
@@ -1063,8 +1150,17 @@ def _extern_angaben(antwort):
             if erster and liste_im_block and not listenpunkt and not eingerueckt:
                 nachsatz = True
             if nachsatz:
-                for teile in block:
-                    teile.append(satz)
+                # Ein Nachsatz gilt für die Punkte, deren Kennung er nennt;
+                # ohne Kennung für jeden Punkt der Liste.
+                genannt = _kennungen(satz)
+                passend = ([teile for teile in block
+                            if genannt & _kennungen(" ".join(teile))]
+                           if genannt else list(block))
+                if passend:
+                    for teile in passend:
+                        teile.append(satz)
+                else:
+                    ziel.append([satz])
             elif angabe is None:
                 neue_angabe([satz])
             else:
@@ -1083,37 +1179,110 @@ def _wortlaut(text):
     return " ".join(FORMEL_STOERER.sub("", text).split()).casefold()
 
 
-def _dokument_muster(dokument):
-    """Muster für ein Dokument: voller Pfad oder Dateiname, an Pfadgrenzen.
-    Ein anderes Verzeichnis davor („archiv/miete.md") oder ein längerer Name
-    („keine-miete.md") ist keine Nennung."""
-    dokument = str(dokument or "")
-    namen = sorted({dokument, dokument.rsplit("/", 1)[-1]} - {""},
-                   key=len, reverse=True)
-    if not namen:
-        return None
-    return re.compile(r"(?<![\w/.-])(?:\./)?(?:"
-                      + "|".join(re.escape(name) for name in namen)
-                      + r")(?![\w/-])", re.IGNORECASE)
+def _dokument_spannen(text, dokument):
+    """Wo nennt ein Text das Dokument? Spannen über den ganzen Pfad.
+
+    Erkannt wird der volle Pfad, auch mit einem Verzeichnis davor
+    („beispiel-extern/handbuch/a.md", ein absoluter Pfad, „X-0001/…"),
+    und der Dateiname für sich. Liegt das Dokument an der Wurzel der Quelle,
+    zählt ein Verzeichnis davor nur, wenn es absolut ist oder die Kennung
+    der Quelle. Ein anderes Verzeichnis statt des eigenen („archiv/a.md")
+    und ein längerer Name („keine-a.md") sind keine Nennung. Text und
+    Dokument werden ohne Hervorhebung verglichen, in jeder Schreibung."""
+    dokument = _ohne_hervorhebung(dokument or "").strip()
+    if not dokument:
+        return []
+    name = dokument.rsplit("/", 1)[-1]
+    spannen = []
+
+    def danach_frei(ende):
+        return not re.match(r"[\w/-]", text[ende:ende + 1])
+
+    for fund in re.finditer(re.escape(dokument), text, re.IGNORECASE):
+        anfang, ende = fund.span()
+        if not danach_frei(ende):
+            continue
+        vor = text[anfang - 1:anfang] if anfang else ""
+        if not vor or not re.match(r"[\w/.-]", vor):
+            spannen.append((anfang, ende))
+            continue
+        if vor != "/":
+            continue
+        token = re.search(r"[^\s(\[„“\"'»«,;]*$", text[:anfang])
+        praefix = token.group(0) if token else ""
+        if ("/" in dokument or praefix.startswith("/")
+                or re.match(r"(?i)[a-z][a-z0-9+.-]*://", praefix)
+                or re.match(r"(?i)X-\d{4}[/:]", praefix)):
+            spannen.append((anfang - len(praefix), ende))
+    if name != dokument:
+        for fund in re.finditer(re.escape(name), text, re.IGNORECASE):
+            anfang, ende = fund.span()
+            if not danach_frei(ende):
+                continue
+            if text[anfang - 2:anfang] == "./" and anfang >= 2:
+                anfang -= 2
+            vor = text[anfang - 1:anfang] if anfang else ""
+            if (not vor or not re.match(r"[\w/.-]", vor)) and not any(
+                    a <= anfang < e for a, e in spannen):
+                spannen.append((anfang, ende))
+    return sorted(spannen)
 
 
 def _nennt_dokument(angabe, dokument):
-    """Nennt die Angabe das Dokument, mit vollem Pfad oder Dateinamen? In
-    jeder Schreibung; der Name bleibt, wie er ist, Unterstriche inklusive."""
-    muster = _dokument_muster(dokument)
-    return bool(muster and muster.search(angabe))
+    """Nennt die Angabe das Dokument (siehe _dokument_spannen)?"""
+    return bool(_dokument_spannen(_ohne_hervorhebung(angabe), dokument))
 
 
-def _ohne_dokument(angabe, dokument):
-    """Die Angabe ohne jede Nennung des Dokuments."""
-    muster = _dokument_muster(dokument)
-    return muster.sub(" ", angabe) if muster else angabe
+def _ohne_dokument(text, dokument):
+    """Der Text ohne jede Nennung des Dokuments, und ob es eine gab. Der Text
+    muss schon ohne Hervorhebung sein; jede Nennung wird zu Leerzeichen
+    derselben Länge, damit Stellen erhalten bleiben."""
+    spannen = _dokument_spannen(text, dokument)
+    for anfang, ende in spannen:
+        text = text[:anfang] + " " * (ende - anfang) + text[ende:]
+    return text, bool(spannen)
+
+
+def _eigener_pfad(vault, pfad):
+    """Ist ein Pfad eine Datei des geprüften Tresors (knowledge/…,
+    sources/EXTERN.md, references/antworten.md …)? Er kann dann kein
+    erfundener Treffer einer Quelle sein."""
+    rein = pfad[2:] if pfad.startswith("./") else pfad
+    wurzel = Path(vault)
+    if rein.casefold().startswith(wurzel.name.casefold() + "/"):
+        rein = rein[len(wurzel.name) + 1:]
+    if rein.casefold().startswith("knowledge/"):
+        return True
+    if rein.startswith("/") or ".." in rein.split("/"):
+        return False
+    try:
+        return (wurzel / rein).is_file()
+    except (OSError, ValueError):
+        return False
+
+
+def _kennung_zum_pfad(text, fund, angabe):
+    """Die Kennung, unter der eine Angabe einen Pfad führt: eine direkt
+    dahinter („a.md (X-0002)", „a.md aus X-0002"), sonst die letzte davor,
+    sonst die einzige der Angabe."""
+    danach = re.match(
+        r"\s*[(\[]\s*(X-\d{4})(?!\d)|\s+(?:aus|laut|von|in|bei)\s+"
+        r"(?:der\s+)?(?:quelle\s+)?(X-\d{4})(?!\d)",
+        text[fund.end():], re.IGNORECASE)
+    if danach:
+        return (danach.group(1) or danach.group(2)).upper()
+    davor = X_KENNUNG_RE.findall(text[:fund.start()])
+    if davor:
+        return davor[-1].upper()
+    alle = _kennungen(angabe)
+    return next(iter(alle)) if len(alle) == 1 else ""
 
 
 def _auszug(angabe):
-    """Eine Angabe kurz für eine Meldung, ohne ihr Etikett."""
+    """Eine Angabe kurz für eine Meldung, ohne ihr Etikett; ein Unterstrich
+    im Wort bleibt stehen."""
     text = re.sub(r"(?i)^\W*extern\s*\(\s*nicht\s+im\s+bestand\s*\)\W*", "",
-                  " ".join(FORMEL_STOERER.sub("", angabe).split()))
+                  " ".join(_ohne_hervorhebung(angabe).split()))
     return text if len(text) <= 90 else text[:87] + "…"
 
 
@@ -1127,8 +1296,11 @@ def bindung_pruefen(vault, lauf_extern, fragen):
     Gefragt wird mit den Fragen des Protokolls, bis eine die aufgeführten
     Quellen durchgeht: Kein festes Suchwort kann in einem fremden Bestand
     mehrdeutig sein, und eine Frage ohne suchbaren Begriff (invalid_query)
-    sagt über die Bindung nichts. „Keine Quelle gebunden" folgt nie aus
-    einer leeren Liste, nur aus einem Register ohne Quelle (not_declared)."""
+    sagt über die Bindung nichts. Endet jede Frage extern in invalid_query,
+    liest keine etwas, ganz gleich, was gebunden ist: Dann hängt kein Urteil
+    an der Bindung, und die Probe entfällt. „Keine Quelle gebunden" folgt
+    nie aus einer leeren Liste, nur aus einem Register ohne Quelle
+    (not_declared)."""
     if "gebunden" not in lauf_extern:
         return
     probe = None
@@ -1141,10 +1313,7 @@ def bindung_pruefen(vault, lauf_extern, fragen):
             probe = antwort
             break
     if probe is None:
-        raise ProtokollFehler(
-            "Die Bindung lässt sich mit keiner Frage des Protokolls "
-            "nachlesen: Jede endet extern in invalid_query oder wird lokal "
-            "nicht angenommen")
+        return
     gebunden = sorted(str(quelle.get("id")).upper()
                       for quelle in (probe.get("external") or {}).get("sources", [])
                       if quelle.get("mode") == "lokal")
@@ -1252,37 +1421,36 @@ def _pruefe_extern(vault, frage, antwort, aufgefuehrt, offline, bindung_bekannt,
     # Umgekehrt: Was eine Angabe „Extern (nicht im Bestand):" als Treffer
     # nennt, liefert die Abfrage. Jeder Dokumentpfad darin ist ein
     # geliefertes Dokument einer genannten Quelle (nennt sie keine, einer der
-    # aufgeführten); ausgenommen sind Zitate und Seiten des eigenen Bestands
-    # (knowledge/…). Nennt sie gar keinen Pfad, aber eine Satzposition,
-    # behauptet sie einen Treffer und nennt dann ein geliefertes Dokument.
-    # Eine Angabe ohne beides („keine Treffer") behauptet nichts. Sicher sagen
-    # lässt sich das nur bei bekannter Bindung (lokale Quelle) und bei einem
-    # Lauf ohne Netz (Netzquelle); sonst bleibt es ein Hinweis.
+    # aufgeführten); ausgenommen sind Zitate und Dateien des geprüften
+    # Tresors (knowledge/…, sources/EXTERN.md). Nennt sie kein geliefertes
+    # Dokument, ist sie erfunden, außer sie meldet ausdrücklich keinen
+    # Treffer („keine Treffer", „nichts gefunden") und nennt dabei nichts,
+    # was nach einer Fundstelle aussieht (Datei, Pfad, URL, Kapitel,
+    # Abschnitt, Satzposition). Sicher sagen lässt sich das nur bei bekannter
+    # Bindung (lokale Quelle) und bei einem Lauf ohne Netz (Netzquelle);
+    # sonst bleibt es ein Hinweis.
     erfunden, offen = [], []
     for angabe in treffer_bloecke:
         bezug = (_kennungen(angabe) & aufgefuehrt) or set(aufgefuehrt)
         hier = [stelle for stelle in treffer
                 if str(stelle["source_id"]).upper() in bezug]
-        rest = ZITAT_RE.sub(" ", angabe)
+        rest = _ohne_hervorhebung(ZITAT_RE.sub(" ", angabe))
+        nennt = False
         for stelle in hier:
-            rest = _ohne_dokument(rest, stelle.get("document"))
+            rest, gefunden = _ohne_dokument(rest, stelle.get("document"))
+            nennt = nennt or gefunden
+        for fund in list(DOKUMENT_RE.finditer(rest)):
+            if _eigener_pfad(vault, fund.group(1)):
+                rest = (rest[:fund.start(1)] + " " * len(fund.group(1))
+                        + rest[fund.end(1):])
         fremd = []
         for fund in DOKUMENT_RE.finditer(rest):
-            pfad = fund.group(1)
-            if pfad.casefold().startswith("knowledge/"):
-                continue
-            # Die Kennung, unter der die Angabe den Pfad führt: die letzte
-            # davor, sonst die einzige der Angabe.
-            davor = X_KENNUNG_RE.findall(rest[:fund.start()])
-            kennung = (davor[-1].upper() if davor
-                       else next(iter(_kennungen(angabe)))
-                       if len(_kennungen(angabe)) == 1 else "")
-            fremd.append(f"{kennung} {pfad}".strip())
-        behauptet = bool(DOKUMENT_RE.search(ZITAT_RE.sub(" ", angabe))
-                         or SATZPOSITION_RE.search(angabe))
-        nennt = any(_nennt_dokument(angabe, stelle.get("document"))
-                    for stelle in hier)
-        if not fremd and (nennt or not behauptet):
+            pfad = re.sub(r"^\./", "", fund.group(1))
+            fremd.append(f"{_kennung_zum_pfad(rest, fund, angabe)} {pfad}"
+                         .strip())
+        kein_treffer = bool(KEIN_TREFFER_RE.search(rest)
+                            and not DOKUMENTARTIG_RE.search(rest))
+        if not fremd and (nennt or kein_treffer):
             continue
         pruefbar = all((offline if kennung in netz else bindung_bekannt)
                        for kennung in bezug)
@@ -1310,9 +1478,11 @@ def _pruefe_extern(vault, frage, antwort, aufgefuehrt, offline, bindung_bekannt,
                 f"Als nicht gelesen ausgewiesen, aber gelesen: "
                 f"{', '.join(doch_gelesen)}. Die Abfrage mit --extern hat die "
                 f"Quelle gelesen ({zustand})")
+        ohne = _ohne_hervorhebung(ungelesen_text)
         fremde = sorted({name for name in EXTERN_ZUSTAENDE
-                         if re.search(rf"(?<![A-Za-z_]){name}(?![A-Za-z_])",
-                                      ungelesen_text, re.IGNORECASE)}
+                         if re.search(rf"(?<![A-Za-z0-9_]){name}"
+                                      rf"(?![A-Za-z0-9_])", ohne,
+                                      re.IGNORECASE)}
                         - {zustand})
         if fremde:
             hinweise.append(

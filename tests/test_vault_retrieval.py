@@ -1312,8 +1312,9 @@ Das Bild zeigt eine grüne Produktionsfreigabe.
                          ("gilt",))
         # Ein nicht erkannter Satzanfang (nach Auslassungszeichen,
         # Gedankenstrich oder Aufzählung) und eine Überschrift in
-        # Titelschreibung machen kein Funktionswort zum Begriff; nach einem
-        # Doppelpunkt bleibt ein Homograph ein Substantiv.
+        # Titelschreibung machen kein Funktionswort zum Begriff. Am
+        # Satzanfang, auch nach Doppelpunkt, ist ein Homograph nur ein
+        # Substantiv, wenn er für sich steht.
         for frage in ("Schimmel in der Wohnung … Wer muss den Mangel anzeigen?",
                       "Schimmel in der Wohnung – Wer muss den Mangel anzeigen?"):
             self.assertEqual(vault._anfragebegriffe(frage),
@@ -1329,6 +1330,30 @@ Das Bild zeigt eine grüne Produktionsfreigabe.
         self.assertEqual(
             vault._anfragebegriffe("Begriffsfrage: Waren – was ist damit gemeint?"),
             ("begriffsfrage", "waren", "gemeint"))
+        self.assertEqual(
+            vault._anfragebegriffe("Frage: Muss ich eine Kaution zahlen?"),
+            ("frage", "kaution", "zahlen"))
+        for frage in ("Kurze Frage: Haben Mieter ein Minderungsrecht?",
+                      "Ich habe Schimmel; Muss ich das melden?",
+                      "Schimmel in der Wohnung – Muss ich den Mangel anzeigen?",
+                      "Zwei Fragen: 1) Muss ich den Mangel anzeigen?"):
+            begriffe = vault._anfragebegriffe(frage)
+            self.assertFalse({"muss", "haben"} & set(begriffe), (frage, begriffe))
+        # Auch ein Homograph gilt in Versalien oder Titelschreibung nicht als
+        # Substantiv; ein „ß" macht eine Frage in Versalien nicht gemischt.
+        self.assertEqual(
+            vault._anfragebegriffe("WAS MUSS ICH BEI EINER KAUTION BEACHTEN?"),
+            ("kaution", "beachten"))
+        self.assertNotIn("ohne", vault._anfragebegriffe(
+            "WIE HOCH IST DIE KAUTION OHNE ANZEIGE AN DER STRAßE?"))
+        self.assertNotIn("muss", vault._anfragebegriffe(
+            "Wann Muss Der Mieter Den Mangel Anzeigen?"))
+        # Eine Frage nur aus Homographen sucht mit ihnen; die Pronomen der
+        # Anrede sind auch in Großbuchstaben kein Kürzel.
+        self.assertEqual(vault._anfragebegriffe("Würde"), ("wuerde",))
+        self.assertEqual(vault._anfragebegriffe("Waren?"), ("waren",))
+        self.assertEqual(vault._anfragebegriffe("Muss das sein?"), ())
+        self.assertEqual(vault._anfragebegriffe("Können SIE das?"), ())
         # Bleibt nichts übrig, gibt es keinen Begriff und keinen Rückfall.
         self.assertEqual(vault._anfragebegriffe("Darf sie das ohne ihn?"), ())
         self.assertIn("dann", vault._retrieval_tokens("Die Wohnung ist dann"))

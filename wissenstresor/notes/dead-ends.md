@@ -247,7 +247,12 @@ Seit v0.18.3 fallen diese Zeichen weg, bevor Leerzeile und Ueberschrift
 erkannt werden, ein geschuetztes Leerzeichen ist keine Leerzeile, und
 HTML-Kommentare und Kommentarzeilen in einem Code-Zaun zaehlen mit. Nur
 "ignore ... instructions" prueft validate weiter ueber Absatzgrenzen hinweg:
-Diese Formel entsteht dort kaum zufaellig.
+Diese Formel entsteht dort kaum zufaellig. Die vierte Pruefung fand, dass
+v0.18.3 dafuer jede Zaunzeile uebersprang (eine Signatur im Info-String
+rutschte durch) und Kommentarzeilen mit Code und Absatz verband (neue
+Fehlalarme). Seit v0.18.4 gilt ein Zaun wie in CommonMark (Zeichen, Laenge,
+Info-String als eigener Absatz, auch eingerueckt), und Kommentare bilden
+eigene Absaetze, die nie mit Text oder Code verbunden werden.
 
 ## [2026-11-14] Katalog von X-0002 von Hand neu erzeugen — verworfen
 sources/derived/X-0002__orchestrator.json fuehrt unter top_tokens noch "fuer",
@@ -291,8 +296,42 @@ Funktionswoerter wieder zu Begriffen, und der Rueckfall suchte "Koennen Sie
 das?" mit "koennen" und "sie" und traf drei beliebige Saetze, jeder davon
 eine Pflichtzeile unter Schritt 4c. Ersatz in v0.18.3: eine geschlossene
 Liste von Homographen, die grossgeschrieben Substantive sind (Waren, Soll,
-Haben, Wuerde ...), und ohne Begriff invalid_query, kein Negativbefund. Die
-Messung ueber die 117 Fragen bleibt bei 62 / 49 / 6, und keine Frage
-wechselt ihren externen Zustand. Der Preis: Ein Substantiv, das
-kleingeschrieben ein Funktionswort waere und nicht auf der Liste steht,
-zaehlt extern nicht; die Liste waechst nur mit einem Beleg.
+Haben, Wuerde ...), und ohne Begriff invalid_query, kein Negativbefund.
+v0.18.3 nahm dabei Doppelpunkt und Semikolon aus den Satzanfaengen, damit
+"Begriffsfrage: Waren - ..." zaehlt; "Frage: Muss ich ..." machte so "muss"
+wieder zum Begriff. Seit v0.18.4 beginnt nach Doppelpunkt, Semikolon,
+Gedankenstrich und Aufzaehlungsmarke ein Satz, und am Satzanfang zaehlt ein
+Homograph nur fuer sich stehend; in Versalien (auch mit scharfem s) und
+in Titelschreibung nie. Eine Frage nur aus Homographen ("Wuerde") sucht mit
+ihnen, und die Pronomen der Anrede sind auch in Grossbuchstaben kein
+Kuerzel. Die Messung ueber die 117 Fragen bleibt bei 62 / 49 / 6;
+gegenueber v0.18.2 wechselt keine Frage ihren externen Zustand. Der Preis:
+Ein Substantiv, das kleingeschrieben ein Funktionswort waere und nicht auf
+der Liste steht, zaehlt extern nicht, ebenso einer der Liste am Satzanfang
+vor einem Satz ("Soll und Haben - ..."); die Liste waechst nur mit einem
+Beleg.
+
+## [2026-11-14] Trenner im Pfad fuer jede Formel als Leerraum werten — verworfen
+v0.18.3 las Bindestrich, Unterstrich, Punkt und %20 in einem Pfad als
+Leerraum, fuer jede Formel. Damit galten uebliche Dateinamen als Signatur
+("system-prompt-grundlagen.md", "developer-message-format.md", auch das
+Kompositum "ecosystem-prompts.md"), waehrend derselbe Wortlaut als Titel in
+Bindestrichform keine ist. In einem Tresor ueber Sprachmodelle waere jede
+solche Seite markiert, und jede Antwort muesste das unter "Hinweise:"
+nennen. Ersatz in v0.18.4: Mit Trennern zaehlt nur "ignore ...
+instructions"; die Zweiwortformeln zaehlen im Pfad wie im Titel nur mit
+Leerzeichen.
+
+## [2026-11-14] antwort_check: Trefferangabe ohne Pfad und Satzposition als "behauptet nichts" lesen — verworfen
+Damit "Extern (nicht im Bestand): keine Treffer in X-0001" kein Verstoss
+mehr ist, liess v0.18.3 jede Trefferangabe ohne .md-Pfad und ohne "Satz..."
+durch. Die vierte Pruefung zeigte, dass so erfundene Fundstellen still
+durchkamen: ein Kapitel, ein Abschnitt, eine PDF, ein Pfad ohne Endung, ein
+sentence_index; eine Antwort, deren einzige Abweichung so eine Erfindung
+war, endete mit Exit 0. Ebenso uebersprang v0.18.3 eine Rueckfrage nur,
+statt den Block zu beenden, und eine Liste danach galt als Angaben unter
+dem Etikett. Ersatz in v0.18.4: Eine Trefferangabe ohne geliefertes
+Dokument ist erfunden, ausser sie meldet ausdruecklich keinen Treffer und
+nennt nichts, was nach einer Fundstelle aussieht; eine Fragezeile fuer sich
+beendet den Block, und eine Rueckfrage in Klammern, als Teilsatz oder als
+ganzer Listenpunkt ist keine Angabe.

@@ -332,8 +332,12 @@ Verzicht mit allen Kennungen. Seit v0.18.1 verlangt es die Angabe „Extern
 (nicht im Bestand):" mit Quelle und Dokument für jeden Treffer, den die
 Abfrage mit `--extern` liefert, und „Extern nicht gelesen:" für jede
 ungelesene Quelle; eine Angabe zu einem Treffer, die kein geliefertes
-Dokument nennt, ist bei bekannter Bindung (lokale Quelle) und bei einem Lauf
-ohne Netz (Netzquelle) ebenfalls ein Verstoß, sonst ein Hinweis. Einen Verzicht nimmt es nur an, wenn das Protokoll den
+Dokument nennt oder einen Pfad, den die Abfrage nicht geliefert hat, ist bei
+bekannter Bindung (lokale Quelle) und bei einem Lauf ohne Netz (Netzquelle)
+ebenfalls ein Verstoß, sonst ein Hinweis. Ausgenommen sind Zitate, Dateien
+des geprüften Tresors und ein ausdrückliches „keine Treffer", das nichts
+nennt, was nach einer Fundstelle aussieht; eine Rückfrage zählt nie als
+Angabe. Einen Verzicht nimmt es nur an, wenn das Protokoll den
 Wunsch des Nutzers oder die Vorgabe der Umgebung im Feld `vorgabe` festhält.
 Ob der Schritt Pflicht ist, liest es aus dem Vertrag des geprüften Tresors
 (`references/antworten.md`); ein Stand, dessen Vertrag ihn freistellte, wird

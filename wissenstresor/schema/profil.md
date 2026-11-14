@@ -172,23 +172,34 @@ eine aufgeführte externe Bezugsquelle.
   die Warnungen mit aus); ein Release bleibt möglich. Den übrigen Text prüft
   `validate` je Absatz als einen Text, wie ein Leser ihn zusammenliest:
   Ein Zeilenumbruch teilt keine Signatur, und die Fortsetzung einer
-  Claim-Zeile gehört zu ihr. Zuerst fallen Zitatzeichen, Kommentarzeichen
-  (`#` im Frontmatter und in einem Code-Zaun) und HTML-Kommentarmarken am
-  Zeilenrand weg; was dann bleibt, entscheidet: Eine Leerzeile (nur
-  Leerzeichen oder Tabulator; ein geschütztes Leerzeichen ist Inhalt), eine
-  Überschrift oder ein neuer Listenpunkt trennt. Die lange Formel „ignore …
-  instructions" sucht `validate` zusätzlich über Überschriften und
-  Leerzeilen hinweg bis zur nächsten Claim-Zeile; die Zweiwortformeln
-  nicht, denn die entstehen dort zufällig („Tool-System" vor einem Absatz,
-  der mit „Prompt" beginnt). Ein Pfad mit Signatur ist ebenfalls eine
-  Warnung: ein Seitenpfad, der Pfad eines Dokuments im Katalog einer
-  externen Quelle und der Dokumentpfad eines Ankers; Bindestrich,
-  Unterstrich, Punkt und `%20` zählen dabei als Leerraum. Ausgegeben wird
+  Claim-Zeile gehört zu ihr. Zuerst fallen Zitatzeichen weg; was dann
+  bleibt, entscheidet: Eine Leerzeile (nur Leerzeichen oder Tabulator; ein
+  geschütztes Leerzeichen ist Inhalt, auch im Zitat und im Frontmatter),
+  eine Überschrift oder ein neuer Listenpunkt trennt. Kommentare liest das
+  Modell mit, sie bilden aber eigene Absätze und werden nie mit Text oder
+  Code verbunden: Kommentarzeilen im Frontmatter und in einem Code-Zaun
+  (ohne ihr `#`; eine leere Kommentarzeile trennt) und HTML-Kommentare,
+  auch über mehrere Zeilen. Ein Code-Zaun gilt wie in CommonMark, auch
+  eingerückt in einem Listenpunkt: Er schließt nur mit demselben Zeichen in
+  mindestens derselben Länge und ohne Text dahinter, und sein Info-String
+  ist ein eigener Absatz; ```` ```x``` ```` am Zeilenanfang ist Inline-Code,
+  kein Zaun. Die lange Formel „ignore … instructions" sucht `validate`
+  zusätzlich über Überschriften und Leerzeilen hinweg bis zur nächsten
+  Claim-Zeile; die Zweiwortformeln nicht, denn die entstehen dort zufällig
+  („Tool-System" vor einem Absatz, der mit „Prompt" beginnt). Ein Pfad mit
+  Signatur ist ebenfalls eine Warnung: ein Seitenpfad, der Pfad eines
+  Dokuments im Katalog einer externen Quelle und der Dokumentpfad eines
+  Ankers. Mit Leerzeichen zählt dabei jede Formel; mit Bindestrich,
+  Unterstrich, Punkt oder `%20` zwischen den Wörtern nur „ignore …
+  instructions", denn die Zweiwortformeln sind als Dateiname üblich
+  („system-prompt-grundlagen.md") und gelten in dieser Schreibung auch im
+  Titel nicht. Ausgegeben wird
   ein solches Feld nicht (siehe „Maschinenabfrage"); den übrigen Text einer
   Seite gibt die Engine ohnehin nicht aus, der Antworten-Workflow liest ihn
   aber mit, und den Pfad braucht sie als Kennung. Zitiert eine Fehlermeldung
-  eine Signatur, auch in der Schreibweise von `repr` („ignore\xa0all …"),
-  geben `query` und `sweep` von ihr nur den Ort oder die Kennung aus; den
+  eine Signatur, auch in der Schreibweise von `repr` („ignore\xa0all …")
+  oder als Pfad nach der Pfadregel, geben `query` und `sweep` von ihr nur
+  den Ort (wenn er selbst keine Signatur trägt) oder die Kennung aus; den
   Wortlaut zeigt `validate`.
 * Eine Wissensseite liegt nie unter einem Pfad, den das Manifest ausnimmt
   (`__pycache__`). Ihr Wortlaut wäre sonst nach dem Release änderbar, ohne
@@ -342,16 +353,17 @@ Seite ebenso, auch wo das Feld gar nicht ausgegeben wird: in `pages[]` von
 `query` und der Quittung, unter `coverage.omitted_pages`, im Stapel und an
 jeder Kante unter `relations`, die auf sie zeigt. Ein externer Treffer,
 dessen Dokumentpfad eine Signatur trägt, hat das Signal
-`suspicious_instruction`, ebenso ein Beleg unter `evidence[]`, dessen Anker
-auf einen solchen Pfad zeigt; der Pfad bleibt als Kennung stehen. Unmarkiert
-steht ein solcher Pfad nur in zwei Listen: in `fallback.page_paths` (Seiten
-des Bestands) und in `fallback.external_document_paths` (extern gelesene
-Dokumente). Beide nennen, was es gibt oder was gelesen wurde, nicht, was die
-Antwort liest oder zitiert: Markiert ist die Seite in `pages[]`, im Stapel
-und in der Quittung, ein Dokument an seinem Treffer; ein Dokument ohne
-Treffer zitiert die Antwort nicht, und vor seinem Pfad warnt schon
-`validate` am Katalog. Ohne Signatur fehlt das Feld ganz, und die Ausgabe
-ist dieselbe wie vorher.
+`suspicious_instruction`, ebenso ein Beleg unter `evidence[]`, dessen
+Seitenpfad oder Ankerpfad eine trägt; der Pfad bleibt als Kennung stehen.
+Unmarkiert steht ein solcher Pfad nur in zwei Listen: in
+`fallback.page_paths` (Seiten des Bestands) und in
+`fallback.external_document_paths` (extern gelesene Dokumente). Beide
+nennen, was es gibt oder was gelesen wurde, nicht, was die Antwort liest
+oder zitiert: Markiert ist die Seite in `pages[]`, im Stapel und in der
+Quittung, ihr Beleg in `evidence[]`, ein Dokument an seinem Treffer; ein
+Dokument ohne Treffer zitiert die Antwort nicht, und vor seinem Pfad warnt
+schon `validate` am Katalog. Ohne Signatur fehlt das Feld ganz, und die
+Ausgabe ist dieselbe wie vorher.
 
 ### Wortform `wortform/v1`
 
@@ -704,16 +716,21 @@ statt in den besten 24 Katalogeinträgen gelesen, und ein Dokument zählt, sobal
 es einen Anfragebegriff enthält — v1 rundete das bei mehr als 100 Begriffen auf
 0 % Abdeckung ab und verwarf es. v3 nimmt die Funktionswörter der Frage
 (dieselbe Liste wie im lokalen Ranking) aus den Anfragebegriffen. Es bleiben
-ein Kürzel in Großbuchstaben („IT") und ein Wort einer geschlossenen Liste
-von Homographen (`HOMOGRAPHE_SUBSTANTIVE`: „Waren", „Soll", „Haben",
-„Würde" …), wenn es mitten im Satz großgeschrieben steht, denn dann ist es
-ein Substantiv („Was sind Waren?"). Sonst macht Großschreibung kein
-Funktionswort zum Begriff: nicht am Satzanfang, nicht in Versalien, nicht in
-Titelschreibung und nicht bei der Anrede („Können Sie …"). Die Frage wird
-dafür vorher normalisiert (NFKC), damit eine zerlegte Schreibung kein Wort
-teilt. Bleibt nichts übrig, sucht die Frage nicht: `invalid_query`, kein
-Negativbefund. Dokumentseite und Rezept des Fingerprints bleiben, die Nummer
-im Fingerprint wechselt.
+ein Kürzel in Großbuchstaben („IT"; die Pronomen der Anrede wie „SIE" nie)
+und ein Wort einer geschlossenen Liste von Homographen
+(`HOMOGRAPHE_SUBSTANTIVE`: „Waren", „Soll", „Haben", „Würde" …), wenn es
+mitten im Satz großgeschrieben steht, denn dann ist es ein Substantiv („Was
+sind Waren?"). Am Satzanfang (auch nach Doppelpunkt, Semikolon,
+Gedankenstrich und einer Aufzählungsmarke wie „1)") zählt es nur, wenn es
+für sich steht („Begriffsfrage: Waren – …"), nicht, wenn ein Satz folgt
+(„Frage: Muss ich …"); in einer Frage in Versalien („ß" zählt als groß)
+oder in Titelschreibung zählt es nie. Sonst macht Großschreibung kein
+Funktionswort zum Begriff, auch nicht bei der Anrede („Können Sie …").
+Besteht die Frage nur aus Homographen („Würde"), sucht sie mit ihnen. Die
+Frage wird vorher normalisiert (NFKC), damit eine zerlegte Schreibung kein
+Wort teilt. Bleibt nichts übrig, sucht die Frage nicht: `invalid_query`,
+kein Negativbefund. Dokumentseite und Rezept des Fingerprints bleiben, die
+Nummer im Fingerprint wechselt.
 
 Geprüft wird das Ziel jeder Netzanfrage vor dem Socket: unter dem Präfix an
 Pfadgrenzen, ohne Punktsegmente, auch percent-kodiert. Einer Weiterleitung

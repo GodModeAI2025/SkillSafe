@@ -29,7 +29,7 @@ geschützte `dir_fd`-Operationen fail-closed ab.
 📖 **Konzept & Architekturentscheidungen:** [`wissenstresor/KONZEPT.md`](wissenstresor/KONZEPT.md)
 🌐 **Landingpage:** [`index.html`](index.html) (GitHub-Pages-fähig, Source = repo root)
 
-**Aktueller Release: v0.18.3** (Profil `oksv-lite/1.3`) mit Begriffswelten,
+**Aktueller Release: v0.18.4** (Profil `oksv-lite/1.3`) mit Begriffswelten,
 deterministischem Hybrid-Retrieval, geprüften Bild-/PDF-Regionen und einem
 reproduzierbaren `.skill`-Paket für Claude Code und Codex. Der
 Frontmatter-Parser lehnt Verschachtelung fail-closed ab statt sie still
@@ -280,9 +280,26 @@ Ankerpfad das Signal. Das Prüfwerkzeug erkennt eine Rückfrage auch
 umbrochen oder in Klammern und meldet einen erfundenen Pfad mit der
 Kennung seiner Quelle.
 
+v0.18.4 behebt, was eine vierte Prüfung an diesen Korrekturen fand, ebenfalls
+vor `main`. Der Stolperdraht übersprang jede Zaunzeile, sodass eine Signatur
+im Info-String eines Code-Zauns durchrutschte, und er verband Kommentare mit
+Code und Absatz. Jetzt gilt ein Zaun wie in CommonMark, auch eingerückt, sein
+Info-String wird geprüft, und Kommentare bilden eigene Absätze. Ein
+geschütztes Leerzeichen trennt auch im Zitat und im Frontmatter nicht mehr.
+Ein Pfad mit Bindestrichen zählt nur bei „ignore … instructions" als
+Signatur, denn „system-prompt-grundlagen.md" ist ein üblicher Dateiname. Ein
+Beleg, dessen Seitenpfad eine Signatur trägt, bekommt das Signal. In der
+externen Suche beginnt auch nach Doppelpunkt, Gedankenstrich oder „1)" ein
+Satz: „Frage: Muss ich …" sucht nicht mehr nach „muss". Das Prüfwerkzeug
+hatte mit der Lockerung für „keine Treffer" auch erfundene Fundstellen ohne
+`.md`-Pfad durchgelassen (Kapitel, PDF, Pfad ohne Endung); jetzt ist eine
+Trefferangabe ohne geliefertes Dokument wieder ein Verstoß, außer sie meldet
+ausdrücklich keinen Treffer. Eine Rückfrage zählt in keiner Form mehr als
+Angabe, und eine Liste nach einer Rückfrage gehört zur Frage.
+
 Abnahme: 251 Tests bestanden · 37 manifestierte Dateien · 39 sichere
 Paketeinträge · SHA-256
-`a6c7de53ba5e07ea8de70220a0c3a244a955ce84a7458d21d8c2a474f42e1aed`.
+`f2a6ca6894feeb2094f09c3a0c21ef989963b8c3cb0c99cf2b29d77d06a38afa`.
 Dazu 2 aufgeführte externe Bezugsquellen · 2 Satzanker.
 
 Alles läuft mit der Python-Standardbibliothek, gemessen mit CPython 3.9 und

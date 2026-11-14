@@ -360,13 +360,18 @@ def _ohne_signatur(eintrag, felder):
 
 
 # Eine Zeile, die im Rumpf einen eigenen Block beginnt: Überschrift,
-# Listenpunkt, Tabellenzeile. Code-Zäune führt _freitext_laeufe eigens.
+# Listenpunkt, Tabellenzeile. Code-Zäune und HTML-Kommentare führt
+# _freitext_laeufe eigens. Leerraum ist hier nur Leerzeichen und Tabulator:
+# Ein geschütztes Leerzeichen ist Inhalt (CommonMark).
 FREITEXT_BLOCKSTART_RE = re.compile(
-    r"^\s{0,3}(?:#{1,6}(?:\s|$)|[-*+]\s|\d{1,3}[.)]\s|\|)")
-FREITEXT_UEBERSCHRIFT_RE = re.compile(r"^\s{0,3}#{1,6}(?:\s|$)")
-FREITEXT_ZAUN_RE = re.compile(r"^\s{0,3}(?:```|~~~)")
-FREITEXT_ZITAT_RE = re.compile(r"^\s{0,3}(?:>\s?)+")
-FREITEXT_HTML_KOMMENTAR_RE = re.compile(r"^\s*<!--\s?|\s?-->\s*$")
+    r"^[ \t]{0,3}(?:#{1,6}(?:[ \t]|$)|[-*+][ \t]|\d{1,3}[.)][ \t]|\|)")
+FREITEXT_UEBERSCHRIFT_RE = re.compile(r"^[ \t]{0,3}#{1,6}(?:[ \t]|$)")
+# Ein Code-Zaun, auch eingerückt in einem Listenpunkt: Zeichen, Länge und
+# der Info-String dahinter. Ein Backtick-Zaun hat keinen Backtick im
+# Info-String, sonst ist die Zeile Inline-Code.
+FREITEXT_ZAUN_RE = re.compile(r"^[ \t]*(`{3,}|~{3,})(.*)$")
+FREITEXT_ZITAT_RE = re.compile(r"^[ \t]{0,3}(?:>[ \t]?)+")
+FREITEXT_HTML_KOMMENTAR_RE = re.compile(r"^[ \t]*<!--[ \t]?|[ \t]?-->[ \t]*$")
 # Nur die lange Formel verbindet der Stolperdraht auch über Absätze hinweg:
 # "ignore … instructions" entsteht über eine Überschrift kaum zufällig, die
 # Zweiwortformeln ("System" vor einem Absatz, der mit "Prompt" beginnt) schon.
@@ -381,69 +386,125 @@ def _leer(text):
     return not text.strip(" \t\r")
 
 
+def _ohne_kommentarzeichen(zeile):
+    """Eine Kommentarzeile ohne ihr "#" (Frontmatter, Code-Zaun). Nur das
+    Zeichen und der Leerraum davor fallen weg; ob die Zeile leer ist,
+    entscheidet _leer am Rest."""
+    return zeile.lstrip(" \t").lstrip("#")
+
+
 def _freitext_laeufe(datei_zeilen, offset, rumpf_zeilen, absatzweise=True):
     """Der Freitext einer Seite in Läufen, wie ein Leser ihn zusammenliest.
 
-    Zitat- und Kommentarzeichen am Zeilenanfang (">" im Rumpf, "#" im
-    Frontmatter und in einem Code-Zaun, HTML-Kommentarmarken) fallen zuerst
-    weg; was danach bleibt, entscheidet. Absatzweise (Standard) beendet eine
-    Leerzeile den Lauf, ein neuer Block (Überschrift, Listenpunkt,
-    Tabellenzeile, Code-Zaun) beginnt einen neuen, und eine Überschrift steht
-    für sich. Abschnittsweise trennen nur Claim-Zeilen und die übrigen
-    Frontmatter-Zeilen. Eine Claim-Zeile beginnt einen Lauf wie ein
-    Listenpunkt; ihre Fortsetzung gehört dazu. Zurück kommen Läufe aus
-    (Zeilennummer, Text, ist_claim)."""
+    Zitatzeichen fallen zuerst weg; was danach bleibt, entscheidet.
+    Absatzweise (Standard) beendet eine Leerzeile den Lauf, ein neuer Block
+    (Überschrift, Listenpunkt, Tabellenzeile) beginnt einen neuen, und eine
+    Überschrift steht für sich. Kommentarzeilen bilden eigene Läufe und
+    werden nie mit Text oder Code verbunden: "#"-Zeilen im Frontmatter und
+    in einem Code-Zaun (ohne das "#"; eine leere Kommentarzeile trennt) und
+    HTML-Kommentare, auch über mehrere Zeilen. Ein Code-Zaun gilt nach
+    CommonMark: Er schließt nur mit demselben Zeichen in mindestens
+    derselben Länge und ohne Text dahinter; sein Info-String ist ein eigener
+    Lauf, und die Codezeilen darin bilden Läufe wie Absätze. Abschnittsweise
+    trennen nur Claim-Zeilen und die übrigen Frontmatter-Zeilen. Eine
+    Claim-Zeile beginnt einen Lauf wie ein Listenpunkt; ihre Fortsetzung
+    gehört dazu. Zurück kommen Läufe aus (Zeilennummer, Text, ist_claim)."""
     laeufe, lauf = [], []
+    art = None
 
     def schliessen():
+        nonlocal art
         if lauf:
             laeufe.append(list(lauf))
             lauf.clear()
+        art = None
+
+    def anhaengen(nummer, text, neue_art, ist_claim=False):
+        # Eine andere Art beginnt einen neuen Lauf; nur die Fortsetzung
+        # einer Claim-Zeile bleibt bei ihr.
+        nonlocal art
+        if art != neue_art and not (art == "claim" and neue_art == "text"):
+            schliessen()
+            art = neue_art
+        lauf.append((nummer, text, ist_claim))
 
     if offset:
         for nummer, zeile in enumerate(datei_zeilen[:offset], 1):
-            if 1 < nummer < offset and zeile.lstrip().startswith("#"):
-                rest = zeile.lstrip().lstrip("#").strip()
+            if 1 < nummer < offset and zeile.lstrip(" \t").startswith("#"):
+                rest = _ohne_kommentarzeichen(zeile)
                 if absatzweise and _leer(rest):
                     schliessen()
                 else:
-                    lauf.append((nummer, rest, False))
+                    anhaengen(nummer, rest.strip(" \t"), "kommentar")
             else:
                 schliessen()
         schliessen()
-    im_zaun = False
+    zaun = None
+    im_html = False
     for bn, zeile in enumerate(rumpf_zeilen, 1):
         nummer = offset + bn
         ist_claim = zeile.startswith(CLAIM_START)
-        if ist_claim and not im_zaun:
+        if ist_claim and zaun is None and not im_html:
             schliessen()
-            lauf.append((nummer, zeile, True))
+            anhaengen(nummer, zeile, "claim", True)
             continue
+        rest = FREITEXT_ZITAT_RE.sub("", zeile)
         if not absatzweise:
-            rest = FREITEXT_HTML_KOMMENTAR_RE.sub(
-                "", FREITEXT_ZITAT_RE.sub("", zeile))
-            lauf.append((nummer, rest.lstrip().lstrip("#").strip()
-                         if rest.lstrip().startswith("#") else rest, False))
+            rest = FREITEXT_HTML_KOMMENTAR_RE.sub("", rest)
+            if rest.lstrip(" \t").startswith("#"):
+                rest = _ohne_kommentarzeichen(rest).strip(" \t")
+            # Alles außer Claim-Zeilen gehört zum Abschnitt; die Art des
+            # Laufs bleibt die der Claim-Zeile davor.
+            lauf.append((nummer, rest, False))
             continue
-        rest = FREITEXT_HTML_KOMMENTAR_RE.sub("", FREITEXT_ZITAT_RE.sub("", zeile))
-        if FREITEXT_ZAUN_RE.match(rest):
-            schliessen()
-            im_zaun = not im_zaun
-            continue
-        if im_zaun:
-            # Code: Ein "#" leitet hier einen Kommentar ein, keine Überschrift.
-            if _leer(rest):
+        if zaun is not None:
+            zeichen, laenge = zaun
+            schluss = FREITEXT_ZAUN_RE.match(rest)
+            if (schluss and schluss.group(1)[0] == zeichen
+                    and len(schluss.group(1)) >= laenge
+                    and _leer(schluss.group(2))):
+                schliessen()
+                zaun = None
+                continue
+            if rest.lstrip(" \t").startswith("#"):
+                # Code-Kommentar: liest das Modell mit; ein leerer trennt.
+                kommentar = _ohne_kommentarzeichen(rest)
+                if _leer(kommentar):
+                    schliessen()
+                else:
+                    anhaengen(nummer, kommentar.strip(" \t"), "kommentar")
+            elif _leer(rest):
                 schliessen()
             else:
-                lauf.append((nummer, rest.lstrip().lstrip("#").strip()
-                             if rest.lstrip().startswith("#") else rest, False))
+                anhaengen(nummer, rest, "code")
+            continue
+        oeffnung = FREITEXT_ZAUN_RE.match(rest)
+        if oeffnung and not (oeffnung.group(1)[0] == "`"
+                             and "`" in oeffnung.group(2)):
+            schliessen()
+            zaun = (oeffnung.group(1)[0], len(oeffnung.group(1)))
+            if not _leer(oeffnung.group(2)):
+                # Der Info-String steht sichtbar da: ein eigener Lauf.
+                anhaengen(nummer, oeffnung.group(2).strip(" \t"), "info")
+                schliessen()
+            continue
+        kommentarzeile = im_html or rest.lstrip(" \t").startswith("<!--")
+        if kommentarzeile:
+            oeffnet, schliesst = rest.rfind("<!--"), rest.rfind("-->")
+            im_html = oeffnet > schliesst if oeffnet >= 0 else (
+                im_html and schliesst < 0)
+            kommentar = FREITEXT_HTML_KOMMENTAR_RE.sub("", rest)
+            if _leer(kommentar):
+                schliessen()
+            else:
+                anhaengen(nummer, kommentar, "html")
             continue
         if _leer(rest):
             schliessen()
             continue
         if FREITEXT_BLOCKSTART_RE.match(rest):
             schliessen()
-        lauf.append((nummer, rest, False))
+        anhaengen(nummer, rest, "text")
         if FREITEXT_UEBERSCHRIFT_RE.match(rest):
             schliessen()
     schliessen()
@@ -472,12 +533,17 @@ def _freitext_signaturen(laeufe, muster=PROMPT_INJECTION_RE):
 
 
 def _pfad_mit_signatur(pfad):
-    """Trägt ein Pfad eine Instruktionssignatur, auch mit Bindestrich,
-    Unterstrich, Punkt oder %20 zwischen den Wörtern?"""
+    """Trägt ein Pfad eine Instruktionssignatur?
+
+    Mit Leerzeichen zählt jede Formel. Mit Bindestrich, Unterstrich, Punkt
+    oder %20 zwischen den Wörtern zählt nur die lange Formel "ignore …
+    instructions": Die Zweiwortformeln sind als Dateiname üblich
+    ("system-prompt-grundlagen.md", "developer-message-format.md") und
+    bleiben dort, wie ein Titel in dieser Schreibung, ohne Befund."""
     if not isinstance(pfad, str):
         return False
-    return _hat_signatur(pfad) or _hat_signatur(
-        re.sub(r"[-_.]+|%20", " ", pfad))
+    return _hat_signatur(pfad) or bool(IGNORE_SIGNATUR_RE.search(
+        re.sub(r"[-_.]+|%20", " ", pfad)))
 
 
 # Zugangsdaten im ausgelieferten Wissen. Bewusst wenige, präzise Formen statt
@@ -1426,24 +1492,64 @@ def _lokale_tokens(value):
 HOMOGRAPHE_SUBSTANTIVE = frozenset(
     "waren soll haben macht mal wuerde sein bitte halt laut tun muss nichts "
     "wohl".split())
-SATZZEICHEN_VOR_SATZANFANG = ".!?…"
+# Nach diesen Zeichen beginnt ein Satz (auch nach Doppelpunkt, Semikolon
+# und Gedankenstrich), ebenso nach einer Aufzählungsmarke ("1)", "a)", "-").
+SATZZEICHEN_VOR_SATZANFANG = ".!?…:;–—"
+AUFZAEHLUNG_VOR_SATZANFANG_RE = re.compile(
+    r"(?:^|\s)(?:\d{1,3}[.)]|[A-Za-z][)]|[-*•–—])$")
+# Ein Homograph am Satzanfang ist nur dann ein Substantiv, wenn er für
+# sich steht ("Begriffsfrage: Waren – was …", "Waren?"); folgt ein Wort,
+# beginnt dort ein Satz ("Frage: Muss ich …").
+SATZZEICHEN_NACH_ALLEINSTEHEND = "–—-,;:.!?…"
+# Die Pronomen der Anrede sind in Großbuchstaben kein Kürzel ("Können SIE
+# das?"), anders als "IT". Nur für die externe Suche; das lokale Ranking
+# bleibt bytegleich.
+ANREDE_PRONOMEN = frozenset(
+    "sie ihnen ihre ihrem ihren ihrer ihres du dich dir dein deine deinem "
+    "deinen deiner deines euch euer eure eurem euren eurer eures".split())
+
+
+def _versalien(text):
+    """Ist ein Text aus mehreren Wörtern ganz groß geschrieben? Ein "ß"
+    zählt dabei als groß ("STRAßE"), denn es hat keine Großform in str."""
+    gross = text.replace("ß", "SS")
+    return len(WORT_RE.findall(text)) > 1 and gross == gross.upper()
+
+
+def _titelschreibung(text):
+    """Beginnt jedes Wort eines Texts aus mindestens drei Wörtern groß?"""
+    woerter = [wort for wort in WORT_RE.findall(text) if wort[:1].isalpha()]
+    return len(woerter) >= 3 and all(wort[:1].isupper() for wort in woerter)
 
 
 def _sachwoerter_gross(text):
     """Homographe, die großgeschrieben mitten im Satz stehen.
 
     Im Deutschen ist ein solches Wort ein Substantiv und damit ein Sachwort
-    ("Was sind Waren?"). Am Satzanfang sagt die Großschreibung nichts. Der
-    Text wird vorher normalisiert, damit eine zerlegte Schreibung (NFD) das
-    Wort nicht teilt."""
+    ("Was sind Waren?"). Am Satzanfang sagt die Großschreibung nichts, außer
+    das Wort steht für sich; in einer Frage in Versalien oder in
+    Titelschreibung sagt sie nie etwas. Der Text wird vorher normalisiert,
+    damit eine zerlegte Schreibung (NFD) das Wort nicht teilt."""
     text = unicodedata.normalize("NFKC", text)
+    if _versalien(text) or _titelschreibung(text):
+        return set()
     gross = set()
     for fund in WORT_RE.finditer(text):
-        davor = text[:fund.start()].rstrip(" \t\r\n\"'„“”‚‘’»«()[]")
-        if davor and davor[-1] not in SATZZEICHEN_VOR_SATZANFANG \
-                and fund.group(0)[:1].isupper():
-            gross.update(token for token in _retrieval_norm(fund.group(0)).split()
-                         if token in HOMOGRAPHE_SUBSTANTIVE)
+        wort = fund.group(0)
+        if not wort[:1].isupper():
+            continue
+        treffer = {token for token in _retrieval_norm(wort).split()
+                   if token in HOMOGRAPHE_SUBSTANTIVE}
+        if not treffer:
+            continue
+        roh = text[:fund.start()].rstrip(" \t\r\n")
+        davor = roh.rstrip("\"'„“”‚‘’»«()[]")
+        if (not davor or davor[-1] in SATZZEICHEN_VOR_SATZANFANG
+                or AUFZAEHLUNG_VOR_SATZANFANG_RE.search(roh)):
+            danach = text[fund.end():].lstrip(" \t\"'“”‚‘’»«)]")
+            if danach and danach[0] not in SATZZEICHEN_NACH_ALLEINSTEHEND:
+                continue
+        gross.update(treffer)
     return gross
 
 
@@ -1452,17 +1558,26 @@ def _anfragebegriffe(query):
 
     Die Tokens der Frage wie bisher (_retrieval_tokens), ohne die
     Funktionswörter des lokalen Rankings. Es bleiben ein Kürzel in
-    Großbuchstaben ("IT") und ein Homograph, der großgeschrieben mitten im
-    Satz steht ("Was sind Waren?"). Bleibt nichts übrig, sucht die Frage
-    nicht (invalid_query, kein Negativbefund). Die Dokumentseite tokenisiert
-    unverändert: Katalogzahlen, Satzbestand und Fingerprint-Rezept hängen
-    nicht an dieser Liste. Normalisiert wird vorab (NFKC), damit eine
-    zerlegte Schreibung kein Wort teilt; _kuerzel_tokens selbst bleibt
-    unverändert, denn das lokale Ranking hängt daran."""
+    Großbuchstaben ("IT", nicht aber die Pronomen der Anrede) und ein
+    Homograph, der großgeschrieben mitten im Satz steht ("Was sind Waren?").
+    Besteht die Frage nur aus Homographen ("Würde"), bleiben sie. Bleibt
+    nichts übrig, sucht die Frage nicht (invalid_query, kein
+    Negativbefund). Die Dokumentseite tokenisiert unverändert:
+    Katalogzahlen, Satzbestand und Fingerprint-Rezept hängen nicht an
+    dieser Liste. Normalisiert wird vorab (NFKC), damit eine zerlegte
+    Schreibung kein Wort teilt; _kuerzel_tokens selbst bleibt unverändert,
+    denn das lokale Ranking hängt daran."""
     text = unicodedata.normalize("NFKC", str(query))
-    behalten = _kuerzel_tokens(text) | _sachwoerter_gross(text)
-    return tuple(token for token in _retrieval_tokens(text)
-                 if token not in FUNKTIONSWOERTER or token in behalten)
+    behalten = ((_kuerzel_tokens(text.replace("ß", "SS")) - ANREDE_PRONOMEN)
+                | _sachwoerter_gross(text))
+    begriffe = tuple(token for token in _retrieval_tokens(text)
+                     if token not in FUNKTIONSWOERTER or token in behalten)
+    if not begriffe:
+        woerter = _retrieval_norm(text).split()
+        if woerter and all(wort in HOMOGRAPHE_SUBSTANTIVE for wort in woerter):
+            begriffe = tuple(token for token in _retrieval_tokens(text)
+                             if token in HOMOGRAPHE_SUBSTANTIVE)
+    return begriffe
 
 
 def _inhaltstokens(value):
@@ -2769,7 +2884,7 @@ def lade_seiten(register, typen, reltypen, concepts=None, media=None,
         if _pfad_mit_signatur(rp):
             teile = rp.split("/")
             ort = ("knowledge/" + teile[1] if len(teile) > 2
-                   and not _hat_signatur(teile[1]) else "knowledge")
+                   and not _pfad_mit_signatur(teile[1]) else "knowledge")
             warnungen.append(
                 f"{ort}: Der Pfad einer Seite enthält eine offensichtliche "
                 f"Instruktionssignatur — query und sweep markieren die Seite")
@@ -3471,6 +3586,8 @@ MELDUNG_EXTERN_MIT_SIGNATUR = ("Meldung enthält eine offensichtliche "
                                "Instruktionssignatur — Wortlaut nicht "
                                "ausgegeben")
 MELDUNG_ORT_RE = re.compile(r"[\w./-]+(?::\d+)?")
+# Ein Pfad in einer Meldung, auch in Bindestrichform.
+MELDUNG_PFAD_RE = re.compile(r"[\w.%-]*/[\w.%/-]+|[\w.%-]+\.(?:md|markdown|txt|json)")
 MELDUNG_KENNUNG_RE = re.compile(r"(?:[SX]-\d{4}|[A-Z]-\d{4})(?![\w-])")
 # So zitiert repr() nicht druckbaren Leerraum: \t, \xa0, \u2009 …
 MELDUNG_ESCAPE_RE = re.compile(
@@ -3485,16 +3602,20 @@ def _meldung_ohne_signatur(text, ersatz=MELDUNG_MIT_SIGNATUR):
     Instruktionssignatur, ersetzt die Ausgabe sie ganz: Nur die Phrase zu
     schwärzen ließe den Rest des zitierten Werts stehen, und das ist gerade
     die Anweisung. Geprüft wird auch die Form, in der repr() nicht
-    druckbaren Leerraum zitiert ('ignore\\xa0all …'). Stehen bleibt nur der
-    Ort (Pfad, optional mit Zeile), wenn die Meldung mit einem beginnt, sonst
-    eine führende Kennung (X-0001). validate behält den Wortlaut der Fehler
+    druckbaren Leerraum zitiert ('ignore\\xa0all …'), und jeder Pfad nach der
+    Pfadregel (_pfad_mit_signatur). Stehen bleibt nur der Ort (Pfad,
+    optional mit Zeile), wenn die Meldung mit einem beginnt und er selbst
+    keine Signatur trägt, sonst eine führende Kennung (X-0001). validate behält den Wortlaut der Fehler
     und Warnungen, damit die Stelle zu finden ist."""
     if not isinstance(text, str) or not (
             _hat_signatur(text)
-            or _hat_signatur(MELDUNG_ESCAPE_RE.sub(" ", text))):
+            or _hat_signatur(MELDUNG_ESCAPE_RE.sub(" ", text))
+            or any(_pfad_mit_signatur(pfad)
+                   for pfad in MELDUNG_PFAD_RE.findall(text))):
         return text
     ort, trenner, _ = text.partition(": ")
-    if trenner and MELDUNG_ORT_RE.fullmatch(ort):
+    if (trenner and MELDUNG_ORT_RE.fullmatch(ort)
+            and not _pfad_mit_signatur(ort)):
         return f"{ort}: {ersatz}"
     kennung = MELDUNG_KENNUNG_RE.match(text)
     if kennung:
@@ -3884,6 +4005,11 @@ def _evidence_item(snapshot, path, claim, score, reasons,
         # eine Signatur, sagt das Signal es.
         if _pfad_mit_signatur(anker.get("document")):
             item["signals"].append("suspicious_instruction")
+    # Ebenso der Seitenpfad: Er steht im Beleg, also trägt der Beleg das
+    # Signal (einmal, auch wenn der Ankerpfad es schon gesetzt hat).
+    if (_pfad_mit_signatur(path)
+            and "suspicious_instruction" not in item["signals"]):
+        item["signals"].append("suspicious_instruction")
     return item
 
 

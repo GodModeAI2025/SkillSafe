@@ -148,12 +148,15 @@ vermieden. Stoppwörter wie „für" zählen nicht, auch nicht als „fuer". Sei
 `extern-zweistufig/v3` gilt das auch für die Funktionswörter des lokalen
 Rankings (Artikel, Pronomen, Präpositionen, Hilfs- und Modalverben,
 Partikeln): In der Frage sind sie kein Anfragebegriff. Ein Kürzel in
-Großbuchstaben wie „IT" bleibt einer, ebenso ein großgeschriebenes Wort
-mitten im Satz, denn das ist ein Substantiv („Was sind Waren?"); die Pronomen
-der Anrede („Können Sie …") zählen nie. Besteht die Frage nur aus
-Funktionswörtern, sucht sie wie in v2 mit allen. Die Dokumente tokenisiert
-die Suche unverändert. In v2 trafen „sie", „nur" oder „ohne" beliebige
-Sätze, und jeder externe Treffer verlangt in der Antwort eine eigene Zeile.
+Großbuchstaben wie „IT" bleibt einer, ebenso ein Wort einer kurzen,
+geschlossenen Liste von Homographen („Waren", „Soll", „Haben", „Würde" …),
+wenn es mitten im Satz großgeschrieben steht: Dann ist es ein Substantiv
+(„Was sind Waren?"). Sonst macht Großschreibung kein Funktionswort zum
+Begriff, weder am Satzanfang noch in Versalien, in Titelschreibung oder bei
+der Anrede („Können Sie …"). Besteht die Frage nur aus Funktionswörtern,
+ergibt sie `invalid_query` (siehe unten). Die Dokumente tokenisiert die
+Suche unverändert. In v2 trafen „sie", „nur" oder „ohne" beliebige Sätze,
+und jeder externe Treffer verlangt in der Antwort eine eigene Zeile.
 
 ## Ehrlich scheitern
 
@@ -202,8 +205,8 @@ Katalogeinträge, und bei einem Katalogtext, der auf die Anfrage nicht passt,
 sind das schlicht die alphabetisch ersten. Fehlt der Zusatz, wurde jedes
 katalogisierte Dokument jeder berücksichtigten Quelle gelesen.
 
-Eine Frage aus lauter Stoppwörtern ergibt `invalid_query`: Ohne suchbaren
-Begriff kann nichts gefunden werden, und ein „nichts gefunden" wäre ein
+Eine Frage aus lauter Stopp- und Funktionswörtern ergibt `invalid_query`:
+Ohne suchbaren Begriff kann nichts gefunden werden, und ein „nichts gefunden" wäre ein
 Befund über eine Frage, die keine ist. Dasselbe gilt, wenn die lokale Abfrage
 gar nicht auswertbar war (`ambiguous`, unbekannte Begriffswelt): Dann wird
 extern nichts durchsucht.
@@ -219,7 +222,10 @@ Claim darf sich nicht erst aus dem Kontext ergeben müssen. Zusätzlich sichtbar
 Stufeneffekt ablesbar bleibt und nicht in einer Summe verschwindet.
 
 Ein Satz mit Instruktionssignatur wird mit `text: null` und dem Signal
-`suspicious_instruction` zurückgegeben — gemeldet, nie ausgeliefert.
+`suspicious_instruction` zurückgegeben — gemeldet, nie ausgeliefert. Ein
+Dokumentpfad mit Signatur, auch mit Bindestrichen oder Unterstrichen
+zwischen den Wörtern, bleibt als Kennung des Treffers stehen; der Treffer
+trägt dann dasselbe Signal, und `validate` warnt schon am Katalog.
 
 ## Drift
 

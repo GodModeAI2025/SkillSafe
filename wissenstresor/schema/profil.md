@@ -171,10 +171,19 @@ eine aufgeführte externe Bezugsquelle.
   als Warnung, ohne den Wortlaut zu wiederholen (`query` und `sweep` geben
   die Warnungen mit aus); ein Release bleibt möglich. Den übrigen Text prüft
   `validate` je Absatz als einen Text, wie ein Leser ihn zusammenliest:
-  Ein Zeilenumbruch teilt keine Signatur, Zitat- und Kommentarzeichen am
-  Zeilenanfang fallen weg, und die Fortsetzung einer Claim-Zeile gehört zu
-  ihr; eine Leerzeile, eine Überschrift oder ein neuer Listenpunkt trennt.
-  Ein Seitenpfad mit Signatur ist ebenfalls eine Warnung. Ausgegeben wird
+  Ein Zeilenumbruch teilt keine Signatur, und die Fortsetzung einer
+  Claim-Zeile gehört zu ihr. Zuerst fallen Zitatzeichen, Kommentarzeichen
+  (`#` im Frontmatter und in einem Code-Zaun) und HTML-Kommentarmarken am
+  Zeilenrand weg; was dann bleibt, entscheidet: Eine Leerzeile (nur
+  Leerzeichen oder Tabulator; ein geschütztes Leerzeichen ist Inhalt), eine
+  Überschrift oder ein neuer Listenpunkt trennt. Die lange Formel „ignore …
+  instructions" sucht `validate` zusätzlich über Überschriften und
+  Leerzeilen hinweg bis zur nächsten Claim-Zeile; die Zweiwortformeln
+  nicht, denn die entstehen dort zufällig („Tool-System" vor einem Absatz,
+  der mit „Prompt" beginnt). Ein Pfad mit Signatur ist ebenfalls eine
+  Warnung: ein Seitenpfad, der Pfad eines Dokuments im Katalog einer
+  externen Quelle und der Dokumentpfad eines Ankers; Bindestrich,
+  Unterstrich, Punkt und `%20` zählen dabei als Leerraum. Ausgegeben wird
   ein solches Feld nicht (siehe „Maschinenabfrage"); den übrigen Text einer
   Seite gibt die Engine ohnehin nicht aus, der Antworten-Workflow liest ihn
   aber mit, und den Pfad braucht sie als Kennung. Zitiert eine Fehlermeldung
@@ -330,11 +339,19 @@ nur der betroffene Eintrag. Die Seite in `pages[]`, die Quelle unter
 `external.sources[]` tragen dann `suspicious_instruction: true`. Eine
 Signatur in einem Tag, im übrigen Text der Seite oder im Pfad markiert die
 Seite ebenso, auch wo das Feld gar nicht ausgegeben wird: in `pages[]` von
-`query` und der Quittung, im Stapel und an jeder Kante unter `relations`, die
-auf sie zeigt. Ein externer Treffer, dessen Dokumentpfad eine Signatur
-trägt, hat das Signal `suspicious_instruction`; der Pfad bleibt als Kennung
-stehen. Ohne Signatur fehlt das Feld ganz, und die Ausgabe ist dieselbe wie
-vorher.
+`query` und der Quittung, unter `coverage.omitted_pages`, im Stapel und an
+jeder Kante unter `relations`, die auf sie zeigt. Ein externer Treffer,
+dessen Dokumentpfad eine Signatur trägt, hat das Signal
+`suspicious_instruction`, ebenso ein Beleg unter `evidence[]`, dessen Anker
+auf einen solchen Pfad zeigt; der Pfad bleibt als Kennung stehen. Unmarkiert
+steht ein solcher Pfad nur in zwei Listen: in `fallback.page_paths` (Seiten
+des Bestands) und in `fallback.external_document_paths` (extern gelesene
+Dokumente). Beide nennen, was es gibt oder was gelesen wurde, nicht, was die
+Antwort liest oder zitiert: Markiert ist die Seite in `pages[]`, im Stapel
+und in der Quittung, ein Dokument an seinem Treffer; ein Dokument ohne
+Treffer zitiert die Antwort nicht, und vor seinem Pfad warnt schon
+`validate` am Katalog. Ohne Signatur fehlt das Feld ganz, und die Ausgabe
+ist dieselbe wie vorher.
 
 ### Wortform `wortform/v1`
 
@@ -630,7 +647,7 @@ wurde, wäre ein Fehltreffer, der nicht als Fehler auffällt.
 |---|---|---|
 | `not_requested` | Abfrage ohne `--extern`, oder sie scheitert, bevor ein Snapshot geladen ist (leere Frage, `--limit` außerhalb der Grenzen, `invalid_vault`, `vault_busy`, `snapshot_changed`) | nein |
 | `not_declared` | `sources/EXTERN.md` führt keine Quelle | nein |
-| `invalid_query` | Die Anfrage ist so nicht auswertbar: `--source` nennt eine nicht aufgeführte ID, die Frage enthält keinen suchbaren Begriff, oder die lokale Abfrage endete nicht mit `candidates_found` oder `no_candidates` (etwa `ambiguous` oder eine unbekannte Begriffswelt) | nein |
+| `invalid_query` | Die Anfrage ist so nicht auswertbar: `--source` nennt eine nicht aufgeführte ID, die Frage enthält keinen suchbaren Begriff (nur Stopp- und Funktionswörter oder Einzelzeichen), oder die lokale Abfrage endete nicht mit `candidates_found` oder `no_candidates` (etwa `ambiguous` oder eine unbekannte Begriffswelt) | nein |
 | `not_bound` | Jede berücksichtigte Quelle ist eine lokale Quelle ohne brauchbare Bindung auf diesem Host | nein |
 | `unreachable` | Mindestens eine berücksichtigte Quelle hätte gelesen werden sollen, aber es kam kein Dokument an — etwa eine Netzquelle bei gesetztem `SKILLSAFE_OFFLINE`, mit fehlgeschlagenem Abruf, ohne schreibbares Herkunftsprotokoll oder mit erschöpftem Abrufbudget, eine gebundene Quelle ohne lesbares Dokument oder ohne Katalog | nein |
 | `budget_exceeded` | Ein fremder Tresor überschreitet ein gezähltes Budget (Verzeichnistiefe oder Zahl der Einträge) | verworfen |
@@ -687,10 +704,16 @@ statt in den besten 24 Katalogeinträgen gelesen, und ein Dokument zählt, sobal
 es einen Anfragebegriff enthält — v1 rundete das bei mehr als 100 Begriffen auf
 0 % Abdeckung ab und verwarf es. v3 nimmt die Funktionswörter der Frage
 (dieselbe Liste wie im lokalen Ranking) aus den Anfragebegriffen. Es bleiben
-ein Kürzel in Großbuchstaben und ein großgeschriebenes Wort mitten im Satz,
-denn das ist ein Substantiv („Was sind Waren?"); die Pronomen der Anrede
-zählen nie. Bleibt nichts übrig, gelten die Tokens wie in v2. Dokumentseite
-und Rezept des Fingerprints bleiben, die Nummer im Fingerprint wechselt.
+ein Kürzel in Großbuchstaben („IT") und ein Wort einer geschlossenen Liste
+von Homographen (`HOMOGRAPHE_SUBSTANTIVE`: „Waren", „Soll", „Haben",
+„Würde" …), wenn es mitten im Satz großgeschrieben steht, denn dann ist es
+ein Substantiv („Was sind Waren?"). Sonst macht Großschreibung kein
+Funktionswort zum Begriff: nicht am Satzanfang, nicht in Versalien, nicht in
+Titelschreibung und nicht bei der Anrede („Können Sie …"). Die Frage wird
+dafür vorher normalisiert (NFKC), damit eine zerlegte Schreibung kein Wort
+teilt. Bleibt nichts übrig, sucht die Frage nicht: `invalid_query`, kein
+Negativbefund. Dokumentseite und Rezept des Fingerprints bleiben, die Nummer
+im Fingerprint wechselt.
 
 Geprüft wird das Ziel jeder Netzanfrage vor dem Socket: unter dem Präfix an
 Pfadgrenzen, ohne Punktsegmente, auch percent-kodiert. Einer Weiterleitung

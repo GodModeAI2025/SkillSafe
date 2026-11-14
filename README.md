@@ -29,7 +29,7 @@ geschützte `dir_fd`-Operationen fail-closed ab.
 📖 **Konzept & Architekturentscheidungen:** [`wissenstresor/KONZEPT.md`](wissenstresor/KONZEPT.md)
 🌐 **Landingpage:** [`index.html`](index.html) (GitHub-Pages-fähig, Source = repo root)
 
-**Aktueller Release: v0.18.2** (Profil `oksv-lite/1.3`) mit Begriffswelten,
+**Aktueller Release: v0.18.3** (Profil `oksv-lite/1.3`) mit Begriffswelten,
 deterministischem Hybrid-Retrieval, geprüften Bild-/PDF-Regionen und einem
 reproduzierbaren `.skill`-Paket für Claude Code und Codex. Der
 Frontmatter-Parser lehnt Verschachtelung fail-closed ab statt sie still
@@ -261,9 +261,28 @@ Unterstrich richtig, je Listenpunkt eine Angabe, lockere Listen und einen
 auf mehrere Zeilen verteilten Verzicht; eine Angabe zu einem Treffer muss ein
 geliefertes Dokument nennen.
 
-Abnahme: 248 Tests bestanden · 37 manifestierte Dateien · 39 sichere
+v0.18.3 setzt um, was eine dritte Prüfung fand, ebenfalls vor `main`. Die
+Regel für großgeschriebene Wörter erzeugte selbst Rauschtreffer: In einer
+Frage in Versalien, in Titelschreibung oder nach einem nicht erkannten
+Satzanfang galt jedes Funktionswort wieder als Begriff, und eine Frage aus
+lauter Funktionswörtern suchte mit allen Tokens. Jetzt bleibt nur ein Wort
+einer geschlossenen Liste von Homographen („Waren", „Soll", „Haben",
+„Würde" …) ein Begriff, wenn es mitten im Satz großgeschrieben steht, und
+eine Frage ohne Begriff ergibt `invalid_query` statt eines zufälligen
+Treffers; über die 117 Fragen der Messung ändert das nichts. Der
+Stolperdraht entfernt Zitat-, Kommentar- und HTML-Kommentarzeichen, bevor
+er Leerzeilen und Überschriften erkennt, nimmt ein geschütztes Leerzeichen
+nicht als Leerzeile, liest Kommentarzeilen in einem Code-Zaun mit und sucht
+„ignore … instructions" weiter über Absatzgrenzen hinweg. Ein Pfad mit
+Signatur fällt auch mit Bindestrichen darunter; Einträge unter
+`coverage.omitted_pages` tragen die Markierung, ein Beleg mit Signatur im
+Ankerpfad das Signal. Das Prüfwerkzeug erkennt eine Rückfrage auch
+umbrochen oder in Klammern und meldet einen erfundenen Pfad mit der
+Kennung seiner Quelle.
+
+Abnahme: 251 Tests bestanden · 37 manifestierte Dateien · 39 sichere
 Paketeinträge · SHA-256
-`44ac778010f1dc8099e8cd72eea70ed4ea5eff133bd3ca983543df80a535d750`.
+`a6c7de53ba5e07ea8de70220a0c3a244a955ce84a7458d21d8c2a474f42e1aed`.
 Dazu 2 aufgeführte externe Bezugsquellen · 2 Satzanker.
 
 Alles läuft mit der Python-Standardbibliothek, gemessen mit CPython 3.9 und

@@ -243,6 +243,11 @@ Seite ebenso. Ihn ueber Absatzgrenzen hinweg als einen Text zu pruefen,
 ergab Fehlalarme (eine Ueberschrift "System" vor einem Absatz, der mit
 "Prompt" beginnt); seit v0.18.2 prueft validate je Absatz, ohne Zitat- und
 Kommentarzeichen am Zeilenanfang und mit der Fortsetzung einer Claim-Zeile.
+Seit v0.18.3 fallen diese Zeichen weg, bevor Leerzeile und Ueberschrift
+erkannt werden, ein geschuetztes Leerzeichen ist keine Leerzeile, und
+HTML-Kommentare und Kommentarzeilen in einem Code-Zaun zaehlen mit. Nur
+"ignore ... instructions" prueft validate weiter ueber Absatzgrenzen hinweg:
+Diese Formel entsteht dort kaum zufaellig.
 
 ## [2026-11-14] Katalog von X-0002 von Hand neu erzeugen — verworfen
 sources/derived/X-0002__orchestrator.json fuehrt unter top_tokens noch "fuer",
@@ -263,9 +268,10 @@ vier nur ueber "ohne", "nur" und "sie" zustande, und seit Schritt 4c je
 Treffer eine Zeile verlangt, ist jeder solche Rauschtreffer Pflicht. Ersatz
 in v0.18.1: extern-zweistufig/v3 nimmt die Funktionswoerter der Frage aus den
 Anfragebegriffen; die Dokumentseite und die Katalogzahlen bleiben. Ein
-Kuerzel bleibt Begriff, seit v0.18.2 auch ein grossgeschriebenes Wort mitten
-im Satz (sonst fiel "Was sind Waren?" ganz aus), und eine Frage aus lauter
-Funktionswoertern sucht wie in v2. Gemessen an den 117 verschiedenen Fragen
+Kuerzel bleibt Begriff, seit v0.18.3 auch ein Wort einer geschlossenen
+Homographenliste, das mitten im Satz grossgeschrieben steht (sonst fiel "Was
+sind Waren?" ganz aus); eine Frage aus lauter Funktionswoertern ergibt
+invalid_query. Gemessen an den 117 verschiedenen Fragen
 aus Runde 1 bis 5 und den Positivfragen des Gold gegen das gebundene
 Beispielhandbuch: 62 behalten ihre Treffer, bei 49 fallen nur Treffer weg
 (100), bei 6 tritt ein Satz mit mehr Inhaltswoertern an die Stelle (13 weg,
@@ -274,3 +280,19 @@ Beispielhandbuch: 62 behalten ihre Treffer, bei 49 fallen nur Treffer weg
 umschreibende Frage zur Schadensmeldung, die das Mietrechtskapitel vorher nur
 zufaellig ueber Funktionswoerter traf, trifft es jetzt nicht mehr; Bedeutung
 findet extern wie lokal erst das Lesen.
+
+## [2026-11-14] Grossschreibung mitten im Satz als allgemeine Regel, Rueckfall auf alle Tokens — verworfen
+v0.18.2 machte jedes grossgeschriebene Wort mitten im Satz zum Begriff und
+suchte eine Frage aus lauter Funktionswoertern wie in v2 mit allen Tokens.
+Die dritte Pruefung fand in beidem genau die Rauschtreffer, die v3
+abschafft: Eine Frage in Versalien oder in Titelschreibung und ein nicht
+erkannter Satzanfang (nach "...", einem Gedankenstrich oder "1)") machten
+Funktionswoerter wieder zu Begriffen, und der Rueckfall suchte "Koennen Sie
+das?" mit "koennen" und "sie" und traf drei beliebige Saetze, jeder davon
+eine Pflichtzeile unter Schritt 4c. Ersatz in v0.18.3: eine geschlossene
+Liste von Homographen, die grossgeschrieben Substantive sind (Waren, Soll,
+Haben, Wuerde ...), und ohne Begriff invalid_query, kein Negativbefund. Die
+Messung ueber die 117 Fragen bleibt bei 62 / 49 / 6, und keine Frage
+wechselt ihren externen Zustand. Der Preis: Ein Substantiv, das
+kleingeschrieben ein Funktionswort waere und nicht auf der Liste steht,
+zaehlt extern nicht; die Liste waechst nur mit einem Beleg.

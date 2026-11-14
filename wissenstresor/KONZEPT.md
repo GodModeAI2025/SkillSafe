@@ -879,9 +879,11 @@ unbekannte oder als Injection markierte Region → Abbruch · OCR-Injection-
 Canary erscheint nie in Query-Evidenz · Instruktionssignatur in Claim-Text
 oder Fundstelle → Abbruch · Instruktionssignatur in Titel, Tag, Seitentext
 oder Registerangabe → Warnung, und `query` und `sweep` geben das Feld nicht
-aus und markieren Seite oder Quelle (seit v0.18.0; seit v0.18.1 auch über
-einen Zeilenumbruch hinweg, und eine Fehlermeldung, die sie zitiert, nur mit
-ihrem Ort) · verschachteltes Frontmatter in jeder Form
+aus und markieren Seite oder Quelle (seit v0.18.0 Titel, Tag im Stapel
+sowie Titel, Stand und Rechte einer Quelle; seit v0.18.1 Seitentext und
+Kommentarzeilen, Tag auch in `pages[]`, das Ziel einer Netzquelle, und eine
+Fehlermeldung, die sie zitiert, nur mit ihrem Ort; seit v0.18.2 je Absatz,
+an Kanten und in Pfaden) · verschachteltes Frontmatter in jeder Form
 (Blockform, Map-Liste, Tabulator) → Abbruch, und Unterschlüssel gelangen
 nie ins Frontmatter-Dictionary · fremde Dateiart, zweites Script oder
 gesetztes Ausführungsbit im Tresorbaum → Abbruch in `validate` und im

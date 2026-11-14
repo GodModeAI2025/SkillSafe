@@ -437,9 +437,10 @@ Regeln im Envelope:
   dass diese Seite oder Quelle so markiert ist. Gemeint sind die Seiten, die
   die Antwort liest (`pages[]` der Abfrage oder der Quittung samt den
   Nachbarseiten aus Schritt 4) oder aus denen sie zitiert, und die Quellen
-  ihrer Belege und ihrer Zeilen „Extern …". Eine Seite, die nur in einem
-  Stapel markiert ist und aus der nichts gewählt wurde, muss die Antwort
-  nicht nennen.
+  ihrer Belege und ihrer Zeilen „Extern …"; eine Nachbarseite erkennt man
+  an der Markierung ihrer Kante unter `relations`. Eine Seite, die die
+  Antwort weder liest noch zitiert und die nur in einem Stapel markiert ist,
+  muss sie nicht nennen.
 * Ein Treffer auf einer Seite mit `status: veraltet` ist kein Fehler des
   Rankings. Die Gewichte bewerten Geltung nicht, sie hängen nur das Signal
   `page_status:veraltet` an; über die Begriffserweiterung kann eine überholte

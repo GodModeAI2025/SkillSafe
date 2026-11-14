@@ -43,9 +43,11 @@ SKILLSAFE_OFFLINE=1 python3 tools/antwort_check.py \
 ```
 
 Seit v0.18.0 prüft das Werkzeug auch Schritt 4c: Bleibt eine Frage nach der
-Vollsichtung ungedeckt und sind Quellen aufgeführt, muss die Antwort jeden
-externen Treffer mit Quelle und Dokument und jede ungelesene Quelle
-ausweisen oder den Verzicht nennen. Ob der Schritt Pflicht ist, liest es aus
+Vollsichtung ungedeckt und sind Quellen aufgeführt, muss die Antwort externe
+Treffer und Ungelesenes ausweisen oder den Verzicht nennen. Seit v0.18.1
+verlangt es jeden externen Treffer mit Quelle und Dokument und jede
+ungelesene Quelle, einen Verzicht nur mit festgehaltener Vorgabe, und ob der
+Schritt Pflicht ist, liest es aus
 dem Vertrag des geprüften Tresors; Runde 1 bis 4 liefen gegen Stände, deren
 Vertrag ihn freistellte, und werden ohne die Regel geprüft. Die Abfrage mit
 `--extern` rechnet es selbst nach, immer offline: Was eine Netzquelle
@@ -119,9 +121,10 @@ ist eine eingeschränkte Sichtung bei `weak` und `none` eine ausgelassene
 Pflicht. Bittet der Mensch darum, nicht extern nachzuschlagen, oder lässt
 die Umgebung den Aufruf nicht zu, trägt der Eintrag diese Vorgabe im
 Wortlaut unter `vorgabe`. Nur dann zählt ein ausgewiesener Verzicht auf
-Schritt 4c; ohne Vorgabe ist er ein Verstoß, und Zeilen „… nicht
-nachgeschlagen", die zusammen nicht jede aufgeführte Quelle nennen, liest das
-Werkzeug als Zeilen nach dem Aufruf. Ein optionaler Block `stand` mit
+Schritt 4c, und dann müssen die Zeilen „… nicht nachgeschlagen" zusammen
+jede aufgeführte Quelle nennen. Ohne Vorgabe ist ein Verzicht, der alle
+nennt, ein Verstoß; Zeilen „… nicht nachgeschlagen", die zusammen nicht jede
+Quelle nennen, liest das Werkzeug dann als Zeilen nach dem Aufruf. Ein optionaler Block `stand` mit
 `manifest_sha256` bindet das Protokoll an einen Stand. Hing der Lauf an
 gebundenen externen Quellen oder an der Netzlage, hält `stand.extern` beides
 fest: `{"gebunden": ["X-0001"], "offline": true}`. Bindet der prüfende Host

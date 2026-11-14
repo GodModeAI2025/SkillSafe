@@ -238,10 +238,11 @@ im Seitentext markiert die Seite auch in `query` und in der Quittung. Eine
 Fehlermeldung, die eine Signatur zitiert, geben `query` und `sweep` nur mit
 ihrem Ort aus. Ein Ziel mit Leerraum lehnt `validate` jetzt ab; erreichbar war
 ein solches Präfix nie. `tools/antwort_check.py` verlangt je externen Treffer Quelle
-und Dokument, erkennt die Etiketten auch mitten im Satz, liest Bindung und
+und Dokument, erkennt die Etiketten auch am Satzanfang mitten in einer Zeile
+und als Überschrift, liest Bindung und
 Netzlage des Laufs aus dem Protokoll (`stand.extern`) und nimmt einen
-Verzicht auf Schritt 4c nur an, wenn das Protokoll die Bitte des Nutzers
-festhält (`vorgabe`). Ob der Schritt Pflicht ist, liest es aus dem Vertrag
+Verzicht auf Schritt 4c nur an, wenn das Protokoll den Wunsch des Nutzers
+oder die Vorgabe der Umgebung festhält (`vorgabe`). Ob der Schritt Pflicht ist, liest es aus dem Vertrag
 des geprüften Tresors.
 
 v0.18.2 trägt nach, was eine zweite Prüfung dieser Nachbesserungen fand,
@@ -262,7 +263,7 @@ geliefertes Dokument nennen.
 
 Abnahme: 248 Tests bestanden · 37 manifestierte Dateien · 39 sichere
 Paketeinträge · SHA-256
-`7f3e05ee91f08c67c5873c5dd55b38c82fcffcba56d8394af32a1c138f9c3fca`.
+`44ac778010f1dc8099e8cd72eea70ed4ea5eff133bd3ca983543df80a535d750`.
 Dazu 2 aufgeführte externe Bezugsquellen · 2 Satzanker.
 
 Alles läuft mit der Python-Standardbibliothek, gemessen mit CPython 3.9 und
@@ -414,7 +415,7 @@ erneut gegen die Engine.
 | Ende zu Ende, Runde 4 | v0.15.0 | 12 | 7 | 7 | 4 | 4 | 5 | 5 | **0** |
 | Ende zu Ende, Runde 5 | v0.17.0 | 12 | 5 | 5 | 2 | 2 | 6 | 6 | **0** |
 
-*mit Claim:* Fragen mit erwartetem Claim; die zwölfte Frage aus Runde 5 ist
+*mit Claim:* Fragen mit erwartetem Claim; eine Frage aus Runde 5 (F8) ist
 nur teilweise gedeckt, erwartet keinen Claim und zählt in keiner der beiden
 Spalten · *Ranking verfehlt:*
 davon solche, deren Claim das Ranking nicht lieferte · *negativ:* Fragen, die
@@ -493,9 +494,11 @@ Ob ein Agent mit dem eigenen Bestand der Vollsichtung und den Regeln für
 „Nicht im Bestand" folgt (Pflicht-Vollsichtung, gültige Quittung, Zeile
 „Sichtung:", nur vorhandene Kennungen), prüft das dritte Werkzeug, seit
 v0.18.0 auch Schritt 4c: Bleibt die Frage nach der Vollsichtung ungedeckt und
-sind Quellen aufgeführt, muss die Antwort jeden externen Treffer mit Quelle
-und Dokument und jede ungelesene Quelle ausweisen oder den Verzicht nennen,
-den dann das Protokoll als Vorgabe des Nutzers festhält. Die Abfrage mit
+sind Quellen aufgeführt, muss die Antwort externe Treffer und Ungelesenes
+ausweisen oder den Verzicht nennen. Seit v0.18.1 verlangt es jeden externen
+Treffer mit Quelle und Dokument und jede ungelesene Quelle; einen Verzicht
+nimmt es nur an, wenn das Protokoll den Wunsch des Nutzers oder die Vorgabe
+der Umgebung festhält (`vorgabe`). Die Abfrage mit
 `--extern` rechnet es dafür selbst nach, immer offline; Bindung und Netzlage
 des Laufs hält das Protokoll unter `stand.extern` fest. Es braucht
 ein Protokoll mit Frage, Antworttext und den an

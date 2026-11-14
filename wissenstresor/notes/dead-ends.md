@@ -265,10 +265,11 @@ in v0.18.1: extern-zweistufig/v3 nimmt die Funktionswoerter der Frage aus den
 Anfragebegriffen; die Dokumentseite und die Katalogzahlen bleiben. Ein
 Kuerzel bleibt Begriff, seit v0.18.2 auch ein grossgeschriebenes Wort mitten
 im Satz (sonst fiel "Was sind Waren?" ganz aus), und eine Frage aus lauter
-Funktionswoertern sucht wie in v2. Gemessen an den 117 verschiedenen Fragen aus Runde 1
-bis 5 und dem Gold gegen das gebundene Beispielhandbuch: 62 behalten ihre
-Treffer, bei 49 fallen nur Treffer weg (113 insgesamt), bei 6 tritt ein
-Satz mit mehr Inhaltswoertern an die Stelle. Die Stichprobe zum Routing
+Funktionswoertern sucht wie in v2. Gemessen an den 117 verschiedenen Fragen
+aus Runde 1 bis 5 und den Positivfragen des Gold gegen das gebundene
+Beispielhandbuch: 62 behalten ihre Treffer, bei 49 fallen nur Treffer weg
+(100), bei 6 tritt ein Satz mit mehr Inhaltswoertern an die Stelle (13 weg,
+6 neu); zusammen 147 Treffer vorher, 40 nachher. Die Stichprobe zum Routing
 (Fachbegriffe ohne Funktionswort) bleibt unveraendert. Der Preis: Eine
 umschreibende Frage zur Schadensmeldung, die das Mietrechtskapitel vorher nur
 zufaellig ueber Funktionswoerter traf, trifft es jetzt nicht mehr; Bedeutung

@@ -327,11 +327,13 @@ Kennung, eine Angabe „Sichtung:" ohne eingereichte Quittung, eine
 erfundene Claim-ID und, wenn das Protokoll `erwartet` führt, ein
 übersehener Claim. Seit v0.18.0 auch ein still ausgelassener Schritt 4c:
 Bleibt die Frage nach der Vollsichtung ungedeckt und sind Quellen aufgeführt,
-verlangt das Werkzeug die Angabe „Extern (nicht im Bestand):" mit Quelle und
-Dokument für jeden Treffer, den die Abfrage mit `--extern` liefert, „Extern
-nicht gelesen:" für jede ungelesene Quelle, oder den ausgewiesenen Verzicht
-mit allen Kennungen; eine Angabe zu einem Treffer, die kein geliefertes
-Dokument nennt, ist ebenfalls ein Verstoß. Einen Verzicht nimmt es nur an, wenn das Protokoll den
+verlangt das Werkzeug externe Treffer, Ungelesenes oder den ausgewiesenen
+Verzicht mit allen Kennungen. Seit v0.18.1 verlangt es die Angabe „Extern
+(nicht im Bestand):" mit Quelle und Dokument für jeden Treffer, den die
+Abfrage mit `--extern` liefert, und „Extern nicht gelesen:" für jede
+ungelesene Quelle; eine Angabe zu einem Treffer, die kein geliefertes
+Dokument nennt, ist bei bekannter Bindung (lokale Quelle) und bei einem Lauf
+ohne Netz (Netzquelle) ebenfalls ein Verstoß, sonst ein Hinweis. Einen Verzicht nimmt es nur an, wenn das Protokoll den
 Wunsch des Nutzers oder die Vorgabe der Umgebung im Feld `vorgabe` festhält.
 Ob der Schritt Pflicht ist, liest es aus dem Vertrag des geprüften Tresors
 (`references/antworten.md`); ein Stand, dessen Vertrag ihn freistellte, wird

@@ -43,15 +43,22 @@ SKILLSAFE_OFFLINE=1 python3 tools/antwort_check.py \
 ```
 
 Seit v0.18.0 prüft das Werkzeug auch Schritt 4c: Bleibt eine Frage nach der
-Vollsichtung ungedeckt und sind Quellen aufgeführt, muss die Antwort externe
-Treffer und Ungelesenes ausweisen oder den Verzicht nennen. Für Protokolle,
-deren Stand älter ist als v0.17.0, prüft es den Schritt nicht; ihr Vertrag
-stellte ihn frei. Die Abfrage mit `--extern` rechnet es selbst nach, immer
-offline: Was eine Netzquelle geliefert hätte, prüft es nur, wenn auch die
-Umgebung `SKILLSAFE_OFFLINE` setzt.
-Das Werkzeug glaubt dem Protokoll nichts: Es fragt die Trefferstärke jeder
+Vollsichtung ungedeckt und sind Quellen aufgeführt, muss die Antwort jeden
+externen Treffer mit Quelle und Dokument und jede ungelesene Quelle
+ausweisen oder den Verzicht nennen. Ob der Schritt Pflicht ist, liest es aus
+dem Vertrag des geprüften Tresors; Runde 1 bis 4 liefen gegen Stände, deren
+Vertrag ihn freistellte, und werden ohne die Regel geprüft. Die Abfrage mit
+`--extern` rechnet es selbst nach, immer offline: Was eine Netzquelle
+geliefert hätte, prüft es nur, wenn auch der Lauf offline war. Das sagt
+`stand.extern` im Protokoll (siehe unten); fehlt die Angabe, gilt
+`SKILLSAFE_OFFLINE` in der Umgebung des Werkzeugs. Runde 5 trägt sie: Auf
+einem Host ohne die Bindung von X-0001 bricht die Nachrechnung deshalb ab,
+statt Verstöße zu melden, die keine sind.
+Das Werkzeug glaubt dem Agenten nichts: Es fragt die Trefferstärke jeder
 Frage neu ab, fährt jede Quittung erneut gegen die Engine und liest die
-zitierten Claim-IDs aus dem Antworttext.
+zitierten Claim-IDs aus dem Antworttext. Was der Ersteller der Messung
+festhält (`umfang_vorgegeben`, `vorgabe`, `stand.extern`), übernimmt es;
+was der Agent behauptet, nicht.
 
 Der Block `ergebnis` in jeder Datei ist die Zusammenfassung dieses Werkzeugs
 zum Messzeitpunkt. Eine Ausnahme nennt Runde 3 selbst: Das Werkzeug aus
@@ -109,8 +116,20 @@ Domäne oder Seite als Umfang, trägt der Eintrag
 `--page`). Dann erfüllt die Sichtung dieses Umfangs die Pflicht, und „in
 diesem Umfang nicht gefunden" zählt als korrekte Ablehnung; ohne die Angabe
 ist eine eingeschränkte Sichtung bei `weak` und `none` eine ausgelassene
-Pflicht. Ein optionaler Block `stand` mit `manifest_sha256` bindet das
-Protokoll an einen Stand.
+Pflicht. Bittet der Mensch darum, nicht extern nachzuschlagen, oder lässt
+die Umgebung den Aufruf nicht zu, trägt der Eintrag diese Vorgabe im
+Wortlaut unter `vorgabe`. Nur dann zählt ein ausgewiesener Verzicht auf
+Schritt 4c; ohne Vorgabe ist er ein Verstoß, und eine Zeile „… nicht
+nachgeschlagen", die nicht jede aufgeführte Quelle nennt, liest das Werkzeug
+als Zeile nach dem Aufruf. Ein optionaler Block `stand` mit
+`manifest_sha256` bindet das Protokoll an einen Stand. Hing der Lauf an
+gebundenen externen Quellen oder an der Netzlage, hält `stand.extern` beides
+fest: `{"gebunden": ["X-0001"], "offline": true}`. Bindet der prüfende Host
+andere Quellen, bricht das Werkzeug mit Exit 2 ab wie bei einem fremden
+Manifest, und `offline` gilt vor der Umgebung des Werkzeugs. Ohne die Angabe
+gehört die Prüfung auf einen Host mit derselben Bindung. Die Kennung allein
+bindet den Inhalt der gebundenen Wurzel nicht: Sie stammt deshalb aus
+demselben Commit wie der Tresor (`git archive`, wie oben für Runde 5).
 
 Was das Werkzeug liest und was nicht: Die Trefferstärke rechnet es mit dem
 Standardlimit nach. Claim-IDs erkennt es in jeder Schreibung, auch als Bereich

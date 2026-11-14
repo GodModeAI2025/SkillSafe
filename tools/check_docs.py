@@ -290,9 +290,9 @@ def lauf(argv, cwd, timeout=120):
     return ergebnis.returncode, ergebnis.stdout + ergebnis.stderr
 
 
-def recall_stand():
-    """Die Messwerte der Suche, mit demselben Werkzeug wie von Hand."""
-    spec = importlib.util.spec_from_file_location("skillsafe_recall", RECALL_TOOL)
+def _werkzeug(name, pfad):
+    """Ein Werkzeug aus tools/ als Modul, ohne Bytecode im Repositorium."""
+    spec = importlib.util.spec_from_file_location(name, pfad)
     werkzeug = importlib.util.module_from_spec(spec)
     vorher = sys.dont_write_bytecode
     sys.dont_write_bytecode = True
@@ -300,6 +300,12 @@ def recall_stand():
         spec.loader.exec_module(werkzeug)
     finally:
         sys.dont_write_bytecode = vorher
+    return werkzeug
+
+
+def recall_stand():
+    """Die Messwerte der Suche, mit demselben Werkzeug wie von Hand."""
+    werkzeug = _werkzeug("skillsafe_recall", RECALL_TOOL)
     fragen, _ = werkzeug.lade_gold(werkzeug.STANDARD_GOLD, SKILL)
     sichtung = werkzeug.sichtung_pruefen(SKILL, fragen[0]["frage"])
     zeilen, _ = werkzeug.messe(SKILL, fragen, [], 8, sichtung["seite_von"])
@@ -352,6 +358,11 @@ def e2e_stand():
                 # Wie viele Sichtungen über wie viele Stapel liefen.
                 "stapel": dict(Counter(
                     len(antwort["quittung"]) for antwort in quittiert)),
+                # Schritt 4c (Pflicht seit dem Vertrag von v0.17.0): wie oft
+                # er fällig war, und wie oft das Werkzeug einen Verzicht
+                # gelten ließ. Beides zählt tools/antwort_check.py.
+                "pflicht_extern": int(ergebnis.get("pflicht_extern", 0)),
+                "verzicht_extern": int(ergebnis.get("verzicht_extern", 0)),
             }
         except (OSError, UnicodeError, ValueError, KeyError, TypeError) as exc:
             raise SystemExit(
@@ -676,6 +687,33 @@ def pruefe_summen(stand, runden, readme, landing, abweichungen, konzept=None,
         if not treffer and pflicht:
             melde(datei, f"{was} nicht gefunden (Muster {muster!r})")
         return treffer
+
+    # Schritt 4c: "Bei sieben Antworten war der Schritt fällig; sechs schlugen
+    # extern nach …, eine nannte den Verzicht" und im Abnahmeblock von
+    # KONZEPT "Schritt 4c bei sieben Antworten fällig". Nachgeschlagen hat,
+    # wer nicht verzichtete.
+    faellig = sum(stand.get(f"e2e_pflicht_extern_{runde}", 0) for runde in runden)
+    verzicht = sum(stand.get(f"e2e_verzicht_extern_{runde}", 0)
+                   for runde in runden)
+    for datei in [name for name in ("README.md", "index.html", "KONZEPT.md")
+                  if name in texte]:
+        for treffer in fundstellen(
+                datei, r"Bei (\w+) Antworten war (?:der Schritt|er) fällig[;,] "
+                       r"(\w+) schlugen extern nach\b[^.]*?\b(\w+) nannten? "
+                       r"den (?:erbetenen )?Verzicht",
+                "Schritt 4c (fällig, nachgeschlagen, Verzicht)"):
+            genannt = [zahl_aus_wort(treffer.group(stelle)) for stelle in (1, 2, 3)]
+            if genannt != [faellig, faellig - verzicht, verzicht]:
+                melde(datei, f"Schritt 4c: {treffer.group(0)!r}, die Protokolle: "
+                             f"{faellig} fällig, {faellig - verzicht} extern "
+                             f"nachgeschlagen, {verzicht} Verzicht")
+    if "KONZEPT.md" in texte:
+        for treffer in fundstellen("KONZEPT.md",
+                                   r"Schritt 4c bei (\w+) Antworten fällig",
+                                   "Schritt 4c im Abnahmeblock"):
+            if zahl_aus_wort(treffer.group(1)) != faellig:
+                melde("KONZEPT.md", f"{treffer.group(0)!r}, die Protokolle: "
+                                    f"{faellig} fällig")
 
     agenten = sum(stand[f"e2e_agenten_{runde}"] for runde in runden)
     for datei in [name for name in ("README.md", "index.html", "KONZEPT.md")

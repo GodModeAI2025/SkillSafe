@@ -165,13 +165,18 @@ eine aufgeführte externe Bezugsquelle.
 * Offensichtliche Instruktionssignaturen sind weder im Aussagetext noch in
   der Fundstelle freigabefähig. Sie bleiben als markierte Quelldaten in der
   Medienrepräsentation oder Quarantäne, erscheinen aber nie als Claim.
-  Titel, Tags, der übrige Text einer Seite und die Registerangaben einer
-  Quelle (Titel, Stand, Rechte) sind kuratierter Text daneben. Eine Signatur
-  dort meldet `validate` als Warnung, ohne den Wortlaut zu wiederholen
-  (`query` und `sweep` geben die Warnungen mit aus); ein Release bleibt
-  möglich. Ausgegeben wird ein solches Feld nicht (siehe „Maschinenabfrage");
-  den übrigen Text einer Seite gibt die Engine ohnehin nicht aus, der
-  Antworten-Workflow liest ihn aber mit.
+  Titel, Tags, der übrige Text einer Seite samt Kommentarzeilen im
+  Frontmatter und die Registerangaben einer Quelle (Titel, Stand, Rechte,
+  Ziel) sind kuratierter Text daneben. Eine Signatur dort meldet `validate`
+  als Warnung, ohne den Wortlaut zu wiederholen (`query` und `sweep` geben
+  die Warnungen mit aus); ein Release bleibt möglich. Den übrigen Text prüft
+  `validate` je zusammenhängendem Abschnitt als einen Text, damit ein
+  Zeilenumbruch keine Signatur teilt; eine Claim-Zeile trennt. Ausgegeben
+  wird ein solches Feld nicht (siehe „Maschinenabfrage"); den übrigen Text
+  einer Seite gibt die Engine ohnehin nicht aus, der Antworten-Workflow
+  liest ihn aber mit. Zitiert eine Fehlermeldung eine Signatur, geben
+  `query` und `sweep` von ihr nur den Ort aus; den Wortlaut zeigt
+  `validate`.
 * Eine Wissensseite liegt nie unter einem Pfad, den das Manifest ausnimmt
   (`__pycache__`). Ihr Wortlaut wäre sonst nach dem Release änderbar, ohne
   dass Sperre oder Siegel es bemerken.
@@ -315,11 +320,14 @@ meldet sein Alter in jeder Ausgabe.
 
 Kuratierter Text mit Instruktionssignatur geht nicht in die Ausgabe. Trägt
 ein Seitentitel, ein Tag oder eine Registerangabe einer Quelle (Titel, Stand,
-Rechte) eine Signatur, steht das Feld als `null` da; aus `tags` fehlt nur der
-betroffene Eintrag. Die Seite in `pages[]`, die Quelle unter
+Rechte, Ziel) eine Signatur, steht das Feld als `null` da; aus `tags` fehlt
+nur der betroffene Eintrag. Die Seite in `pages[]`, die Quelle unter
 `evidence[].source`, die Seite eines Stapels von `sweep` und die Quelle unter
-`external.sources[]` tragen dann `suspicious_instruction: true`. Ohne
-Signatur fehlt das Feld ganz, und die Ausgabe ist dieselbe wie vorher.
+`external.sources[]` tragen dann `suspicious_instruction: true`. Eine
+Signatur in einem Tag oder im übrigen Text der Seite markiert die Seite
+ebenso, auch wo das Feld gar nicht ausgegeben wird: in `pages[]` von `query`
+und der Quittung. Ohne Signatur fehlt das Feld ganz, und die Ausgabe ist
+dieselbe wie vorher.
 
 ### Wortform `wortform/v1`
 
@@ -378,7 +386,9 @@ Beleg für die Bedeutung.
 Funktionswörter (Artikel, Pronomen, Präpositionen, Konjunktionen, Hilfs- und
 Modalverben, Partikeln) zählen im lokalen Ranking nicht als Fragebegriff. Die
 Liste ist eine eigene und lässt die ältere Stoppwortliste unberührt, an der
-`extern-zweistufig/v2` und die nachrechenbaren Katalogzahlen hängen.
+die nachrechenbaren Katalogzahlen hängen. Seit `extern-zweistufig/v3` nimmt
+die externe Suche die Funktionswörter ebenfalls aus der Frage, nicht aus den
+Dokumenten.
 Homographen wie „Macht"/„macht" gelten als Funktionswort; als kuratierte
 Benennung einer Begriffswelt bleiben sie exakt auffindbar, weil Begriffe
 gegen die ungefilterte Frage abgeglichen werden. Eine Abkürzung in
@@ -660,7 +670,7 @@ lokale Quelle wird vollständig gelesen. Fehlt der Zusatz, wurde jedes
 katalogisierte Dokument jeder berücksichtigten Quelle gelesen.
 
 Zustände, `live` und die Regel, wann es einen Fingerprint gibt, gehören zu
-diesem Query-Vertrag, nicht zum Ranking. `extern-zweistufig/v2` benennt die
+diesem Query-Vertrag, nicht zum Ranking. `extern-zweistufig/v3` benennt die
 Rechenvorschrift für Treffer und das Rezept des Fingerprints: Solange
 dieselben gelesenen Dokumente und dieselbe Anfrage dieselben Treffer, Scores
 und denselben Fingerprint ergeben, bleibt die Nummer. Gegenüber v1 hat sich
@@ -668,7 +678,10 @@ dreierlei geändert, und jedes davon ändert Treffer: Stoppwörter werden
 normalisiert (wie im lokalen Ranking), eine lokale Quelle wird vollständig
 statt in den besten 24 Katalogeinträgen gelesen, und ein Dokument zählt, sobald
 es einen Anfragebegriff enthält — v1 rundete das bei mehr als 100 Begriffen auf
-0 % Abdeckung ab und verwarf es.
+0 % Abdeckung ab und verwarf es. v3 nimmt die Funktionswörter der Frage
+(dieselbe Liste wie im lokalen Ranking, Kürzel ausgenommen) aus den
+Anfragebegriffen; Dokumentseite und Rezept des Fingerprints bleiben, die
+Nummer im Fingerprint wechselt.
 
 Geprüft wird das Ziel jeder Netzanfrage vor dem Socket: unter dem Präfix an
 Pfadgrenzen, ohne Punktsegmente, auch percent-kodiert. Einer Weiterleitung
@@ -778,8 +791,12 @@ einer Antwort übernimmt. Acht Spalten:
   nach, gelesen wird nur, was es pinnt, und sein `scripts/vault.py` wird
   niemals ausgeführt.
 * `Ziel` ist ein festes `https://`-Präfix oder `-` für eine lokale Quelle.
-  `http`, Query, Fragment, Zugangsdaten im Host und `..` sind verboten. Ein
-  absoluter lokaler Pfad steht hier nie — er gehört in die Bindung.
+  `http`, Query, Fragment, Zugangsdaten im Host, `..` und Leerraum sind
+  verboten. Leerraum lehnt `validate` seit v0.18.1 ab: Ein solches Präfix war
+  nie erreichbar, weil der Abruf jede URL mit Leerraum verwirft. Die
+  Verschärfung macht also nur einen Eintrag rot, der nie gelesen werden
+  konnte, und ist deshalb eine Korrektur, kein Major-Release. Ein absoluter
+  lokaler Pfad steht hier nie — er gehört in die Bindung.
 * `Bindungsschlüssel` ist `[a-z0-9][a-z0-9-]{0,63}` und tresorweit eindeutig.
 * Bei `skillsafe-vault` nennt `Stand/Version` zusätzlich genau einen Scope aus
   `organisation`, `fachbereich`, `projekt`, `persoenlich` — Grundlage der
@@ -891,7 +908,7 @@ läuft über die Satzanker, nicht über den Katalog. Alle Zahlenfelder sind nach
 kommen aus dem Script; `title`, `summary` und `tags` sind Modellarbeit. Genau
 diese Trennlinie ist der Prüfpunkt.
 
-Das Ranking `extern-zweistufig/v2` nutzt den Katalog bei einer Netzquelle als
+Das Ranking `extern-zweistufig/v3` nutzt den Katalog bei einer Netzquelle als
 Prefilter (Stufe 1: die besten 24 werden abgerufen), bei einer lokalen Quelle
 nur als Reihenfolge — gelesen wird dort jedes katalogisierte Dokument. Stufe 2
 rechnet immer gegen den **jetzt gelesenen** Text. Ein Dokument ohne einen

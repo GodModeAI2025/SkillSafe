@@ -51,21 +51,37 @@ oder Seite als Umfang, erfüllt die Sichtung dieses Umfangs die Pflicht, und
 wer die Messung baut: Der Eintrag trägt dann ``umfang_vorgegeben: true`` und
 den Umfang in ``sweep_args``.
 
-Schritt 4c ist seit dem Vertrag von v0.17.0 Pflicht. Bleibt eine Frage nach
-der Vollsichtung des ganzen Bestands ganz oder teilweise ungedeckt (die
-Antwort sagt „Nicht im Bestand", auch als Zeile „Nicht im Bestand: …") und
-sind externe Quellen aufgeführt (``fallback.external_lookup_available``),
-weist die Antwort aus, was extern gefunden oder nicht gelesen wurde: je
-Treffer eine Zeile „Extern (nicht im Bestand):", für jede ungelesene Quelle
-„Extern nicht gelesen:", oder den Verzicht („… nicht nachgeschlagen
-(<Grund>) — kein Negativbefund") mit jeder aufgeführten Quelle. Nie im
-Kennungsfall, nie bei begrenztem Umfang. Die Abfrage mit ``--extern`` rechnet
-das Werkzeug selbst nach, mit gesetztem Offline-Schalter: Es ruft nichts ab
-und schreibt nichts in log.md. Was eine Netzquelle geliefert hätte, weiß es
-deshalb nur, wenn auch der Lauf offline war (``SKILLSAFE_OFFLINE`` in seiner
-Umgebung); sonst bleibt sie ein Hinweis. Ein Protokoll, dessen
-``stand.version`` älter ist als 0.17.0, wird ohne diese Regel geprüft: Sein
-Vertrag stellte den Schritt frei.
+Schritt 4c ist seit dem Vertrag von v0.17.0 Pflicht. Ob er es für den
+geprüften Tresor ist, liest das Werkzeug aus dessen references/antworten.md,
+nicht aus einer Versionsnummer: Ein eigener Tresor beginnt bei 1.0.0, ein
+alter Stand stellte den Schritt frei. Bleibt eine Frage nach der Vollsichtung
+des ganzen Bestands ganz oder teilweise ungedeckt (die Antwort sagt „Nicht im
+Bestand", auch als Zeile „Nicht im Bestand: …") und sind externe Quellen
+aufgeführt (``fallback.external_lookup_available``), weist die Antwort aus,
+was extern gefunden oder nicht gelesen wurde: je Treffer eine Angabe
+„Extern (nicht im Bestand):" mit Quelle und Dokument, für jede ungelesene
+Quelle „Extern nicht gelesen:". Beide Etiketten gelten am Anfang einer Zeile
+oder eines Satzes, auch als Überschrift mit einer Liste darunter. Umgekehrt
+nennt eine Trefferzeile nur, was die Abfrage liefert: Bei bekannter Bindung
+(lokale Quelle) und bei einem Lauf ohne Netz (Netzquelle) ist eine
+Trefferzeile ohne Treffer ein Verstoß, sonst ein Hinweis. Den
+Verzicht („Extern nicht gelesen: X-0001, X-0002 nicht nachgeschlagen
+(<Grund>) — kein Negativbefund") nimmt es an, wenn das Protokoll die Vorgabe
+dafür festhält (``vorgabe``: den Wunsch des Nutzers oder die Vorgabe der
+Umgebung im Wortlaut) oder wenn eine solche Zeile jede aufgeführte Quelle
+nennt; ohne Vorgabe ist der Verzicht ein Verstoß. Nie im Kennungsfall, nie
+bei begrenztem Umfang. Die Abfrage mit ``--extern`` rechnet das Werkzeug
+selbst nach, mit gesetztem Offline-Schalter: Es ruft nichts ab und schreibt
+nichts in log.md. Was eine Netzquelle geliefert hätte, weiß es deshalb nur,
+wenn auch der Lauf offline war. Das sagt ``stand.extern.offline`` im
+Protokoll, sonst ``SKILLSAFE_OFFLINE`` in der Umgebung des Werkzeugs; ohne
+beides bleibt die Netzquelle ein Hinweis. Welche Quellen der Lauf gebunden
+hatte, sagt ``stand.extern.gebunden``: Bindet der prüfende Host andere,
+bricht das Werkzeug ab wie bei einem fremden Manifest. Fehlt die Angabe und
+nennt die Antwort Treffer einer Quelle, die die Nachrechnung nicht lesen
+kann, ist das ein Hinweis auf eine abweichende Bindung. Nennt das Protokoll
+eine Version, die nicht zum Tresor passt, bricht das Werkzeug bei gebundenem
+Manifest ab; ohne Manifest ist das ein Hinweis.
 
 Kennungen mit typografischem Strich (C‑0001 mit U+2011, C–0001) liest das
 Werkzeug als Kennung. Eine Angabe zur Sichtung ist die Zeile „Sichtung:" in
@@ -148,14 +164,28 @@ FORMEL_STOERER = re.compile(r"[*_`\u00ad\u200b\u200c\u200d\u2060\ufeff]")
 SWEEP_SCHALTER = {"--size", "--domain", "--page"}
 # Kanten, denen der Antworten-Workflow zu einer weiteren Seite folgt.
 LESEKANTEN = {"ersetzt", "widerspricht"}
-# Schritt 4c (externer Fallback) ist seit dem Vertrag von v0.17.0 Pflicht.
-# Ein Protokoll, dessen Stand älter ist, wird ohne diese Regel geprüft: Seine
-# Agenten arbeiteten nach einem Vertrag, der den Schritt freistellte.
+# Schritt 4c (externer Fallback) ist seit dem Vertrag von v0.17.0 Pflicht. Ob
+# ein Tresor ihn verlangt, liest vertrag_4c aus seinem eigenen Vertrag; diese
+# Grenze gilt nur, wenn der nicht lesbar ist.
 VERTRAG_4C = (0, 17, 0)
+# Der Vertrag erst ohne Zeilenumbrüche gelesen (vertrag_4c): Die Formel steht
+# direkt hinter der Überschrift des Schritts.
+VERTRAG_4C_RE = re.compile(
+    r"4c\.\s*\*\*Externer Fallback\.\*\*\s*Der Schritt ist \*\*Pflicht\*\*")
+VERTRAG_4C_KOPF_RE = re.compile(r"4c\.\s*\*\*Externer Fallback\.\*\*")
 # Die Zeilen, mit denen eine Antwort Schritt 4c ausweist (antworten.md, 4c).
-EXTERN_TREFFER_RE = re.compile(r"(?i)^extern\s*\(\s*nicht\s+im\s+bestand\s*\)\s*:")
-EXTERN_UNGELESEN_RE = re.compile(r"(?i)^extern\s+nicht\s+gelesen\s*:")
+EXTERN_TREFFER_RE = re.compile(
+    r"(?i)^extern\s*\(\s*nicht\s+im\s+bestand\s*\)\s*(?::|$)")
+EXTERN_UNGELESEN_RE = re.compile(r"(?i)^extern\s+nicht\s+gelesen\s*(?::|$)")
 X_KENNUNG_RE = re.compile(r"(?i)(?<![A-Za-z0-9])X-\d{4}(?!\d)")
+# Ein Dokumentpfad in einer Trefferzeile, etwa handbuch/mietminderung.md.
+DOKUMENT_RE = re.compile(
+    r"(?<![\w/.-])((?:[\w-]+/)*[\w.-]+\.(?:md|markdown|txt))(?![\w/-])",
+    re.IGNORECASE)
+# Ein zitierter Treffersatz: Was darin steht, nennt die Antwort nicht als
+# Fundstelle.
+ZITAT_RE = re.compile(
+    r"„[^“”\"\n]*[“”\"]|“[^”\n]*”|«[^»\n]*»|»[^«\n]*«|\"[^\"\n]*\"")
 # So liest die Engine den Offline-Schalter (vault.py, _netz_erlaubt).
 OFFLINE_WERTE = {"1", "true", "yes"}
 
@@ -250,6 +280,15 @@ def lade_protokoll(pfad, vault):
                 f"Umfang (--domain oder --page)")
         if eintrag.get("art") == "negativ" and eintrag["erwartet"]:
             raise ProtokollFehler(f"{wo}: eine Negativfrage erwartet keinen Claim")
+        # Schritt 4c entfällt nur auf Wunsch des Nutzers oder nach einer
+        # Vorgabe der Umgebung (antworten.md, 4c). Auch das weiß nur, wer die
+        # Messung gebaut hat: Der Eintrag trägt den Wortlaut der Vorgabe.
+        vorgabe = eintrag.setdefault("vorgabe", None)
+        if vorgabe is not None and (
+                not isinstance(vorgabe, str) or not vorgabe.strip()):
+            raise ProtokollFehler(
+                f"{wo}: 'vorgabe' ist der Wortlaut einer Vorgabe des Nutzers "
+                f"oder der Umgebung")
         kennung = eintrag.get("id", nummer)
         if isinstance(kennung, bool) or not isinstance(kennung, (str, int)):
             raise ProtokollFehler(f"{wo}: 'id' ist ein Text oder eine Zahl")
@@ -268,6 +307,20 @@ def lade_protokoll(pfad, vault):
     for feld in ("commit", "version"):
         if stand.get(feld) is not None and not isinstance(stand[feld], str):
             raise ProtokollFehler(f"{pfad}: 'stand.{feld}' muss Text sein")
+    # Bindung und Netzlage des Laufs: {"gebunden": ["X-0001"], "offline": true}.
+    extern = stand.get("extern")
+    if extern is not None:
+        if (not isinstance(extern, dict)
+                or set(extern) - {"gebunden", "offline"}
+                or ("offline" in extern and not isinstance(extern["offline"], bool))
+                or ("gebunden" in extern and (
+                    not isinstance(extern["gebunden"], list)
+                    or not all(isinstance(kennung, str)
+                               and X_KENNUNG_RE.fullmatch(kennung)
+                               for kennung in extern["gebunden"])))):
+            raise ProtokollFehler(
+                f"{pfad}: 'stand.extern' ist ein Objekt mit 'gebunden' "
+                f"(Liste von X-Kennungen) und 'offline' (wahr oder falsch)")
     return antworten, stand
 
 
@@ -298,9 +351,17 @@ def bestand_lesen(vault):
             continue
         kennungen.update(kennung.upper() for kennung in re.findall(
             r"(?i)(?<![A-Za-z0-9])[SXB]-\d{4}(?!\d)", text))
+    try:
+        register = (Path(vault) / "sources" / "EXTERN.md").read_text(
+            encoding="utf-8")
+    except (OSError, UnicodeError):
+        register = ""
+    extern = sorted({kennung.upper() for kennung in re.findall(
+        r"(?im)^\|\s*(X-\d{4})\s*\|", register)})
     return {
         "seite_von": seite_von,
         "kennungen": kennungen | set(seite_von),
+        "extern": extern,
         "manifest": plan["vault"]["manifest_sha256"],
         "version": plan["vault"]["version"],
     }
@@ -805,124 +866,276 @@ def _gilt_allein_der_kennung(abfrage, antwort, belegt, abstention):
 
 
 def _version(text):
-    teile = re.findall(r"\d+", str(text or ""))
-    return tuple(int(teil) for teil in teile[:3]) if teile else None
+    """Eine Versionsangabe dreistellig: „0.17" ist (0, 17, 0)."""
+    teile = [int(teil) for teil in re.findall(r"\d+", str(text or ""))[:3]]
+    return tuple(teile + [0] * (3 - len(teile))) if teile else None
 
 
-def vertrag_4c(stand):
-    """Gilt für dieses Protokoll schon die Pflicht zu Schritt 4c?
+def vertrag_4c(vault, stand=None):
+    """Gilt für den geprüften Tresor die Pflicht zu Schritt 4c?
 
-    Maßgeblich ist der Stand, an den das Protokoll gebunden ist. Nennt es
-    keinen, gilt der heutige Vertrag."""
-    version = _version((stand or {}).get("version"))
-    return version is None or version >= VERTRAG_4C
+    Maßgeblich ist sein eigener Vertrag, references/antworten.md, das im
+    Manifest liegt: Seit v0.17.0 heißt es dort in Schritt 4c „Der Schritt ist
+    **Pflicht**", davor war er freigestellt. Die Nummer in VERSION taugt
+    dafür nicht, denn ein eigener Tresor beginnt nach dem Rezept bei v1.0.0,
+    gleich wie alt sein Motor ist. Nur wenn die Datei fehlt, gilt die Angabe
+    stand.version des Protokolls, ohne Angabe der heutige Vertrag."""
+    text = _vertragstext(vault)
+    if text is None:
+        version = _version((stand or {}).get("version"))
+        return version is None or version >= VERTRAG_4C
+    return bool(VERTRAG_4C_RE.search(text))
+
+
+def _vertragstext(vault):
+    """references/antworten.md ohne Zeilenumbrüche, None wenn nicht lesbar."""
+    try:
+        text = (Path(vault) / "references" / "antworten.md").read_text(
+            encoding="utf-8")
+    except (OSError, UnicodeError):
+        return None
+    return " ".join(text.split())
+
+
+def vertrag_4c_hinweis(vault):
+    """Ein Hinweis, wenn das Werkzeug Schritt 4c im Vertrag gar nicht findet.
+
+    Ein Vertrag, der den Schritt freistellt, nennt ihn trotzdem. Fehlt die
+    Überschrift ganz, prüft das Werkzeug ohne die Pflicht, sagt das aber,
+    statt die Regel still abzuschalten."""
+    text = _vertragstext(vault)
+    if text is not None and VERTRAG_4C_KOPF_RE.search(text):
+        return None
+    return ("Schritt 4c im Vertrag des Tresors nicht gefunden "
+            "(references/antworten.md): geprüft ohne die Pflicht zu 4c")
 
 
 def _extern_angaben(antwort):
-    """Die Zeilen, mit denen eine Antwort Schritt 4c ausweist.
+    """Die Angaben, mit denen eine Antwort Schritt 4c ausweist.
 
-    Je Treffer eine Zeile „Extern (nicht im Bestand):", für Ungelesenes eine
-    Zeile „Extern nicht gelesen:". Zu dieser zählt, was bis zur nächsten
-    Leerzeile oder zum nächsten Etikett darunter steht, etwa eine Liste der
-    Quellen. Hervorhebung, Zitatzeichen, Listen- und Überschriftszeichen
-    davor ändern nichts."""
+    Ein Etikett „Extern (nicht im Bestand):" oder „Extern nicht gelesen:"
+    zählt am Anfang einer Zeile und am Anfang eines Satzes, wie die Beispiele
+    im Vertrag es schreiben; als Überschrift oder Hervorhebung auch ohne
+    Doppelpunkt. Zur Angabe gehört, was bis zur nächsten Leerzeile oder zum
+    nächsten Etikett folgt, etwa eine Liste darunter. Zitatzeichen, Listen-
+    und Überschriftszeichen davor ändern nichts. Zurück kommen zwei Listen von
+    Texten: die Angaben zu Treffern und die zu Ungelesenem."""
     text = FORMEL_STOERER.sub("", _ohne_zitatzeichen(_striche(antwort)))
-    treffer, bloecke, block = [], [], None
+    treffer, ungelesen, block = [], [], None
+    # Ein nacktes Etikett ohne Text dahinter wartet über Leerzeilen hinweg
+    # auf seine Liste; sonst endet eine Angabe an der Leerzeile.
+    wartet = False
     for zeile in text.splitlines():
         rumpf = LISTENPUNKT_RE.sub("", re.sub(r"^\s*#{1,6}\s*", "", zeile))
         rumpf = rumpf.strip()
         if not rumpf:
-            block = None
-        elif EXTERN_TREFFER_RE.match(rumpf):
-            treffer.append(rumpf)
-            block = None
-        elif EXTERN_UNGELESEN_RE.match(rumpf):
-            block = [rumpf]
-            bloecke.append(block)
-        elif block is not None and not ETIKETT_RE.match(rumpf):
-            block.append(rumpf)
-        else:
-            block = None
-    return treffer, [" ".join(block) for block in bloecke]
+            if not wartet:
+                block = None
+            continue
+        for satz in re.split(r"(?<=[.!?])\s+(?=\S)", rumpf):
+            etikett = (EXTERN_TREFFER_RE.match(satz)
+                       or EXTERN_UNGELESEN_RE.match(satz))
+            if etikett:
+                block = [satz]
+                (treffer if EXTERN_TREFFER_RE.match(satz)
+                 else ungelesen).append(block)
+                wartet = not satz[etikett.end():].strip(" :")
+            elif block is not None and not ETIKETT_RE.match(satz):
+                block.append(satz)
+                wartet = False
+            else:
+                block = None
+                wartet = False
+    return ([" ".join(block) for block in treffer],
+            [" ".join(block) for block in ungelesen])
 
 
-def _pruefe_extern(vault, frage, antwort):
+def _kennungen(text):
+    return {kennung.upper() for kennung in X_KENNUNG_RE.findall(text)}
+
+
+def _trefferpaare(block):
+    """(Quelle, Dokument) je Nennung in einer Angabe „Extern (nicht im
+    Bestand):". Ein Dokument gehört zur Kennung davor; was in einem Zitat
+    steht, etwa im wiedergegebenen Treffersatz, zählt nicht."""
+    paare = set()
+    block = ZITAT_RE.sub(" ", block)
+    funde = list(X_KENNUNG_RE.finditer(block))
+    for nummer, fund in enumerate(funde):
+        ende = funde[nummer + 1].start() if nummer + 1 < len(funde) else len(block)
+        for dokument in DOKUMENT_RE.findall(block[fund.end():ende]):
+            paare.add((fund.group(0).upper(), dokument))
+    return paare
+
+
+def bindung_pruefen(vault, lauf_extern):
+    """Bindung des Laufs gegen den Prüfhost halten (Protokoll: stand.extern).
+
+    Welche Quellen ein Lauf lesen konnte, hängt an der host-lokalen Bindung
+    in .vault-extern.json, die außerhalb des Manifests liegt. Weicht sie ab,
+    hieße jede Abweichung im Urteil über Schritt 4c „Verstoß des Agenten";
+    deshalb bricht das Werkzeug dann ab wie bei einem falschen Manifest."""
+    if "gebunden" not in lauf_extern:
+        return
+    probe = lauf(vault, "query", "--extern", "Bindung",
+                 umgebung={"SKILLSAFE_OFFLINE": "1"})
+    gebunden = sorted(str(quelle.get("id")).upper()
+                      for quelle in (probe.get("external") or {}).get("sources", [])
+                      if quelle.get("mode") == "lokal")
+    soll = sorted(str(kennung).upper() for kennung in lauf_extern["gebunden"])
+    if gebunden != soll:
+        raise ProtokollFehler(
+            f"Der Lauf hatte {', '.join(soll) or 'keine Quelle'} gebunden, "
+            f"dieser Host bindet {', '.join(gebunden) or 'keine'}. Schritt 4c "
+            f"lässt sich nur mit derselben Bindung nachrechnen "
+            f"('vault.py extern bind').")
+
+
+def _pruefe_extern(vault, frage, antwort, aufgefuehrt, offline, bindung_bekannt,
+                   vorgabe=None):
     """Schritt 4c nachrechnen: Was hätte die Antwort ausweisen müssen?
 
     Das Werkzeug fragt die externen Quellen selbst ab, aber nie übers Netz:
-    Es setzt den Offline-Schalter, damit die Nachprüfung weder abruft noch
-    in log.md schreibt. Was eine Netzquelle geliefert hätte, weiß es deshalb
-    nur, wenn auch der Lauf offline war (SKILLSAFE_OFFLINE in der Umgebung
-    des Werkzeugs); sonst bleibt die Netzquelle ungeprüft und das ein
-    Hinweis. Zurück kommen Verstöße und Hinweise."""
+    Es setzt den Offline-Schalter, damit die Nachprüfung weder abruft noch in
+    log.md schreibt. Was eine Netzquelle geliefert hätte, weiß es deshalb nur,
+    wenn auch der Lauf offline war (``offline``); sonst bleibt die Netzquelle
+    ungeprüft und das ein Hinweis. ``aufgefuehrt`` sind die Kennungen aller
+    aufgeführten Quellen, ``vorgabe`` der Wortlaut einer Vorgabe gegen das
+    Nachschlagen aus dem Protokoll. Zurück kommen Verstöße, Hinweise und ob
+    die Antwort einen Verzicht ausweist, den das Werkzeug als solchen
+    nimmt."""
     verstoesse, hinweise = [], []
-    offline = os.environ.get("SKILLSAFE_OFFLINE", "").strip() in OFFLINE_WERTE
     extern = lauf(vault, "query", "--extern", frage,
                   umgebung={"SKILLSAFE_OFFLINE": "1"}).get("external") or {}
     zustand = extern.get("state")
     quellen = {str(quelle["id"]).upper(): quelle
                for quelle in extern.get("sources", []) if quelle.get("id")}
+    aufgefuehrt = set(aufgefuehrt) | set(quellen)
     if zustand in ("external_candidates_found", "no_external_candidates"):
         rest = (extern.get("reason") or "").split("Nicht gelesen:", 1)
-        ungelesen = ({kennung.upper() for kennung in X_KENNUNG_RE.findall(rest[1])}
-                     if len(rest) > 1 else set())
-    elif zustand in ("not_bound", "unreachable", "budget_exceeded",
-                     "invalid_external_source"):
-        ungelesen = set(quellen)
+        ungelesen = _kennungen(rest[1]) if len(rest) > 1 else set()
     else:
-        hinweise.append(f"Schritt 4c nicht nachprüfbar: Die Abfrage mit "
-                        f"--extern liefert den Zustand {zustand}")
-        return verstoesse, hinweise
+        # Jeder andere Zustand liest nichts (antworten.md, 4c), auch
+        # invalid_query; nach einem Abbruch fehlen in sources die Quellen
+        # danach, aufgeführt sind sie trotzdem.
+        ungelesen = set(aufgefuehrt)
     netz = {kennung for kennung, quelle in quellen.items()
             if quelle.get("mode") == "netz"}
     ungeprueft = set() if offline else (ungelesen & netz)
     if ungeprueft:
         hinweise.append(
             f"Netzquelle nicht nachgeprüft ({', '.join(sorted(ungeprueft))}): "
-            f"Ohne SKILLSAFE_OFFLINE in der Umgebung ist offen, was der Lauf "
-            f"dort gelesen hat")
+            f"Ohne Offline-Angabe zum Lauf ist offen, was er dort gelesen hat")
     pflicht_ungelesen = ungelesen - ungeprueft
     treffer = [stelle for stelle in extern.get("hits", [])
                if stelle.get("source_id")]
 
-    treffer_zeilen, bloecke = _extern_angaben(antwort)
-    blocktext = " ".join(bloecke)
-    genannt = {kennung.upper() for kennung in X_KENNUNG_RE.findall(blocktext)}
-    if "nicht nachgeschlagen" in " ".join(blocktext.split()).casefold():
-        # Der ausgewiesene Verzicht (Nutzerwunsch, Vorgabe der Umgebung):
-        # Dann nennt die Zeile jede aufgeführte Quelle, gelesen ist keine.
-        fehlend = sorted(set(quellen) - genannt)
+    treffer_bloecke, ungelesen_bloecke = _extern_angaben(antwort)
+    treffer_text = " ".join(treffer_bloecke)
+    ungelesen_text = " ".join(ungelesen_bloecke)
+    genannt = _kennungen(ungelesen_text)
+    verzichtszeilen = [block for block in ungelesen_bloecke
+                       if "nicht nachgeschlagen"
+                       in " ".join(block.split()).casefold()]
+    # Der ausgewiesene Verzicht: Der Schritt unterblieb auf Wunsch des
+    # Nutzers oder nach einer Vorgabe der Umgebung, und die Zeile nennt jede
+    # aufgeführte Quelle. Ohne Vorgabe im Protokoll gilt nur die Zeile als
+    # Verzicht, die selbst jede Kennung nennt; sonst ist „nicht
+    # nachgeschlagen" der Wortlaut einer Zeile nach dem Aufruf, und es gilt
+    # der normale Weg.
+    verzicht = bool(not treffer_bloecke and verzichtszeilen and (
+        vorgabe or any(aufgefuehrt <= _kennungen(block)
+                       for block in verzichtszeilen)))
+    if verzicht:
+        if not vorgabe:
+            verstoesse.append(
+                "Verzicht auf Schritt 4c ohne Vorgabe: Das Protokoll hält "
+                "weder einen Wunsch des Nutzers noch eine Vorgabe der Umgebung "
+                "fest (\"vorgabe\"), und nur dann entfällt der Schritt")
+        fehlend = sorted(aufgefuehrt - genannt)
         if fehlend:
             verstoesse.append(
                 f"Zeile „Extern nicht gelesen:\" weist aus, dass Schritt 4c "
                 f"unterblieb, nennt aber nicht jede aufgeführte Quelle: "
                 f"{', '.join(fehlend)} fehlt")
-        return verstoesse, hinweise
-    if not treffer_zeilen and not bloecke:
+        return verstoesse, hinweise, True
+    if vorgabe:
+        hinweise.append(
+            "Das Protokoll nennt eine Vorgabe gegen das Nachschlagen, die "
+            "Antwort weist aber keinen Verzicht aus")
+    if not treffer_bloecke and not ungelesen_bloecke:
         if treffer or pflicht_ungelesen:
             verstoesse.append(
                 "Schritt 4c fehlt: Nach der Vollsichtung bleibt die Frage "
                 "ungedeckt, und externe Quellen sind aufgeführt; die Antwort "
                 "hat weder eine Zeile „Extern (nicht im Bestand):\" noch "
                 "„Extern nicht gelesen:\"")
-        return verstoesse, hinweise
-    if treffer and not treffer_zeilen:
-        orte = sorted({f"{stelle['source_id']} {stelle.get('document', '')}".strip()
-                       for stelle in treffer})
+        return verstoesse, hinweise, False
+    # Je Treffer eine Angabe mit Quelle und Dokument (antworten.md, 4c).
+    fehlende_treffer = []
+    for stelle in treffer:
+        dokument = str(stelle.get("document") or "")
+        namen = {dokument.casefold(), dokument.rsplit("/", 1)[-1].casefold()} - {""}
+        if not any(str(stelle["source_id"]).upper() in _kennungen(block)
+                   and any(name in block.casefold() for name in namen)
+                   for block in treffer_bloecke):
+            fehlende_treffer.append(f"{stelle['source_id']} {dokument}".strip())
+    if fehlende_treffer:
         verstoesse.append(
-            f"Die Abfrage mit --extern findet {len(treffer)} Stelle"
-            f"{'' if len(treffer) == 1 else 'n'} ({'; '.join(orte)}), die "
-            f"Antwort hat keine Zeile „Extern (nicht im Bestand):\"")
-    fehlend = sorted(pflicht_ungelesen - genannt)
+            f"Treffer ohne Zeile „Extern (nicht im Bestand):\": "
+            f"{'; '.join(sorted(set(fehlende_treffer)))}. Je Treffer nennt die "
+            f"Antwort Quelle und Dokument")
+    # Umgekehrt: Was eine solche Zeile nennt, muss die Abfrage liefern; die
+    # Zeilen kommen aus external.hits. Sicher sagen lässt sich das nur bei
+    # bekannter Bindung (lokale Quelle) und bei einem Lauf ohne Netz
+    # (Netzquelle); sonst bleibt es ein Hinweis.
+    # Nachsichtig gelesen: in jeder Schreibung, und ein Name zählt auch als
+    # Ende eines längeren Pfads (ein Dateiname mit Leerzeichen zerfällt beim
+    # Lesen in Stücke).
+    geliefert = [(str(stelle["source_id"]).upper(),
+                  str(stelle.get("document") or "").casefold())
+                 for stelle in treffer]
+    erfunden, offen = [], []
+    for kennung, name in sorted(set().union(
+            *(_trefferpaare(block) for block in treffer_bloecke))):
+        if kennung not in aufgefuehrt or any(
+                quelle == kennung and dokument.endswith(name.casefold())
+                for quelle, dokument in geliefert):
+            continue
+        netzquelle = kennung in netz
+        if (offline if netzquelle else bindung_bekannt):
+            erfunden.append(f"{kennung} {name}")
+        else:
+            offen.append(f"{kennung} {name}")
+    if erfunden:
+        verstoesse.append(
+            f"Zeile „Extern (nicht im Bestand):\" ohne Treffer der Abfrage: "
+            f"{'; '.join(erfunden)}. Sie nennt nur, was query --extern liefert")
+    if offen:
+        hinweise.append(
+            f"Trefferzeile nicht nachprüfbar ({'; '.join(offen)}): Bindung "
+            f"oder Netzlage des Laufs stehen nicht im Protokoll")
+    fehlend = pflicht_ungelesen - genannt
+    # Nennt die Antwort Treffer aus einer Quelle, die hier ungelesen blieb,
+    # war sie beim Lauf vermutlich anders gebunden. Ohne Angabe zur Bindung
+    # im Protokoll ist das kein Verstoß des Agenten, sondern offen.
+    anders_gebunden = set() if bindung_bekannt else (fehlend & _kennungen(treffer_text))
+    if anders_gebunden:
+        hinweise.append(
+            f"Bindung weicht vermutlich ab: Die Antwort nennt Treffer aus "
+            f"{', '.join(sorted(anders_gebunden))}, die Nachrechnung konnte "
+            f"die Quelle nicht lesen")
+    fehlend = sorted(fehlend - anders_gebunden)
     if fehlend:
         verstoesse.append(
             f"Zeile „Extern nicht gelesen:\" fehlt für {', '.join(fehlend)}: "
             f"Diese Quelle hat die Abfrage mit --extern nicht gelesen, und "
             f"nicht gelesen ist kein Negativbefund")
-    return verstoesse, hinweise
+    return verstoesse, hinweise, False
 
 
-def pruefe(vault, eintrag, bestand, mit_4c=True):
+def pruefe(vault, eintrag, bestand, mit_4c=True, offline=None,
+           bindung_bekannt=False):
     """Eine Antwort gegen die Engine nachrechnen."""
     antwort = _striche(eintrag["antwort"])
     quittung = [teil.strip() for teil in eintrag["quittung"] if teil.strip()]
@@ -970,6 +1183,7 @@ def pruefe(vault, eintrag, bestand, mit_4c=True):
         "unbekannte_ids": unbekannte_ids,
         "kennung_unbekannt": False,
         "extern_pflicht": False,
+        "extern_verzicht": False,
         "verstoesse": [],
         "hinweise": [],
     }
@@ -1081,9 +1295,17 @@ def pruefe(vault, eintrag, bestand, mit_4c=True):
             and rueckfall.get("unknown_ids_only") is not True
             and rueckfall.get("external_lookup_available") is True):
         zeile["extern_pflicht"] = True
-        verstoesse, hinweise = _pruefe_extern(vault, eintrag["frage"], antwort)
+        if offline is None:
+            offline = (os.environ.get("SKILLSAFE_OFFLINE", "").strip()
+                       in OFFLINE_WERTE)
+        aufgefuehrt = set(rueckfall.get("external_source_ids") or ()) | {
+            kennung for kennung in bestand["extern"]}
+        verstoesse, hinweise, verzicht = _pruefe_extern(
+            vault, eintrag["frage"], antwort, aufgefuehrt, offline,
+            bindung_bekannt, eintrag.get("vorgabe"))
         zeile["verstoesse"].extend(verstoesse)
         zeile["hinweise"].extend(hinweise)
+        zeile["extern_verzicht"] = verzicht
 
     angaben = _sichtungsangaben(antwort)
     # Ein Satz behauptet eine Vollsichtung, wenn er so viele Claims nennt,
@@ -1225,6 +1447,7 @@ def zusammenfassung(zeilen):
         "negativ_korrekt": sum(1 for z in negativ if urteil(z) in ABGELEHNT),
         "pflicht_vollsichtung": sum(1 for z in zeilen if z["pflicht"]),
         "pflicht_extern": sum(1 for z in zeilen if z.get("extern_pflicht")),
+        "verzicht_extern": sum(1 for z in zeilen if z.get("extern_verzicht")),
         "quittungen": len(mit_quittung),
         "quittungen_gueltig": sum(1 for z in mit_quittung if z["vollstaendig"]),
         "ohne_verstoss": sum(1 for z in zeilen if not z["verstoesse"]),
@@ -1260,7 +1483,8 @@ def bericht(zeilen, bestand, ausfuehrlich):
               f"korrekt abgelehnt {summe['negativ_korrekt']}")
     print(f"  Vollsichtung war Pflicht      {summe['pflicht_vollsichtung']:>3}")
     if summe["pflicht_extern"]:
-        print(f"  Schritt 4c war Pflicht        {summe['pflicht_extern']:>3}")
+        print(f"  Schritt 4c war Pflicht        {summe['pflicht_extern']:>3}, "
+              f"davon Verzicht {summe['verzicht_extern']}")
     print(f"  Quittungen eingereicht        {summe['quittungen']:>3}, "
           f"gültig und vollständig {summe['quittungen_gueltig']}")
     stapel = Counter(z["stapel"] for z in zeilen if z["stapel"])
@@ -1293,8 +1517,29 @@ def main(argv=None):
                 + f", der Tresor steht auf {bestand['manifest'][:12]}. Siegel "
                 f"gelten nur für ihren Stand: auf dem gebundenen Stand prüfen."
             )
-        mit_4c = vertrag_4c(stand)
-        zeilen = [pruefe(vault, eintrag, bestand, mit_4c=mit_4c)
+        hinweise_lauf = []
+        # Die Version im Protokoll ist eine Angabe des Erstellers. Bindet er
+        # ein Manifest, muss sie dazu passen; sonst ist sie nur ein Hinweis.
+        if stand.get("version") and (_version(stand["version"])
+                                     != _version(bestand["version"])):
+            abweichung = (f"Das Protokoll nennt den Stand v{stand['version']}, "
+                          f"der Tresor steht auf v{bestand['version']}")
+            if gebunden:
+                raise ProtokollFehler(
+                    abweichung + ". Bei gleichem Manifest ist die Angabe "
+                    "stand.version falsch; bitte berichtigen.")
+            hinweise_lauf.append(
+                abweichung + "; ob Schritt 4c Pflicht ist, sagt der Vertrag "
+                "des geprüften Tresors")
+        mit_4c = vertrag_4c(vault, stand)
+        if not mit_4c and vertrag_4c_hinweis(vault):
+            hinweise_lauf.append(vertrag_4c_hinweis(vault))
+        lauf_extern = stand.get("extern") or {}
+        if mit_4c:
+            bindung_pruefen(vault, lauf_extern)
+        zeilen = [pruefe(vault, eintrag, bestand, mit_4c=mit_4c,
+                         offline=lauf_extern.get("offline"),
+                         bindung_bekannt="gebunden" in lauf_extern)
                   for eintrag in antworten]
     except ProtokollFehler as exc:
         print(f"🔴 antwort-check: {exc}")
@@ -1305,10 +1550,13 @@ def main(argv=None):
             {"schema": PROTOKOLL_SCHEMA, "stand": {
                 "version": bestand["version"],
                 "manifest_sha256": bestand["manifest"]},
+             "hinweise": hinweise_lauf,
              "zusammenfassung": zusammenfassung(zeilen), "zeilen": zeilen},
             ensure_ascii=False, indent=2, sort_keys=True))
         summe = zusammenfassung(zeilen)
     else:
+        for text in hinweise_lauf:
+            print(f"Hinweis: {text}")
         summe = bericht(zeilen, bestand, not args.kurz)
     if summe["verstoesse"]:
         if not args.json:

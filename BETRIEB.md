@@ -327,33 +327,45 @@ Kennung, eine Angabe „Sichtung:" ohne eingereichte Quittung, eine
 erfundene Claim-ID und, wenn das Protokoll `erwartet` führt, ein
 übersehener Claim. Seit v0.18.0 auch ein still ausgelassener Schritt 4c:
 Bleibt die Frage nach der Vollsichtung ungedeckt und sind Quellen aufgeführt,
-verlangt das Werkzeug die Zeile „Extern (nicht im Bestand):" für jeden
-Treffer, den die Abfrage mit `--extern` liefert, „Extern nicht gelesen:" für
-jede ungelesene Quelle, oder den ausgewiesenen Verzicht mit allen
-Kennungen. Die Abfrage rechnet es selbst nach, immer offline; was eine
-Netzquelle geliefert hätte, prüft es nur, wenn auch die Umgebung
-`SKILLSAFE_OFFLINE` setzt. Für Protokolle, deren Stand älter ist als v0.17.0,
-gilt die Regel nicht. Exit 1 bei einem Verstoß, 2 bei unbrauchbarem
-Protokoll oder falschem Stand.
+verlangt das Werkzeug die Angabe „Extern (nicht im Bestand):" mit Quelle und
+Dokument für jeden Treffer, den die Abfrage mit `--extern` liefert, „Extern
+nicht gelesen:" für jede ungelesene Quelle, oder den ausgewiesenen Verzicht
+mit allen Kennungen; eine Trefferzeile, die die Abfrage nicht liefert, ist
+ebenfalls ein Verstoß. Einen Verzicht nimmt es nur an, wenn das Protokoll den
+Wunsch des Nutzers oder die Vorgabe der Umgebung im Feld `vorgabe` festhält.
+Ob der Schritt Pflicht ist, liest es aus dem Vertrag des geprüften Tresors
+(`references/antworten.md`); ein Stand, dessen Vertrag ihn freistellte, wird
+ohne die Regel geprüft. Die Abfrage rechnet es selbst nach, immer offline.
+Was eine Netzquelle geliefert hätte, prüft es nur, wenn auch der Lauf
+offline war: Das sagt `stand.extern.offline` im Protokoll, sonst
+`SKILLSAFE_OFFLINE` in seiner Umgebung. Hält das Protokoll unter
+`stand.extern.gebunden` fest, welche Quellen der Lauf gebunden hatte, und
+bindet der prüfende Host andere, bricht es ab. Exit 1 bei einem Verstoß, 2
+bei unbrauchbarem Protokoll, falschem Stand oder abweichender Bindung.
 
 **Siegel gelten für ihren Stand.** Nach jedem Release sind alte Quittungen
 ungültig. Ein Protokoll, das aufgehoben werden soll, braucht deshalb den Block
 `stand` mit dem Manifest-Digest; nachgerechnet wird gegen den Tresor dieses
-Commits (`git archive <commit> wissenstresor`). Die vier Messläufe vom 12. und
-13. November 2026 liegen so unter `tests/e2e/`. Ihre Zahlen stehen in
+Commits (`git archive <commit> wissenstresor`). Hing die Antwort an einer
+gebundenen externen Quelle, gehört auch die Bindung dazu: Runde 5 lief mit
+gebundener X-0001 und ohne Netz und wird genauso nachgerechnet, mit
+`beispiel-extern/` aus demselben Commit (Rezept in `tests/e2e/LIESMICH.md`).
+Die fünf Messläufe vom 12. bis 14. November 2026 liegen so unter
+`tests/e2e/`. Ihre Zahlen stehen in
 `README.md`, `index.html` und `wissenstresor/KONZEPT.md`, und
 `check_docs.py` bindet sie an die Protokolle: die Tabellenzeilen an den Block `ergebnis`, die Summen im
 Fließtext (Zahl der Agenten, „alle N …", Sichtungen über mehrere Stapel) an
 dieselben Protokolle samt ihren Quittungen.
 
-**Die Anmerkungen sind die halbe Messung.** Die Agenten der vier Läufe
+**Die Anmerkungen sind die halbe Messung.** Die Agenten der fünf Läufe
 sollten zusätzlich in einem Satz sagen, was am Vertrag unklar war. Daraus
-kamen die Korrekturen in v0.13.0 bis v0.16.0, darunter ein falscher
+kamen die Korrekturen in v0.13.0 bis v0.18.0, darunter ein falscher
 Satz, den erst ein Agent bemerkte. Wer den Vertrag ändert, lässt ihn danach
 lesen.
 
-**Was diese Messung nicht sagt.** 68 Fragen, ein Bestand mit einem Stapel,
-Agenten aus derselben Modellfamilie. Sie zeigt, dass das Verfahren befolgbar
+**Was diese Messung nicht sagt.** 80 Fragen, ein Demo-Bestand mit 28
+Claims (in der Standardgröße ein Stapel), Agenten aus derselben
+Modellfamilie. Sie zeigt, dass das Verfahren befolgbar
 ist, nicht wie sorgfältig ein Modell 189 Stapel liest.
 
 ## Störfälle

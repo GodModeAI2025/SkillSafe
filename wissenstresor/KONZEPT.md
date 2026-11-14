@@ -364,12 +364,13 @@ nicht als Negativbefund. Diese Asymmetrie ist eine Entscheidung.
 
 **Entscheidung:** Für einen externen Markdown-Baum entsteht ein Katalog als
 `.json` (`skillsafe.orchestrator/v1`), den die Engine liest. Das Ranking
-`extern-zweistufig/v2` rechnet Stufe 2 immer gegen den jetzt gelesenen Text.
+`extern-zweistufig/v3` rechnet Stufe 2 immer gegen den jetzt gelesenen Text.
 Den Katalog nutzt es bei einer Netzquelle als Prefilter, weil dort jedes
 geöffnete Dokument ein Abruf ist; eine lokale Quelle wird vollständig gelesen,
 der Katalog ordnet sie nur. Ein Dokument ohne einen einzigen Anfragebegriff
 fällt heraus, unabhängig vom Katalog-Score. Bleibt nichts übrig, kommt nichts
-zurück.
+zurück. Funktionswörter der Frage sind seit v3 kein Anfragebegriff: Ein Satz,
+den nur ein „sie" oder ein „ohne" trifft, ist kein Fund.
 
 **Begründung:** Der Katalogtext ist ein schwaches Signal, der Bestand dahinter
 das starke. Im Demo-Bestand liefert „Minderung Mangel Wohnung" in Stufe 1 das
@@ -650,7 +651,10 @@ extern nach, eine nannte den Verzicht, um den der Nutzer gebeten hatte. Ihre
 Agenten fanden, dass für diesen Verzicht die Kennungen der Quellen fehlten
 (seit v0.18.0 `fallback.external_source_ids`), dass `live: true` ohne
 Netzabruf irritiert, und wo die Grenze zwischen Lesart und Zusatz bei einem
-verneinenden Claim und bei einem engeren Begriff liegt.
+verneinenden Claim und bei einem engeren Begriff liegt. Die Gegenprüfung von
+v0.18.0 fand dazu, dass vier der sieben externen Trefferzeilen nur über
+Funktionswörter wie „sie" oder „ohne" zustande kamen; seit v0.18.1
+(`extern-zweistufig/v3`) zählen sie extern nicht mehr als Anfragebegriff.
 
 Grenzen dieser Messung, ausdrücklich: 80 Fragen, ein Demo-Bestand, in dem die
 Vollsichtung ein einziger Stapel ist, Agenten aus derselben Modellfamilie,
@@ -874,7 +878,9 @@ unbekannte oder als Injection markierte Region → Abbruch · OCR-Injection-
 Canary erscheint nie in Query-Evidenz · Instruktionssignatur in Claim-Text
 oder Fundstelle → Abbruch · Instruktionssignatur in Titel, Tag, Seitentext
 oder Registerangabe → Warnung, und `query` und `sweep` geben das Feld nicht
-aus (seit v0.18.0) · verschachteltes Frontmatter in jeder Form
+aus und markieren Seite oder Quelle (seit v0.18.0; seit v0.18.1 auch über
+einen Zeilenumbruch hinweg, und eine Fehlermeldung, die sie zitiert, nur mit
+ihrem Ort) · verschachteltes Frontmatter in jeder Form
 (Blockform, Map-Liste, Tabulator) → Abbruch, und Unterschlüssel gelangen
 nie ins Frontmatter-Dictionary · fremde Dateiart, zweites Script oder
 gesetztes Ausführungsbit im Tresorbaum → Abbruch in `validate` und im

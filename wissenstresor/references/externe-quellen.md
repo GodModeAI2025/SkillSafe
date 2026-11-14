@@ -121,7 +121,7 @@ fällig ist, regelt allein `references/antworten.md`, Schritt 4c: Dort ist er
 Pflicht, sobald die Vollsichtung die Frage nicht deckt und Quellen aufgeführt
 sind.
 
-Das Ranking `extern-zweistufig/v2` arbeitet in zwei Stufen:
+Das Ranking `extern-zweistufig/v3` arbeitet in zwei Stufen:
 
 * **Stufe 1, Katalogtext** — ein schwaches Signal. Bei einer **Netzquelle**
   entscheidet es, welche Dokumente überhaupt abgerufen werden (die besten 24).
@@ -144,7 +144,13 @@ Katalogtext ist ein schwaches Signal, der Bestand dahinter das starke.
 
 Abgeglichen wird ausschließlich an Tokengrenzen. „himmel" findet deshalb kein
 „schimmel" — der Fehler ist strukturell ausgeschlossen, nicht per Konvention
-vermieden. Stoppwörter wie „für" zählen nicht, auch nicht als „fuer".
+vermieden. Stoppwörter wie „für" zählen nicht, auch nicht als „fuer". Seit
+`extern-zweistufig/v3` gilt das auch für die Funktionswörter des lokalen
+Rankings (Artikel, Pronomen, Präpositionen, Hilfs- und Modalverben,
+Partikeln): In der Frage sind sie kein Anfragebegriff, ein Kürzel in
+Großbuchstaben wie „IT" bleibt einer. Die Dokumente tokenisiert die Suche
+unverändert. In v2 trafen „sie", „nur" oder „ohne" beliebige Sätze, und
+jeder externe Treffer verlangt in der Antwort eine eigene Zeile.
 
 ## Ehrlich scheitern
 

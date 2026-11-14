@@ -1,12 +1,18 @@
 {
  "schema": "skillsafe.antwort-protokoll/v1",
- "hinweis": "Ende-zu-Ende-Messung vom 2026-11-14, Runde 5. Vier frische Agenten, je drei Fragen; die Agenten 3 und 4 mit vorgegebener Stapelgröße 10 (drei Stapel). Jeder Agent bekam nur den entpackten Skill-Ordner und die Fragen im Wortlaut. X-0001 war an das Beispielhandbuch gebunden, die Umgebung offline (SKILLSAFE_OFFLINE=1), X-0002 blieb damit ungelesen. Erstmals galt die Pflicht zu Schritt 4c: Bei sieben Antworten war er fällig, sechs schlugen extern nach, eine wies den Verzicht aus, um den der Nutzer bei dieser Frage gebeten hatte. Vier Fragen stammen aus tests/gold/recall-demo.json, acht sind eigens für diese Runde gestellt: Negativfragen mit und ohne externen Treffer, zwei nur teilweise gedeckte Fragen, eine Kennung, die es nicht gibt, eine Frage mit Domäne im Wortlaut und ein ausdrücklicher Verzicht auf externe Quellen. Die Siegel gelten ausschließlich für den Stand unter 'stand': nachprüfen lässt sich das Protokoll mit tools/antwort_check.py gegen den Tresor dieses Commits, mit derselben Bindung von X-0001 und offline (siehe tests/e2e/LIESMICH.md). 'ergebnis' ist die Ausgabe des Werkzeugs aus v0.18.0, das Schritt 4c mitprüft.",
+ "hinweis": "Ende-zu-Ende-Messung vom 2026-11-14, Runde 5. Vier frische Agenten, je drei Fragen; die Agenten 3 und 4 mit vorgegebener Stapelgröße 10 (drei Stapel). Jeder Agent bekam nur den entpackten Skill-Ordner und die Fragen im Wortlaut. X-0001 war an das Beispielhandbuch gebunden, die Umgebung offline (SKILLSAFE_OFFLINE=1), X-0002 blieb damit ungelesen. Erstmals galt die Pflicht zu Schritt 4c: Bei sieben Antworten war er fällig, sechs schlugen extern nach, eine wies den Verzicht aus, um den der Nutzer bei dieser Frage gebeten hatte. Vier Fragen stammen aus tests/gold/recall-demo.json, acht sind eigens für diese Runde gestellt: Negativfragen mit und ohne externen Treffer, zwei nur teilweise gedeckte Fragen, eine Kennung, die es nicht gibt, eine Frage mit Domäne im Wortlaut und ein ausdrücklicher Verzicht auf externe Quellen. Die Siegel gelten ausschließlich für den Stand unter 'stand': nachprüfen lässt sich das Protokoll mit tools/antwort_check.py gegen den Tresor dieses Commits, mit derselben Bindung von X-0001 und offline (siehe tests/e2e/LIESMICH.md). 'ergebnis' ist die Ausgabe des Werkzeugs aus v0.18.1, das Schritt 4c mitprüft.",
  "runde": 5,
  "agenten": 4,
  "stand": {
   "version": "0.17.0",
   "manifest_sha256": "223e391389fd5540395496d2295cf6c694db2931479b40f2594b01f773907ddc",
-  "commit": "d275b06"
+  "commit": "d275b06",
+  "extern": {
+   "gebunden": [
+    "X-0001"
+   ],
+   "offline": true
+  }
  },
  "ergebnis": {
   "antworten": 12,
@@ -21,6 +27,7 @@
   "quittungen": 11,
   "quittungen_gueltig": 11,
   "verstoesse": 0,
+  "verzicht_extern": 1,
   "vom_ranking_verfehlt": 2
  },
  "antworten": [
@@ -74,6 +81,7 @@
    "id": "F5",
    "art": "negativ",
    "frage": "Welche Versicherung braucht ein Mieter?",
+   "vorgabe": "Bitte schlag dafür nicht in externen Quellen nach.",
    "erwartet": [],
    "sweep_args": [],
    "quittung": [

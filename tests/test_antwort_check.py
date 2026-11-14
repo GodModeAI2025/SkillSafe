@@ -1153,11 +1153,15 @@ class AntwortCheckTests(unittest.TestCase):
         quittung, leer = self.sichtung(NEGATIV)
         kern = "Nicht im Bestand.\n" + self.zeile_sichtung(leer) + "\n"
 
-        def zeile(antwort, **weiter):
-            ergebnis = self.pruefe([{
-                "id": "N1", "art": "negativ", "frage": NEGATIV,
-                "quittung": quittung, "antwort": antwort}],
-                argumente=["--json"], **weiter)
+        def zeile(antwort, frage=NEGATIV, eintraege=None, vorgabe=None,
+                  **weiter):
+            eintrag = {
+                "id": "N1", "art": "negativ", "frage": frage,
+                "quittung": quittung if eintraege is None else eintraege,
+                "antwort": antwort}
+            if vorgabe is not None:
+                eintrag["vorgabe"] = vorgabe
+            ergebnis = self.pruefe([eintrag], argumente=["--json"], **weiter)
             daten = json.loads(ergebnis.stdout)
             return daten["zeilen"][0], daten["zusammenfassung"]
 
@@ -1166,42 +1170,209 @@ class AntwortCheckTests(unittest.TestCase):
         self.assertEqual(summe["pflicht_extern"], 1)
         self.assertTrue(any(m.startswith("Schritt 4c fehlt")
                             for m in still["verstoesse"]), still)
-        sauber, _ = zeile(kern + EXTERN)
-        self.assertEqual(sauber["verstoesse"], [])
-        # Als Liste unter dem Etikett, hervorgehoben: dieselbe Angabe.
-        liste, _ = zeile(kern + "**Extern nicht gelesen:**\n- X-0001: nicht "
-                         "gebunden\n- X-0002: SKILLSAFE_OFFLINE gesetzt\n\n"
-                         "Hinweise: keine")
-        self.assertEqual(liste["verstoesse"], [])
+        for name, antwort in {
+                "eigene Zeile": kern + EXTERN,
+                # Wie im Vertragsbeispiel: das Etikett mitten im Absatz.
+                "im Satz": "Nicht im Bestand: Der Bestand nennt keinen "
+                           "Urlaubsanspruch. " + EXTERN + ".\n"
+                           + self.zeile_sichtung(leer),
+                "Liste unter Etikett": kern + "**Extern nicht gelesen:**\n- "
+                                       "X-0001: nicht gebunden\n- X-0002: "
+                                       "SKILLSAFE_OFFLINE gesetzt\n\nHinweise: "
+                                       "keine",
+                "Überschrift ohne Doppelpunkt": kern + "### Extern nicht "
+                                                "gelesen\n- X-0001 (nicht "
+                                                "gebunden)\n- X-0002 (offline)",
+                "Etikett, Leerzeile, Liste": kern + "Extern nicht gelesen:\n\n"
+                                             "- X-0001 (nicht gebunden)\n"
+                                             "- X-0002 (offline)",
+        }.items():
+            with self.subTest(form=name):
+                sauber, _ = zeile(antwort)
+                self.assertEqual(sauber["verstoesse"], [])
         halb, _ = zeile(kern + "Extern nicht gelesen: X-0001 (nicht gebunden) "
                         "— kein Negativbefund")
         self.assertTrue(any("fehlt für X-0002" in m
                             for m in halb["verstoesse"]), halb)
         # Unterbleibt der Schritt, nennt die Zeile jede aufgeführte Quelle.
-        verzicht, _ = zeile(kern + "Extern nicht gelesen: X-0001, X-0002 nicht "
-                            "nachgeschlagen (Nutzer wünscht keine externe "
-                            "Suche) — kein Negativbefund")
+        # Entfallen darf er nur auf Wunsch des Nutzers oder nach einer
+        # Vorgabe der Umgebung; die hält das Protokoll fest.
+        bitte = "Bitte schlag dafür nicht in externen Quellen nach."
+        verzichtszeile = (kern + "Extern nicht gelesen: X-0001, X-0002 nicht "
+                          "nachgeschlagen (auf deinen Wunsch) — kein "
+                          "Negativbefund")
+        verzicht, verzicht_summe = zeile(verzichtszeile, vorgabe=bitte)
         self.assertEqual(verzicht["verstoesse"], [])
+        self.assertTrue(verzicht["extern_verzicht"])
+        self.assertEqual(verzicht_summe["verzicht_extern"], 1)
+        eigenmaechtig, _ = zeile(verzichtszeile)
+        self.assertTrue(any(m.startswith("Verzicht auf Schritt 4c ohne Vorgabe")
+                            for m in eigenmaechtig["verstoesse"]), eigenmaechtig)
         verzicht_halb, _ = zeile(kern + "Extern nicht gelesen: X-0001 nicht "
                                  "nachgeschlagen (Nutzerwunsch) — kein "
-                                 "Negativbefund")
+                                 "Negativbefund", vorgabe=bitte)
         self.assertTrue(any("X-0002 fehlt" in m
                             for m in verzicht_halb["verstoesse"]), verzicht_halb)
-        # Ohne Offline-Schalter in der Umgebung bleibt offen, was die
-        # Netzquelle geliefert hätte: ein Hinweis, kein Verstoß.
+        # Ohne Vorgabe ist „nicht nachgeschlagen" für einen Teil der Quellen
+        # der Wortlaut einer Zeile nach dem Aufruf: normaler Weg.
+        nach_aufruf, _ = zeile(kern + "Extern nicht gelesen: X-0001 (nicht "
+                               "gebunden). Extern nicht gelesen: X-0002 nicht "
+                               "nachgeschlagen (SKILLSAFE_OFFLINE gesetzt) — "
+                               "kein Negativbefund")
+        self.assertEqual(nach_aufruf["verstoesse"], [])
+        nach_aufruf_halb, _ = zeile(kern + "Extern nicht gelesen: X-0001 nicht "
+                                    "nachgeschlagen (Nutzerwunsch) — kein "
+                                    "Negativbefund")
+        self.assertTrue(any("fehlt für X-0002" in m
+                            for m in nach_aufruf_halb["verstoesse"]),
+                        nach_aufruf_halb)
+        # Eine Trefferzeile nennt nur, was die Abfrage liefert. Hier liest
+        # sie nichts: X-0001 ist nicht gebunden, X-0002 hinter dem Schalter.
+        erfunden = (kern + EXTERN + "\nExtern (nicht im Bestand): X-0001 "
+                    "handbuch/miete.md, Satz 1\nExtern (nicht im Bestand): "
+                    "X-0002 README.md, Satz 4")
+        gebunden_bekannt, _ = zeile(erfunden, stand={
+            "extern": {"gebunden": [], "offline": True}})
+        self.assertTrue(any(
+            "ohne Treffer der Abfrage" in m and "X-0001 handbuch/miete.md" in m
+            and "X-0002 README.md" in m
+            for m in gebunden_bekannt["verstoesse"]), gebunden_bekannt)
+        # Ohne Angabe zur Bindung bleibt die lokale Quelle offen; die
+        # Netzquelle nicht, denn der Lauf war offline.
+        ohne_angabe, _ = zeile(erfunden)
+        self.assertTrue(any(
+            "ohne Treffer der Abfrage: X-0002 README.md" in m
+            for m in ohne_angabe["verstoesse"]), ohne_angabe)
+        self.assertTrue(any("X-0001 handbuch/miete.md" in h
+                            for h in ohne_angabe["hinweise"]), ohne_angabe)
+        # Eine Vorgabe ohne ausgewiesenen Verzicht ist ein Hinweis.
+        trotzdem, _ = zeile(kern + EXTERN, vorgabe=bitte)
+        self.assertEqual(trotzdem["verstoesse"], [])
+        self.assertTrue(any("Vorgabe gegen das Nachschlagen" in h
+                            for h in trotzdem["hinweise"]), trotzdem)
+        # Ohne Offline-Angabe zum Lauf bleibt offen, was die Netzquelle
+        # geliefert hätte: ein Hinweis, kein Verstoß.
         online, _ = zeile(kern + "Extern nicht gelesen: X-0001 (nicht gebunden) "
                           "— kein Negativbefund", offline=False)
         self.assertEqual(online["verstoesse"], [])
         self.assertTrue(any("Netzquelle nicht nachgeprüft (X-0002)" in h
                             for h in online["hinweise"]), online)
-        # Ein Protokoll vom Stand vor v0.17.0 wird ohne die Regel geprüft.
-        for version, pflicht in (("0.16.0", False), ("0.17.0", True),
-                                 ("1.2.0", True)):
-            with self.subTest(stand=version):
-                alt, _ = zeile(kern, stand={"version": version})
-                self.assertEqual(alt["extern_pflicht"], pflicht)
-                self.assertEqual(any(m.startswith("Schritt 4c fehlt")
-                                     for m in alt["verstoesse"]), pflicht)
+        # Die Angabe im Protokoll gilt vor der Umgebung des Werkzeugs.
+        protokoll_offline, _ = zeile(
+            kern + "Extern nicht gelesen: X-0001 (nicht gebunden) — kein "
+            "Negativbefund", offline=False,
+            stand={"extern": {"gebunden": [], "offline": True}})
+        self.assertTrue(any("fehlt für X-0002" in m
+                            for m in protokoll_offline["verstoesse"]),
+                        protokoll_offline)
+        # invalid_query liest nichts: Auch dann gehört die Zeile dazu.
+        frage_kurz = "Was ist das?"
+        kurz, kurz_fertig = self.sichtung(frage_kurz)
+        unbrauchbar, _ = zeile("Nicht im Bestand.\n"
+                               + self.zeile_sichtung(kurz_fertig),
+                               frage=frage_kurz, eintraege=kurz)
+        self.assertTrue(unbrauchbar["extern_pflicht"])
+        self.assertTrue(any(m.startswith("Schritt 4c fehlt")
+                            for m in unbrauchbar["verstoesse"]), unbrauchbar)
+
+    def test_the_contract_examples_for_step_4c_read_as_written(self):
+        """„Extern nicht gelesen" und „Teilweise gelesen": Die Beispiele im
+        Vertrag schreiben die Angaben in den Fließtext, mitten in den Absatz.
+        So liest sie das Werkzeug auch, Wort für Wort aus dem Vertrag."""
+        spec = importlib.util.spec_from_file_location("antwort_check_bsp", TOOL)
+        tool = importlib.util.module_from_spec(spec)
+        vorher = sys.dont_write_bytecode
+        sys.dont_write_bytecode = True
+        try:
+            spec.loader.exec_module(tool)
+        finally:
+            sys.dont_write_bytecode = vorher
+        vertrag = (SOURCE_SKILL / "references/antworten.md").read_text(
+            encoding="utf-8")
+
+        def beispiel(titel):
+            absatz = " ".join(
+                vertrag.split(f"**{titel}**", 1)[1].split("\n\n", 1)[0].split())
+            return re.search(r"(?:Antwort: |kommen deshalb: )„(.+?)[\"“], dazu",
+                             absatz).group(1)
+
+        treffer, ungelesen = tool._extern_angaben(beispiel("Extern nicht gelesen"))
+        self.assertEqual(treffer, [])
+        self.assertEqual(len(ungelesen), 1, ungelesen)
+        self.assertEqual(tool._kennungen(ungelesen[0]), {"X-0001", "X-0002"})
+        treffer, ungelesen = tool._extern_angaben(beispiel("Teilweise gelesen"))
+        self.assertEqual(len(treffer), 1, treffer)
+        self.assertEqual(tool._trefferpaare(treffer[0]),
+                         {("X-0001", "handbuch/mietminderung.md")})
+        self.assertEqual(len(ungelesen), 1, ungelesen)
+        self.assertEqual(tool._kennungen(ungelesen[0]), {"X-0002"})
+
+    def test_step_4c_follows_the_contract_of_the_checked_vault(self):
+        """Ob 4c Pflicht ist, sagt der Vertrag des Tresors, nicht VERSION."""
+        spec = importlib.util.spec_from_file_location("antwort_check_4c", TOOL)
+        tool = importlib.util.module_from_spec(spec)
+        vorher = sys.dont_write_bytecode
+        sys.dont_write_bytecode = True
+        try:
+            spec.loader.exec_module(tool)
+        finally:
+            sys.dont_write_bytecode = vorher
+        # Ändert sich die Formulierung, muss das Werkzeug mitwachsen.
+        self.assertTrue(tool.vertrag_4c(SOURCE_SKILL))
+        self.assertIsNone(tool.vertrag_4c_hinweis(SOURCE_SKILL))
+        self.assertEqual(tool._version("0.17"), (0, 17, 0))
+        # Die Fassung von v0.15.0 stellt den Schritt frei; ein Zeilenumbruch
+        # in der Formel ändert nichts.
+        for fassung, pflicht in (
+                ("4c. **Externer Fallback.** Eine Option, keine Pflicht, und "
+                 "nie von selbst:", False),
+                ("4c. **Externer Fallback.** Der Schritt\n   ist **Pflicht**, "
+                 "sobald beide", True)):
+            with self.subTest(fassung=fassung[:40]):
+                alt_vault = self.basis / f"fassung-{int(pflicht)}"
+                (alt_vault / "references").mkdir(parents=True)
+                (alt_vault / "references/antworten.md").write_text(
+                    "# Antworten\n\n" + fassung + "\n", encoding="utf-8")
+                self.assertIs(tool.vertrag_4c(alt_vault), pflicht)
+                self.assertIsNone(tool.vertrag_4c_hinweis(alt_vault))
+        ohne = self.basis / "ohne-4c"
+        (ohne / "references").mkdir(parents=True)
+        (ohne / "references/antworten.md").write_text(
+            "# Antworten\n\nKein externer Schritt.\n", encoding="utf-8")
+        self.assertFalse(tool.vertrag_4c(ohne))
+        self.assertIn("nicht gefunden", tool.vertrag_4c_hinweis(ohne))
+        frei = self.basis / "frei" / "wissenstresor"
+        shutil.copytree(self.root, frei)
+        antworten_md = frei / "references/antworten.md"
+        text = antworten_md.read_text(encoding="utf-8")
+        self.assertEqual(text.count("Der Schritt ist **Pflicht**"), 1)
+        antworten_md.write_text(text.replace(
+            "Der Schritt ist **Pflicht**", "Der Schritt ist eine Option"),
+            encoding="utf-8")
+        gepinnt = _cli(frei, "checksum")
+        self.assertEqual(gepinnt.returncode, 0, gepinnt.stdout + gepinnt.stderr)
+        self.assertFalse(tool.vertrag_4c(frei))
+        quittung, leer = self.sichtung(NEGATIV, root=frei)
+        ergebnis = self.pruefe([{
+            "id": "N1", "art": "negativ", "frage": NEGATIV, "quittung": quittung,
+            "antwort": "Nicht im Bestand.\n" + self.zeile_sichtung(leer)}],
+            argumente=["--json"], vault=frei,
+            stand={"version": "1.4.0"})
+        daten = json.loads(ergebnis.stdout)
+        self.assertFalse(daten["zeilen"][0]["extern_pflicht"])
+        self.assertEqual(daten["zusammenfassung"]["verstoesse"], 0)
+        # Die Version im Protokoll passt nicht zum Tresor: ohne Manifest ein
+        # Hinweis, mit Manifest ein Abbruch.
+        self.assertTrue(any("nennt den Stand v1.4.0" in h
+                            for h in daten["hinweise"]), daten["hinweise"])
+        manifest = daten["stand"]["manifest_sha256"]
+        falsch = self.pruefe([{
+            "id": "N1", "art": "negativ", "frage": NEGATIV, "quittung": quittung,
+            "antwort": "Nicht im Bestand.\n" + self.zeile_sichtung(leer)}],
+            vault=frei, stand={"version": "0.15.0",
+                               "manifest_sha256": manifest})
+        self.assertEqual(falsch.returncode, 2, falsch.stdout)
+        self.assertIn("nennt den Stand v0.15.0", falsch.stdout)
 
     def test_step_4c_with_a_bound_source_needs_the_external_hits(self):
         """Gebunden liest die Abfrage X-0001; ihre Treffer gehören in die Antwort."""
@@ -1218,27 +1389,65 @@ class AntwortCheckTests(unittest.TestCase):
             stdout=subprocess.PIPE, check=False, timeout=60,
             env=dict(os.environ, SKILLSAFE_OFFLINE="1")).stdout)["external"]
         self.assertEqual(extern["state"], "external_candidates_found", extern)
+        self.assertGreaterEqual(len(extern["hits"]), 2, extern["hits"])
         kern = "Nicht im Bestand.\n" + self.zeile_sichtung(leer) + "\n"
         ungelesen = ("Extern nicht gelesen: X-0002 (SKILLSAFE_OFFLINE gesetzt) "
                      "— kein Negativbefund")
-        treffer = extern["hits"][0]
-        hinweis = (f"Extern (nicht im Bestand): {treffer['source_id']} "
-                   f"{treffer['document']}, Satz {treffer['sentence_index']}")
+        zeilen = [f"Extern (nicht im Bestand): {stelle['source_id']} "
+                  f"{stelle['document']}, Satz {stelle['sentence_index']}"
+                  for stelle in extern["hits"]]
 
-        def verstoesse(antwort):
-            ergebnis = self.pruefe([{
+        def ergebnis(antwort, vault=gebunden, stand=None):
+            lauf = self.pruefe([{
                 "id": "N1", "art": "negativ", "frage": frage,
                 "quittung": quittung, "antwort": antwort}],
-                argumente=["--json"], vault=gebunden)
-            return json.loads(ergebnis.stdout)["zeilen"][0]["verstoesse"]
+                argumente=["--json"], vault=vault, stand=stand)
+            return lauf
 
-        self.assertEqual(verstoesse(kern + hinweis + "\n" + ungelesen), [])
-        ohne_treffer = verstoesse(kern + ungelesen)
-        self.assertTrue(any("keine Zeile „Extern (nicht im Bestand):\"" in m
-                            for m in ohne_treffer), ohne_treffer)
-        ohne_ungelesen = verstoesse(kern + hinweis)
+        def zeile(antwort, **weiter):
+            return json.loads(ergebnis(antwort, **weiter).stdout)["zeilen"][0]
+
+        alles = kern + "\n".join(zeilen) + "\n" + ungelesen
+        self.assertEqual(zeile(alles)["verstoesse"], [])
+        # Fehlt ein Treffer, nennt das Werkzeug ihn mit Quelle und Dokument.
+        ohne_einen = zeile(kern + "\n".join(zeilen[1:]) + "\n" + ungelesen)
+        self.assertTrue(any("Treffer ohne Zeile" in m
+                            and extern["hits"][0]["document"] in m
+                            for m in ohne_einen["verstoesse"]), ohne_einen)
+        ohne_ungelesen = zeile(kern + "\n".join(zeilen))
         self.assertTrue(any("fehlt für X-0002" in m
-                            for m in ohne_ungelesen), ohne_ungelesen)
+                            for m in ohne_ungelesen["verstoesse"]), ohne_ungelesen)
+        # „nicht nachgeschlagen" für eine Quelle neben Treffern ist kein
+        # Verzicht auf den ganzen Schritt.
+        teilweise = zeile(kern + "\n".join(zeilen) + "\nExtern nicht gelesen: "
+                          "X-0002 nicht nachgeschlagen (SKILLSAFE_OFFLINE "
+                          "gesetzt) — kein Negativbefund")
+        self.assertEqual(teilweise["verstoesse"], [])
+        # Bindung im Protokoll: gleich, dann geprüft; abweichend, dann Abbruch.
+        lauf = {"extern": {"gebunden": ["X-0001"], "offline": True}}
+        mit_angabe = zeile(alles, stand=lauf)
+        self.assertEqual(mit_angabe["verstoesse"], [])
+        # Eine Trefferzeile nennt nur, was die Abfrage liefert; ein Dateiname
+        # im zitierten Treffersatz ist keine Fundstelle.
+        erfunden = zeile(alles + "\nExtern (nicht im Bestand): X-0001 "
+                         "handbuch/mietkaution.md, Satz 2", stand=lauf)
+        self.assertTrue(any(
+            "ohne Treffer der Abfrage: X-0001 handbuch/mietkaution.md" in m
+            for m in erfunden["verstoesse"]), erfunden)
+        zitiert = zeile(kern + zeilen[0] + ": „Mehr steht in anhang/weiteres.md.“\n"
+                        + "\n".join(zeilen[1:]) + "\n" + ungelesen, stand=lauf)
+        self.assertEqual(zitiert["verstoesse"], [])
+        abweichend = ergebnis(alles, stand={"extern": {"gebunden": [],
+                                                       "offline": True}})
+        self.assertEqual(abweichend.returncode, 2, abweichend.stdout)
+        self.assertIn("dieser Host bindet X-0001", abweichend.stdout)
+        # Ohne Angabe im Protokoll: Nennt die Antwort Treffer aus einer
+        # Quelle, die die Nachrechnung nicht lesen kann, ist das ein Hinweis.
+        ungebunden = zeile(alles, vault=self.root)
+        self.assertFalse(any("fehlt für X-0001" in m
+                             for m in ungebunden["verstoesse"]), ungebunden)
+        self.assertTrue(any("Bindung weicht vermutlich ab" in h
+                            for h in ungebunden["hinweise"]), ungebunden)
 
     def test_form_does_not_fool_the_tool(self):
         """Umbruch, Hervorhebung, Doppelpunkt: derselbe Verstoß, andere Form."""
@@ -1382,6 +1591,14 @@ class AntwortCheckTests(unittest.TestCase):
         self.assertIn("nimmt die Frage nicht an (invalid_query)",
                       zu_lang.stdout)
         self.assertIn("Antwort L2", zu_lang.stdout)
+        # Die Vorgabe gegen das Nachschlagen ist ihr Wortlaut, nichts sonst.
+        for vorgabe in ("", "   ", True, ["kein Netz"]):
+            with self.subTest(vorgabe=vorgabe):
+                result = self.pruefe([{
+                    "id": "V1", "frage": NEGATIV, "vorgabe": vorgabe,
+                    "antwort": "Nicht im Bestand."}])
+                self.assertEqual(result.returncode, 2, result.stdout)
+                self.assertIn("'vorgabe' ist der Wortlaut", result.stdout)
 
     def test_a_partial_scope_never_satisfies_the_mandatory_sweep(self):
         """Pflicht heißt: der ganze Bestand. Eine Domäne genügt nicht."""
@@ -1587,6 +1804,18 @@ class AntwortCheckTests(unittest.TestCase):
                     ergebnis["davon_gefunden"], ergebnis["vom_ranking_verfehlt"])
                 self.assertLessEqual(
                     ergebnis["pflicht_vollsichtung"], len(antworten))
+                # Ein Verzicht auf Schritt 4c braucht die Vorgabe im Protokoll
+                # und die Formel in der Antwort; mehr kann er nicht sein, als
+                # der Schritt fällig war.
+                verzichte = 0
+                for eintrag in antworten:
+                    treffer, ungelesen = tool._extern_angaben(eintrag["antwort"])
+                    if eintrag.get("vorgabe") and not treffer and any(
+                            "nicht nachgeschlagen" in " ".join(b.split()).casefold()
+                            for b in ungelesen):
+                        verzichte += 1
+                self.assertEqual(ergebnis.get("verzicht_extern", 0), verzichte)
+                self.assertLessEqual(verzichte, ergebnis.get("pflicht_extern", 0))
                 # Gegen den heutigen Stand verweigert das Werkzeug die Prüfung,
                 # statt lauter ungültige Quittungen zu melden.
                 result = subprocess.run(

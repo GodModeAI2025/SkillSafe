@@ -2746,6 +2746,26 @@ class RecallGateTests(unittest.TestCase):
                                            "in Runde 4 zu elf von zwölf"),
                     "Runden KONZEPT": ("KONZEPT.md", "In den ersten drei Runden",
                                        "In den ersten zwei Runden"),
+                    # Schritt 4c: fällig, nachgeschlagen, Verzicht.
+                    "4c fällig README": ("README.md", "Bei sieben Antworten",
+                                         "Bei acht Antworten"),
+                    "4c nachgeschlagen README": (
+                        "README.md", "sechs schlugen extern nach",
+                        "fünf schlugen extern nach"),
+                    "4c Verzicht README": ("README.md", "eine nannte den Verzicht",
+                                           "zwei nannten den Verzicht"),
+                    "4c fällig Landing": ("index.html",
+                                          "Bei sieben Antworten war er fällig",
+                                          "Bei sechs Antworten war er fällig"),
+                    "4c Verzicht Landing": ("index.html",
+                                            "eine nannte den erbetenen Verzicht",
+                                            "keine nannte den erbetenen Verzicht"),
+                    "4c fällig KONZEPT": ("KONZEPT.md",
+                                          "Bei sieben Antworten war er fällig",
+                                          "Bei neun Antworten war er fällig"),
+                    "4c Abnahme KONZEPT": ("KONZEPT.md",
+                                           "4c bei\nsieben Antworten fällig",
+                                           "4c bei\nacht Antworten fällig"),
                 }
                 originale = {"README.md": text, "index.html": html,
                              "KONZEPT.md": konzept.read_text(encoding="utf-8")}

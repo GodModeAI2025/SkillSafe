@@ -173,8 +173,12 @@ BINDING_SCHEMA = "skillsafe.bindung/v1"
 # normalisiert — in v1 wirkte „für" nie als Stoppwort, weil das rohe Wort mit
 # dem Token „fuer" verglichen wurde. Dazu liest v2 lokale Quellen vollständig,
 # filtert über den Katalog nur noch bei Netzquellen und zählt Abrufe je Abfrage.
+# extern-zweistufig/v3: Die Funktionswörter der Frage (FUNKTIONSWOERTER, wie
+# lokal; ein Kürzel in Großbuchstaben bleibt) sind kein Anfragebegriff mehr.
+# In v2 trafen „sie", „nur" oder „ohne" beliebige Sätze, und jeder Treffer
+# verlangt in der Antwort eine eigene Zeile.
 RETRIEVAL_PROFILE = "hybrid-local/v4"
-EXTERN_RETRIEVAL_PROFILE = "extern-zweistufig/v2"
+EXTERN_RETRIEVAL_PROFILE = "extern-zweistufig/v3"
 SEGMENTATION_PROFILE = "satzsegmentierung/v1"
 # Wortform ist kein Bedeutungsmodell: nur Flexion, Umlaut-Plural, -ung und
 # Kompositumteile, alles nachrechenbar. Bedeutung liest das Modell in der
@@ -353,6 +357,32 @@ def _ohne_signatur(eintrag, felder):
     if markiert:
         eintrag["suspicious_instruction"] = True
     return eintrag
+
+
+def _freitext_signaturen(zeilen):
+    """Dateizeilen, in denen im Freitext eine Instruktionssignatur beginnt.
+
+    ``zeilen`` ist eine Folge von (Zeilennummer, Text oder None); None
+    trennt. Jeder zusammenhängende Lauf wird als ein Text geprüft: Die
+    Signatur verlangt Leerraum zwischen den Wörtern, und ein Zeilenumbruch
+    ist Leerraum. Je Zeile höchstens ein Treffer."""
+    treffer, lauf = set(), []
+
+    def lauf_pruefen():
+        text = "\n".join(zeile for _, zeile in lauf)
+        for fund in PROMPT_INJECTION_RE.finditer(text):
+            treffer.add(lauf[text.count("\n", 0, fund.start())][0])
+        lauf.clear()
+
+    for nummer, zeile in zeilen:
+        if zeile is None:
+            lauf_pruefen()
+        else:
+            lauf.append((nummer, zeile))
+    lauf_pruefen()
+    return sorted(treffer)
+
+
 # Zugangsdaten im ausgelieferten Wissen. Bewusst wenige, präzise Formen statt
 # einer Entropie-Heuristik: ein Fehlalarm blockiert validate und damit jeden
 # Release, also zählt jede Form nur, wenn sie praktisch nie zufällig in Prosa
@@ -404,10 +434,12 @@ RETRIEVAL_STOPWORDS = {
 
 # Funktionswörter des lokalen Rankings (seit hybrid-local/v2), in der normalisierten
 # Schreibung von _retrieval_norm (ae/oe/ue/ss). Bewusst eine ZWEITE Liste und
-# keine Erweiterung von RETRIEVAL_STOPWORDS: die alte Liste formt auch
-# 'extern-zweistufig/v2' und die nachrechenbaren Katalogzahlen (token_count,
-# top_tokens). Sie bleibt unberührt, damit sich dort kein Wert verschiebt; seit
-# extern-zweistufig/v2 wird sie nur noch normalisiert (RETRIEVAL_STOPWORDS_NORM).
+# keine Erweiterung von RETRIEVAL_STOPWORDS: die alte Liste formt auch die
+# nachrechenbaren Katalogzahlen (token_count, top_tokens). Sie bleibt
+# unberührt, damit sich dort kein Wert verschiebt; seit extern-zweistufig/v2
+# wird sie nur noch normalisiert (RETRIEVAL_STOPWORDS_NORM). Seit
+# extern-zweistufig/v3 nimmt auch die externe Suche diese Liste aus den
+# Anfragebegriffen, aber nur auf der Seite der Frage (_anfragebegriffe).
 #
 # Aufgenommen sind nur geschlossene Wortklassen (Artikel, Pronomen,
 # Präpositionen, Konjunktionen, Hilfs- und Modalverben, Partikeln) plus die
@@ -1289,6 +1321,18 @@ def _lokale_tokens(value):
     )
 
 
+def _anfragebegriffe(query):
+    """Anfragebegriffe der externen Suche (seit extern-zweistufig/v3).
+
+    Die Tokens der Frage wie bisher (_retrieval_tokens), ohne die
+    Funktionswörter des lokalen Rankings; ein Kürzel in Großbuchstaben bleibt.
+    Die Dokumentseite tokenisiert unverändert: Katalogzahlen, Satzbestand und
+    Fingerprint-Rezept hängen nicht an dieser Liste."""
+    kuerzel = _kuerzel_tokens(str(query))
+    return tuple(token for token in _retrieval_tokens(query)
+                 if token not in FUNKTIONSWOERTER or token in kuerzel)
+
+
 def _inhaltstokens(value):
     """Inhaltstragende Tokens des lokalen Rankings: ohne Funktionswörter."""
     text = str(value)
@@ -1849,6 +1893,10 @@ def _https_praefix(roh):
         return None, "führende oder abschließende Leerzeichen sind verboten"
     if any(ord(z) < 32 or ord(z) == 127 for z in wert):
         return None, "Steuerzeichen sind verboten"
+    if any(z.isspace() for z in wert):
+        # Ein Abruf verwirft jede URL mit Leerraum (_unter_praefix); ein
+        # solches Präfix wäre nie erreichbar.
+        return None, "Leerraum ist in einem Präfix verboten"
     if not wert.startswith("https://"):
         return None, "nur https:// ist erlaubt"
     rest = wert[len("https://"):]
@@ -2573,6 +2621,33 @@ def lade_seiten(register, typen, reltypen, concepts=None, media=None,
                     f"{rp}: externe Quelle {xid} steht nicht in "
                     f"{rel(EXTERN_REGISTER)}"
                 )
+        # Freitext der Seite: die Kommentarzeilen des Frontmatters, die der
+        # Parser überspringt, und der Rumpf ohne die Claims (Kurzfassung,
+        # Kontext, Grenzen). Die Engine gibt beides nicht aus, der
+        # Antworten-Workflow liest die Seite aber ganz. Jeder zusammenhängende
+        # Abschnitt wird als ein Text geprüft, damit ein Zeilenumbruch eine
+        # Signatur nicht teilt; eine Claim- oder Frontmatter-Zeile trennt.
+        freitext = []
+        if offset:
+            for nummer, zeile in enumerate(read(p).split("\n")[:offset], 1):
+                kommentar = (1 < nummer < offset
+                             and zeile.lstrip().startswith("#"))
+                freitext.append((nummer, zeile if kommentar else None))
+        for bn, zeile in enumerate(body.split("\n"), 1):
+            freitext.append(
+                (offset + bn,
+                 None if zeile.startswith(CLAIM_START) else zeile))
+        freitext_treffer = _freitext_signaturen(freitext)
+        for nummer in freitext_treffer:
+            if nummer <= offset:
+                warnungen.append(
+                    f"{rp}:{nummer}: Instruktionssignatur in einer "
+                    f"Kommentarzeile des Frontmatters — das Modell liest "
+                    f"sie mit der Seite")
+            else:
+                warnungen.append(
+                    f"{rp}:{nummer}: Instruktionssignatur im Text der Seite "
+                    f"außerhalb der Claims — das Modell liest ihn mit")
         if _hat_signatur(fm.get("title")):
             warnungen.append(
                 f"{rp}: Titel enthält eine offensichtliche "
@@ -2582,12 +2657,13 @@ def lade_seiten(register, typen, reltypen, concepts=None, media=None,
             for nummer, tag in enumerate(tags, 1):
                 if not isinstance(tag, str) or not _retrieval_norm(tag):
                     fehler.append(f"{rp}: ungültiger oder leerer Tag {tag!r}")
-                elif any(zeichen in tag for zeichen in ",[]"):
+                    continue
+                if any(zeichen in tag for zeichen in ",[]"):
                     fehler.append(
-                        f"{rp}: Tag {tag!r} enthält ',' '[' oder ']'; in der "
-                        f"Inline-Listenform ist das nicht darstellbar und "
-                        f"zerlegt den Wert")
-                elif _hat_signatur(tag):
+                        f"{rp}: Tag Nr. {nummer} enthält ',' '[' oder ']'; "
+                        f"in der Inline-Listenform ist das nicht darstellbar "
+                        f"und zerlegt den Wert")
+                if _hat_signatur(tag):
                     # Ohne Wortlaut: query und sweep geben die Warnungen mit
                     # aus, und dort darf die Signatur nicht stehen.
                     warnungen.append(
@@ -2612,12 +2688,7 @@ def lade_seiten(register, typen, reltypen, concepts=None, media=None,
         for bn, line in enumerate(body.split("\n"), 1):
             n = offset + bn
             if not line.startswith(CLAIM_START):
-                # Kurzfassung, Kontext und Grenzen: Die Engine gibt sie nicht
-                # aus, der Antworten-Workflow liest die Seite aber ganz.
-                if _hat_signatur(line):
-                    warnungen.append(
-                        f"{rp}:{n}: Instruktionssignatur im Text der Seite "
-                        f"außerhalb der Claims — das Modell liest ihn mit")
+                # Freitext; den prüft der Stolperdraht oben.
                 continue
             m = CLAIM_RE.match(line)
             if not m:
@@ -2790,6 +2861,7 @@ def lade_seiten(register, typen, reltypen, concepts=None, media=None,
         seiten[rp] = {
             "fm": fm, "claims": claims, "relationen": relationen, "pfad": p,
             "zeilen": len(body.split("\n")), "body": body,
+            "freitext_signatur": bool(freitext_treffer),
         }
 
     for rp, seite in sorted(seiten.items()):
@@ -2931,7 +3003,8 @@ def cmd_validate(still=False):
         for kennung, zeile in sorted(reg.items()):
             for feld, schluessel in (("Titel", "titel"),
                                      ("Stand/Version", "stand"),
-                                     ("Rechte", "rechte")):
+                                     ("Rechte", "rechte"),
+                                     ("Ziel", "ziel")):
                 if _hat_signatur(zeile.get(schluessel)):
                     warnungen.append(
                         f"{name}: {kennung} {feld} enthält eine offensichtliche "
@@ -3241,7 +3314,45 @@ def _query_base(query, state, *, manifest_digest=None, version=None,
     }
 
 
+MELDUNG_MIT_SIGNATUR = ("Meldung enthält eine offensichtliche "
+                        "Instruktionssignatur — Wortlaut nur in validate")
+MELDUNG_ORT_RE = re.compile(r"[\w./-]+(?::\d+)?")
+
+
+def _meldung_ohne_signatur(text):
+    """Eine Meldung so, wie query und sweep sie ausgeben.
+
+    Fehler und Warnungen zitieren mitunter kuratierten Text (eine
+    Frontmatter-Zeile, eine Registerspalte). Trägt eine Meldung eine
+    Instruktionssignatur, ersetzt die Ausgabe sie ganz: Nur die Phrase zu
+    schwärzen ließe den Rest des zitierten Werts stehen, und das ist gerade
+    die Anweisung. Stehen bleibt nur der Ort (Pfad, optional mit Zeile), wenn
+    die Meldung mit einem beginnt. validate behält den Wortlaut, damit die
+    Stelle zu finden ist."""
+    if not _hat_signatur(text):
+        return text
+    ort, trenner, _ = text.partition(": ")
+    if trenner and MELDUNG_ORT_RE.fullmatch(ort):
+        return f"{ort}: {MELDUNG_MIT_SIGNATUR}"
+    return MELDUNG_MIT_SIGNATUR
+
+
 def _emit_query_json(result):
+    # Gilt für jede Ausgabe von query und sweep, auch im fail-closed-Pfad.
+    for feld in ("errors", "warnings"):
+        if isinstance(result.get(feld), list):
+            result[feld] = [_meldung_ohne_signatur(m) for m in result[feld]]
+    extern = result.get("external")
+    if isinstance(extern, dict):
+        if isinstance(extern.get("notes"), list):
+            extern["notes"] = [_meldung_ohne_signatur(m)
+                               for m in extern["notes"]]
+        if "reason" in extern:
+            extern["reason"] = _meldung_ohne_signatur(extern["reason"])
+    rueckfall = result.get("fallback")
+    if isinstance(rueckfall, dict) and "external_reason" in rueckfall:
+        rueckfall["external_reason"] = _meldung_ohne_signatur(
+            rueckfall["external_reason"])
     print(json.dumps(
         result, ensure_ascii=False, indent=2, sort_keys=True
     ))
@@ -3631,9 +3742,22 @@ def _seiten_relationen(pages):
     return kanten
 
 
+def _seite_markieren(eintrag, seite):
+    """Markiert eine Seite, deren Signatur in keinem ausgegebenen Feld steht.
+
+    Den Freitext gibt die Engine nie aus, die Tags nicht in ``pages[]``. Die
+    Seite liest der Agent aber ganz (antworten.md, Schritt 4); also trägt sie
+    die Markierung, wo immer sie erscheint."""
+    tags = seite["fm"].get("tags", [])
+    if seite.get("freitext_signatur") or (
+            isinstance(tags, list) and any(_hat_signatur(tag) for tag in tags)):
+        eintrag["suspicious_instruction"] = True
+    return eintrag
+
+
 def _page_summary(snapshot, path, score, reasons, kanten):
     fm = snapshot["pages"][path]["fm"]
-    return _ohne_signatur({
+    return _seite_markieren(_ohne_signatur({
         "path": path,
         "title": fm.get("title"),
         "domain": fm.get("domain"),
@@ -3647,7 +3771,7 @@ def _page_summary(snapshot, path, score, reasons, kanten):
         "reasons": sorted(set(reasons)),
         "concepts": sorted(fm.get("concepts", [])),
         "relations": kanten[path],
-    }, ("title",))
+    }, ("title",)), snapshot["pages"][path])
 
 
 def _wortform_varianten(terms, tokenmengen):
@@ -4637,9 +4761,10 @@ def build_sweep_result(snapshot, batch=None, receipt=None,
         result.update(kopf)
         result["batch"] = batch
         # Jeder Stapel wird ganz gelesen: Titel und Tags mit
-        # Instruktionssignatur stehen deshalb nicht darin (_ohne_signatur).
+        # Instruktionssignatur stehen deshalb nicht darin (_ohne_signatur),
+        # und eine Signatur im Freitext markiert die Seite (_seite_markieren).
         result["pages"] = [
-            _ohne_signatur({
+            _seite_markieren(_ohne_signatur({
                 "path": pfad,
                 "title": snapshot["pages"][pfad]["fm"].get("title"),
                 "domain": snapshot["pages"][pfad]["fm"].get("domain"),
@@ -4655,7 +4780,7 @@ def build_sweep_result(snapshot, batch=None, receipt=None,
                     }
                     for claim in claims
                 ],
-            }, ("title", "tags"))
+            }, ("title", "tags")), snapshot["pages"][pfad])
             for pfad, claims in gruppe
         ]
         result["seal"] = siegel[batch - 1]
@@ -5729,7 +5854,7 @@ def build_external_result(snapshot, query, quellen_filter=None):
     geöffnet wurde, ist derselbe Fehltreffer wie eine vertippte Quellen-ID —
     und genauso teuer, weil er nicht als Fehler auffällt.
 
-    ``extern-zweistufig/v2``: Eine lokale Quelle wird vollständig gelesen,
+    Seit ``extern-zweistufig/v2``: Eine lokale Quelle wird vollständig gelesen,
     eine Netzquelle nur in den besten ``MAX_EXTERN_STUFE1`` Katalogeinträgen
     und innerhalb von ``EXTERN_NETZ_MAX_ABRUFE`` Abrufen je Abfrage. Alles,
     was dabei ungelesen bleibt, nennt der Grund.
@@ -5738,7 +5863,7 @@ def build_external_result(snapshot, query, quellen_filter=None):
     register = snapshot["extern"]["register"]
     kataloge = snapshot["extern"]["orchestrators"]
     query_norm = _retrieval_norm(query)
-    tokens = _retrieval_tokens(query)
+    tokens = _anfragebegriffe(query)
 
     block = {
         # Die Vorbelegung ist bewusst KEIN Ergebniszustand: verlässt ein Pfad
@@ -5784,8 +5909,9 @@ def build_external_result(snapshot, query, quellen_filter=None):
     if not tokens:
         block["state"] = "invalid_query"
         block["reason"] = (
-            f"Die Frage enthält keinen suchbaren Begriff (nur Stoppwörter oder "
-            f"Einzelzeichen). Es wurde nichts durchsucht — {EXTERN_KEIN_BEFUND}."
+            f"Die Frage enthält keinen suchbaren Begriff (nur Stopp- und "
+            f"Funktionswörter oder Einzelzeichen). Es wurde nichts durchsucht "
+            f"— {EXTERN_KEIN_BEFUND}."
         )
         return block
 
@@ -5827,7 +5953,7 @@ def build_external_result(snapshot, query, quellen_filter=None):
             "rights": zeile["rechte"], "target": zeile["ziel"],
             "bound": status["modus"] != "unbound",
             "mode": status["modus"],
-        }, ("title", "rights"))
+        }, ("title", "rights", "target"))
         block["sources"].append(eintrag)
         if status["modus"] == "unbound":
             nicht_gelesen("not_bound", status["grund"])

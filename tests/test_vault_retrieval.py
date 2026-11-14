@@ -1095,14 +1095,14 @@ Das Bild zeigt eine grüne Produktionsfreigabe.
 
     @staticmethod
     def fingerprint_nach_rezept(wurzeln, frage_norm, treffer):
-        """Das Rezept von extern-zweistufig/v2, hier ein zweites Mal ausgeschrieben.
+        """Das Rezept von extern-zweistufig/v3, hier ein zweites Mal ausgeschrieben.
 
         Bewusst dupliziert: aendert jemand in der Engine, was in den
         Fingerprint eingeht, muss dieser Test rot werden — sonst waere
         "bytegleich zum alten Stand" eine Behauptung ohne Waechter.
         """
         return hashlib.sha256(json.dumps(
-            {"algorithm": "extern-zweistufig/v2",
+            {"algorithm": "extern-zweistufig/v3",
              "roots": sorted(wurzeln),
              "query": frage_norm,
              "hits": [[t["source_id"], t["document"], t["sentence_index"],
@@ -1263,11 +1263,45 @@ Das Bild zeigt eine grüne Produktionsfreigabe.
         # Lokal gilt seit der Zusammenführung hybrid-local/v4: Dort war „fuer"
         # schon Funktionswort, die Normalisierung ändert keinen Treffer.
         self.assertEqual(payload["retrieval"], "hybrid-local/v4")
-        self.assertEqual(payload["external"]["algorithm"], "extern-zweistufig/v2")
+        self.assertEqual(payload["external"]["algorithm"], "extern-zweistufig/v3")
         gruende = [g for seite in payload["pages"] for g in seite["reasons"]]
         gruende += [g for item in payload["evidence"] for g in item["reasons"]]
         self.assertTrue(gruende)
         self.assertFalse([g for g in gruende if "fuer" in g], gruende)
+
+    def test_function_words_are_no_external_query_terms(self):
+        """extern-zweistufig/v3: Ein Funktionswort trifft extern keinen Satz.
+
+        In v2 traf „dann" den Satz „Die Wohnung ist dann nicht
+        vertragsgemaess", und jeder externe Treffer verlangt in der Antwort
+        eine eigene Zeile (antworten.md, 4c). In Abnahmerunde 5 kamen vier
+        von sieben solchen Zeilen nur über „ohne", „nur" und „sie" zustande.
+        Die Dokumentseite tokenisiert unverändert; ein Kürzel bleibt Begriff.
+        """
+        vault = self.load_vault("funktionswort")
+        self.assertEqual(vault._anfragebegriffe("Was gilt dann bei Bruchschaden?"),
+                         ("gilt", "bruchschaden"))
+        self.assertEqual(vault._anfragebegriffe("Was regelt die IT?"),
+                         ("regelt", "it"))
+        self.assertEqual(vault._anfragebegriffe("Darf sie das ohne ihn?"), ())
+        self.assertIn("dann", vault._retrieval_tokens("Die Wohnung ist dann"))
+        wurzel = self.install_extern_fixture()
+        self.bind_extern(wurzel)
+        self.build_katalog()
+        self.release()
+        nur_dann = self.extern_payload("Was gilt dann bei Bruchschaden?")["external"]
+        self.assertEqual(nur_dann["state"], "no_external_candidates", nur_dann)
+        self.assertEqual(nur_dann["hits"], [])
+        mit_inhalt = self.extern_payload(
+            "Wann ist die Wohnung dann vertragsgemäß?")["external"]
+        self.assertEqual(mit_inhalt["state"], "external_candidates_found",
+                         mit_inhalt)
+        self.assertEqual([t["document"] for t in mit_inhalt["hits"]],
+                         ["handbuch/miete.md"])
+        leer = self.extern_payload("Darf sie das ohne ihn?")["external"]
+        self.assertEqual(leer["state"], "invalid_query", leer)
+        self.assertIn("Funktionswörter", leer["reason"])
+        self.assertIn("kein Negativbefund", leer["reason"])
 
     def test_question_without_a_searchable_term_reads_nothing_externally(self):
         """Nur Stoppwoerter: kein Befund ueber eine Frage, die keine ist."""

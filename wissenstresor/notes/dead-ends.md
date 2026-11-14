@@ -238,7 +238,9 @@ der Stufenwahl in BETRIEB.md waere das ein Major-Release. Ersatz in v0.18.0:
 validate warnt (ohne den Wortlaut, weil query und sweep die Warnungen mit
 ausgeben), und query und sweep geben das Feld nicht aus, sondern markieren
 Seite oder Quelle mit suspicious_instruction. Den uebrigen Seitentext gibt
-die Engine ohnehin nicht aus; dort bleibt es bei der Warnung.
+die Engine ohnehin nicht aus; seit v0.18.1 markiert eine Signatur dort die
+Seite ebenso, und validate prueft ihn je Abschnitt als einen Text, damit ein
+Zeilenumbruch keine Signatur teilt.
 
 ## [2026-11-14] Katalog von X-0002 von Hand neu erzeugen — verworfen
 sources/derived/X-0002__orchestrator.json fuehrt unter top_tokens noch "fuer",
@@ -249,9 +251,21 @@ Hauptzweig driftet. Auf das Ranking wirkt der Eintrag nicht: Eine Anfrage
 enthaelt das Token nicht mehr. Ein von Hand nachgebauter Katalog waere
 Modellarbeit an einer Datei, die das Script nachrechnen koennen soll.
 
-## [2026-11-14] Externe Stoppwoerter an die lokale Liste angleichen — zurueckgestellt
+## [2026-11-14] Externe Funktionswoerter erst in einem eigenen Release angleichen — verworfen
 Abnahmerunde 5 fiel auf, dass der externe Grund "darf" und "sein" als
 Anfragebegriffe fuehrt, waehrend die lokale Abfrage sie als Funktionswoerter
-ueberliest (FUNKTIONSWOERTER gilt nur lokal). Fuer die Antworten war das
-folgenlos. Angleichen hiesse, die externe Rangfolge zu aendern, also
-extern-zweistufig/v3 mit neuer Messung; das gehoert in ein eigenes Release.
+ueberliest. In v0.18.0 stand hier, das sei fuer die Antworten folgenlos, und
+die Angleichung gehoere in ein eigenes Release. Die Gegenpruefung fand das
+Gegenteil: Von den sieben Zeilen "Extern (nicht im Bestand):" der Runde kamen
+vier nur ueber "ohne", "nur" und "sie" zustande, und seit Schritt 4c je
+Treffer eine Zeile verlangt, ist jeder solche Rauschtreffer Pflicht. Ersatz
+in v0.18.1: extern-zweistufig/v3 nimmt die Funktionswoerter der Frage aus den
+Anfragebegriffen (Kuerzel ausgenommen); die Dokumentseite und die
+Katalogzahlen bleiben. Gemessen an den 117 verschiedenen Fragen aus Runde 1
+bis 5 und dem Gold gegen das gebundene Beispielhandbuch: 62 behalten ihre
+Treffer, bei 49 fallen nur Treffer weg (113 insgesamt), bei 6 tritt ein
+Satz mit mehr Inhaltswoertern an die Stelle. Die Stichprobe zum Routing
+(Fachbegriffe ohne Funktionswort) bleibt unveraendert. Der Preis: Eine
+umschreibende Frage zur Schadensmeldung, die das Mietrechtskapitel vorher nur
+zufaellig ueber Funktionswoerter traf, trifft es jetzt nicht mehr; Bedeutung
+findet extern wie lokal erst das Lesen.

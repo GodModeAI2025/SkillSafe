@@ -37,17 +37,29 @@ EXTERN = ("Extern nicht gelesen: X-0001 (nicht gebunden), X-0002 "
           "Negativbefund")
 
 
-def _cli(root, *args):
+def _cli(root, *args, umgebung=None):
     return subprocess.run(
         [sys.executable, "-B", str(root / "scripts/vault.py"), *args],
         cwd=root, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         check=False, timeout=60,
+        env=dict(os.environ, **umgebung) if umgebung else None,
     )
 
 
-def tool_urteil(zeile):
-    """Das Urteil, wie das Werkzeug es druckt (geladen ohne Bytecode)."""
-    spec = importlib.util.spec_from_file_location("antwort_check_urteil", TOOL)
+def _extern(root, frage):
+    """external aus query --extern, mit gesetztem Offline-Schalter; ohne JSON
+    mit der Ausgabe der Engine als Meldung."""
+    lauf = _cli(root, "query", "--extern", frage,
+                umgebung={"SKILLSAFE_OFFLINE": "1"})
+    try:
+        return json.loads(lauf.stdout)["external"]
+    except ValueError as exc:
+        raise AssertionError(lauf.stdout + lauf.stderr) from exc
+
+
+def _werkzeug(name):
+    """Das Werkzeug als Modul, geladen ohne Bytecode."""
+    spec = importlib.util.spec_from_file_location(name, TOOL)
     modul = importlib.util.module_from_spec(spec)
     vorher = sys.dont_write_bytecode
     sys.dont_write_bytecode = True
@@ -55,7 +67,12 @@ def tool_urteil(zeile):
         spec.loader.exec_module(modul)
     finally:
         sys.dont_write_bytecode = vorher
-    return modul.urteil(zeile)
+    return modul
+
+
+def tool_urteil(zeile):
+    """Das Urteil, wie das Werkzeug es druckt (geladen ohne Bytecode)."""
+    return _werkzeug("antwort_check_urteil").urteil(zeile)
 
 
 class AntwortCheckTests(unittest.TestCase):
@@ -403,14 +420,7 @@ class AntwortCheckTests(unittest.TestCase):
         Sonst würde ein Protokoll aus v0.15.0, dessen Agent sich an die damals
         gültige Regel hielt, heute als Verstoß gemeldet.
         """
-        spec = importlib.util.spec_from_file_location("antwort_check", TOOL)
-        tool = importlib.util.module_from_spec(spec)
-        vorher = sys.dont_write_bytecode
-        sys.dont_write_bytecode = True
-        try:
-            spec.loader.exec_module(tool)
-        finally:
-            sys.dont_write_bytecode = vorher
+        tool = _werkzeug("antwort_check")
 
         def abfrage(feld, offen=("9999",), teil=(), version="0.1.0"):
             """feld None: eine Engine vor v0.16.0, die das Feld nicht kennt."""
@@ -1290,14 +1300,7 @@ class AntwortCheckTests(unittest.TestCase):
         """„Extern nicht gelesen" und „Teilweise gelesen": Die Beispiele im
         Vertrag schreiben die Angaben in den Fließtext, mitten in den Absatz.
         So liest sie das Werkzeug auch, Wort für Wort aus dem Vertrag."""
-        spec = importlib.util.spec_from_file_location("antwort_check_bsp", TOOL)
-        tool = importlib.util.module_from_spec(spec)
-        vorher = sys.dont_write_bytecode
-        sys.dont_write_bytecode = True
-        try:
-            spec.loader.exec_module(tool)
-        finally:
-            sys.dont_write_bytecode = vorher
+        tool = _werkzeug("antwort_check_bsp")
         vertrag = (SOURCE_SKILL / "references/antworten.md").read_text(
             encoding="utf-8")
 
@@ -1345,14 +1348,7 @@ class AntwortCheckTests(unittest.TestCase):
 
     def test_step_4c_follows_the_contract_of_the_checked_vault(self):
         """Ob 4c Pflicht ist, sagt der Vertrag des Tresors, nicht VERSION."""
-        spec = importlib.util.spec_from_file_location("antwort_check_4c", TOOL)
-        tool = importlib.util.module_from_spec(spec)
-        vorher = sys.dont_write_bytecode
-        sys.dont_write_bytecode = True
-        try:
-            spec.loader.exec_module(tool)
-        finally:
-            sys.dont_write_bytecode = vorher
+        tool = _werkzeug("antwort_check_4c")
         # Ändert sich die Formulierung, muss das Werkzeug mitwachsen.
         self.assertTrue(tool.vertrag_4c(SOURCE_SKILL))
         self.assertIsNone(tool.vertrag_4c_hinweis(SOURCE_SKILL))
@@ -1410,20 +1406,21 @@ class AntwortCheckTests(unittest.TestCase):
         self.assertEqual(falsch.returncode, 2, falsch.stdout)
         self.assertIn("nennt den Stand v0.15.0", falsch.stdout)
 
-    def test_step_4c_with_a_bound_source_needs_the_external_hits(self):
-        """Gebunden liest die Abfrage X-0001; ihre Treffer gehören in die Antwort."""
-        gebunden = self.basis / "gebunden" / "wissenstresor"
+    def gebundene_kopie(self, name):
+        """Eine Kopie des Testtresors, X-0001 an beispiel-extern gebunden."""
+        gebunden = self.basis / name / "wissenstresor"
         shutil.copytree(self.root, gebunden)
         bindung = _cli(gebunden, "extern", "bind", "X-0001",
                        str(REPOSITORY / "beispiel-extern"))
         self.assertEqual(bindung.returncode, 0, bindung.stdout + bindung.stderr)
+        return gebunden
+
+    def test_step_4c_with_a_bound_source_needs_the_external_hits(self):
+        """Gebunden liest die Abfrage X-0001; ihre Treffer gehören in die Antwort."""
+        gebunden = self.gebundene_kopie("gebunden")
         frage = "Welche Vektordatenbank empfiehlt der Bestand?"
         quittung, leer = self.sichtung(frage, root=gebunden)
-        extern = json.loads(subprocess.run(
-            [sys.executable, "-B", str(gebunden / "scripts/vault.py"), "query",
-             "--extern", frage], cwd=gebunden, text=True,
-            stdout=subprocess.PIPE, check=False, timeout=60,
-            env=dict(os.environ, SKILLSAFE_OFFLINE="1")).stdout)["external"]
+        extern = _extern(gebunden, frage)
         self.assertEqual(extern["state"], "external_candidates_found", extern)
         self.assertGreaterEqual(len(extern["hits"]), 2, extern["hits"])
         kern = "Nicht im Bestand.\n" + self.zeile_sichtung(leer) + "\n"
@@ -1533,29 +1530,17 @@ class AntwortCheckTests(unittest.TestCase):
         Inhalt neben „keine Treffer“ sind Verstöße, ebenso eine Rückfrage
         hinter dem Etikett, die als einzige eine Quelle nennt.
         """
-        gebunden = self.basis / "formen" / "wissenstresor"
-        shutil.copytree(self.root, gebunden)
-        bindung = _cli(gebunden, "extern", "bind", "X-0001",
-                       str(REPOSITORY / "beispiel-extern"))
-        self.assertEqual(bindung.returncode, 0, bindung.stdout + bindung.stderr)
-
-        def extern(frage, root):
-            return json.loads(subprocess.run(
-                [sys.executable, "-B", str(root / "scripts/vault.py"), "query",
-                 "--extern", frage], cwd=root, text=True,
-                stdout=subprocess.PIPE, check=False, timeout=60,
-                env=dict(os.environ, SKILLSAFE_OFFLINE="1")).stdout)["external"]
-
+        gebunden = self.gebundene_kopie("formen")
         mit = "Welche Vektordatenbank empfiehlt der Bestand?"
         ohne = "Wie hoch darf die Mietkaution höchstens sein?"
         leer = "Was ist das?"
-        treffer = extern(mit, gebunden)
+        treffer = _extern(gebunden, mit)
         self.assertEqual(treffer["state"], "external_candidates_found", treffer)
         self.assertGreaterEqual(len(treffer["hits"]), 2, treffer["hits"])
-        self.assertEqual(extern(ohne, gebunden)["state"],
+        self.assertEqual(_extern(gebunden, ohne)["state"],
                          "no_external_candidates")
-        self.assertEqual(extern(leer, gebunden)["state"], "invalid_query")
-        self.assertEqual(extern(ohne, self.root)["state"], "unreachable")
+        self.assertEqual(_extern(gebunden, leer)["state"], "invalid_query")
+        self.assertEqual(_extern(self.root, ohne)["state"], "unreachable")
         alle = [f"{stelle['source_id']}, {stelle['document']}, Satzposition "
                 f"{stelle['sentence_index']}" for stelle in treffer["hits"]]
         erstes = treffer["hits"][0]["document"]
@@ -2481,14 +2466,7 @@ class AntwortCheckTests(unittest.TestCase):
         zählt, dass sie lesbar sind, ihren Stand nennen und dass ihr
         'ergebnis' zu den Antworten passt, die in derselben Datei stehen.
         """
-        spec = importlib.util.spec_from_file_location("antwort_check", TOOL)
-        tool = importlib.util.module_from_spec(spec)
-        vorher = sys.dont_write_bytecode
-        sys.dont_write_bytecode = True
-        try:
-            spec.loader.exec_module(tool)
-        finally:
-            sys.dont_write_bytecode = vorher
+        tool = _werkzeug("antwort_check")
         dateien = sorted((REPOSITORY / "tests/e2e").glob("runde-*.json"))
         self.assertGreaterEqual(len(dateien), 3)
         runden = [json.loads(datei.read_text(encoding="utf-8"))["runde"]

@@ -158,6 +158,7 @@ import os
 import re
 import subprocess
 import sys
+import threading
 import unicodedata
 from collections import Counter
 from pathlib import Path
@@ -212,14 +213,15 @@ VERTRAG_4C_KOPF_RE = re.compile(r"4c\.\s*\*\*Externer Fallback\.\*\*")
 # („Extern nicht gelesen (Zustand unreachable):"); nennt er eine Kennung
 # oder einen Pfad, gehört er auch zur Angabe („Extern nicht gelesen
 # (X-0002, offline)").
+ETIKETT_TREFFER = r"extern\s*\(\s*nicht\s+im\s+bestand\s*\)"
+ETIKETT_UNGELESEN = r"extern\s+nicht\s+gelesen"
 EXTERN_TREFFER_RE = re.compile(
-    r"(?i)^extern\s*\(\s*nicht\s+im\s+bestand\s*\)\s*"
-    r"(?P<zusatz>\([^)]*\)\s*)?(?::|$)")
+    r"(?i)^" + ETIKETT_TREFFER + r"\s*(?P<zusatz>\([^)]*\)\s*)?(?::|$)")
 EXTERN_UNGELESEN_RE = re.compile(
-    r"(?i)^extern\s+nicht\s+gelesen\s*(?P<zusatz>\([^)]*\)\s*)?(?::|$)")
+    r"(?i)^" + ETIKETT_UNGELESEN + r"\s*(?P<zusatz>\([^)]*\)\s*)?(?::|$)")
 X_KENNUNG_RE = re.compile(r"(?i)(?<![A-Za-z0-9])X-\d{4}(?!\d)")
 EXTERN_ETIKETT_TEXT_RE = re.compile(
-    r"(?i)\bextern\s*\(\s*nicht\s+im\s+bestand\s*\)|\bextern\s+nicht\s+gelesen\b")
+    r"(?i)\b" + ETIKETT_TREFFER + r"|\b" + ETIKETT_UNGELESEN + r"\b")
 # Satzgrenze in einer Angabe zu Schritt 4c, auch hinter bis zu zwei
 # schließenden Zeichen: Klammer, Anführungszeichen, Hervorhebung
 # („… gelesen.) Extern …", „**Nicht im Bestand.** Extern …", „»…?« Extern …").
@@ -274,11 +276,11 @@ dokumenten anfragebegriffe anfragebegriff begriffe begriff suchbegriffe
 suchbegriff enthält enthaelt enthalten passend passende passenden passendes
 relevant relevante relevanten relevantes extern externe externen externer
 externes bestand tresor ordner katalog volltext stufe gefunden getroffen
-bei dieser abfrage ab bis seit abschnitt abschnitte kapitel lokalen
-lokale lokal nachschlagen nachgeschlagen nachschlag kam kamen zustande
+ab bis seit abschnitt abschnitte kapitel lokalen
+lokale nachschlagen nachgeschlagen nachschlag kam kamen zustande
 möglich moeglich gelang gelungen erfolgt erfolgte durchgeführt
 durchgefuehrt ich wir du man mir mich uns dir dich habe hast hatten bin bist
-war werde wurde kann konnte konnten können koennen muss musste soll darf
+werde kann konnte konnten können koennen muss musste soll darf
 alle alles allen beide beiden einige mehrere jede jeder jedes jeden jedem
 insgesamt sämtliche saemtliche eins zwei drei vier fünf fuenf sechs sieben
 acht neun zehn durchsucht gesucht geprüft geprueft nachgesehen abgefragt
@@ -370,7 +372,9 @@ ZITAT_RE = re.compile(
 # Die Zustände von external.state, die nichts gelesen haben (antworten.md, 4c).
 EXTERN_ZUSTAENDE = ("not_bound", "unreachable", "budget_exceeded",
                     "invalid_external_source", "invalid_query")
-# So liest die Engine den Offline-Schalter (vault.py, _netz_erlaubt).
+# So heißt der Offline-Schalter der Engine (vault.py, EXTERN_OFFLINE_ENV),
+# und so liest sie ihn (_netz_erlaubt).
+OFFLINE_SCHALTER = "SKILLSAFE_OFFLINE"
 OFFLINE_WERTE = {"1", "true", "yes"}
 
 
@@ -378,10 +382,16 @@ class ProtokollFehler(ValueError):
     """Das Protokoll ist kaputt oder passt nicht zum Stand des Tresors."""
 
 
-def lauf(vault, *argv, umgebung=None):
-    """Die Engine so aufrufen, wie ein Agent es täte: als Prozess, über JSON."""
-    vault = Path(vault).resolve()
-    ergebnis = subprocess.run(
+# Ein Lauf von main() rechnet mit einem Stand: query und sweep schreiben
+# nichts, query --extern ruft hier nur mit Offline-Schalter ab, und Tresor
+# und Bindung gelten, wie sie zu Beginn des Laufs waren. Derselbe Aufruf läuft
+# deshalb einmal je Lauf. Der Speicher gehört dem Thread, der main()
+# ausführt; außerhalb von main() ruft lauf() die Engine jedes Mal auf.
+_LAUF = threading.local()
+
+
+def _engine(vault, argv, umgebung):
+    return subprocess.run(
         [sys.executable, "-B", str(vault / "scripts" / "vault.py"), *argv],
         cwd=str(vault),
         text=True,
@@ -391,6 +401,20 @@ def lauf(vault, *argv, umgebung=None):
         timeout=120,
         env=dict(os.environ, **umgebung) if umgebung else None,
     )
+
+
+def lauf(vault, *argv, umgebung=None):
+    """Die Engine so aufrufen, wie ein Agent es täte: als Prozess, über JSON."""
+    vault = Path(vault).resolve()
+    laeufe = getattr(_LAUF, "laeufe", None)
+    if laeufe is None:
+        ergebnis = _engine(vault, argv, umgebung)
+    else:
+        schluessel = (str(vault), argv,
+                      tuple(sorted((umgebung or {}).items())))
+        if schluessel not in laeufe:
+            laeufe[schluessel] = _engine(vault, argv, umgebung)
+        ergebnis = laeufe[schluessel]
     try:
         return json.loads(ergebnis.stdout)
     except json.JSONDecodeError as exc:
@@ -527,21 +551,17 @@ def bestand_lesen(vault):
                 if claim.get("source_id"):
                     kennungen.add(str(claim["source_id"]).upper())
     # Quellen und Begriffe stehen in ihren Registern, auch ohne Claim.
+    texte = {}
     for name in ("sources/REGISTER.md", "sources/EXTERN.md",
                  "schema/begriffswelten.json"):
         try:
-            text = (Path(vault) / name).read_text(encoding="utf-8")
+            texte[name] = (Path(vault) / name).read_text(encoding="utf-8")
         except (OSError, UnicodeError):
             continue
         kennungen.update(kennung.upper() for kennung in re.findall(
-            r"(?i)(?<![A-Za-z0-9])[SXB]-\d{4}(?!\d)", text))
-    try:
-        register = (Path(vault) / "sources" / "EXTERN.md").read_text(
-            encoding="utf-8")
-    except (OSError, UnicodeError):
-        register = ""
+            r"(?i)(?<![A-Za-z0-9])[SXB]-\d{4}(?!\d)", texte[name]))
     extern = sorted({kennung.upper() for kennung in re.findall(
-        r"(?im)^\|\s*(X-\d{4})\s*\|", register)})
+        r"(?im)^\|\s*(X-\d{4})\s*\|", texte.get("sources/EXTERN.md", ""))})
     return {
         "seite_von": seite_von,
         "kennungen": kennungen | set(seite_von),
@@ -582,14 +602,13 @@ def _ohne_zitatzeichen(text):
 def _sagt_im_umfang_nicht(antwort):
     """Die Abstention einer eingeschränkten Sichtung: „in diesem Umfang nicht
     gefunden", auch umbrochen, zitiert oder hervorgehoben."""
-    text = FORMEL_STOERER.sub("", _ohne_zitatzeichen(antwort))
-    return "in diesem umfang nicht gefunden" in " ".join(text.split()).casefold()
+    return ("in diesem umfang nicht gefunden"
+            in _wortlaut(_ohne_zitatzeichen(antwort)))
 
 
 def _sagt_nicht_im_bestand(antwort):
     """Steht die Formel da, auch umbrochen, zitiert oder hervorgehoben?"""
-    text = FORMEL_STOERER.sub("", _ohne_zitatzeichen(antwort))
-    return ABSTENTION in " ".join(text.split()).casefold()
+    return ABSTENTION in _wortlaut(_ohne_zitatzeichen(antwort))
 
 
 def _zitierte_claims(text, bestand_ids):
@@ -1187,20 +1206,31 @@ def _ohne_rueckfragen(satz):
     return satz[:schnitt].rstrip(), True
 
 
+def _etikett_4c(text):
+    """Das Etikett, mit dem ein Text Schritt 4c ausweist („Extern (nicht im
+    Bestand):" oder „Extern nicht gelesen:"), oder None."""
+    return EXTERN_TREFFER_RE.match(text) or EXTERN_UNGELESEN_RE.match(text)
+
+
 def _etikett_nackt(satz):
     """Ist ein Satz ein Etikett ohne Text dahinter (oder eine andere
     Envelope-Zeile ohne Text)?"""
-    etikett = EXTERN_TREFFER_RE.match(satz) or EXTERN_UNGELESEN_RE.match(satz)
+    etikett = _etikett_4c(satz)
     if etikett:
         return not satz[etikett.end():].strip(" :—–-")
     andere = ETIKETT_RE.match(satz)
     return bool(andere) and not satz[andere.end():].strip()
 
 
+def _zeilenrumpf(zeile):
+    """Eine Zeile ohne Überschrifts- und Listenzeichen davor."""
+    return LISTENPUNKT_RE.sub("", re.sub(r"^\s*#{1,6}\s*", "", zeile)).strip()
+
+
 def _letzter_satz(zeile):
     """Der letzte Satz einer Zeile, ohne Listen-, Überschrifts- und
     Hervorhebungszeichen: Ihn setzt eine umbrochene Folgezeile fort."""
-    rumpf = LISTENPUNKT_RE.sub("", re.sub(r"^\s*#{1,6}\s*", "", zeile)).strip()
+    rumpf = _zeilenrumpf(zeile)
     return FORMEL_STOERER.sub("", SATZGRENZE_RE.split(rumpf)[-1]).strip()
 
 
@@ -1222,16 +1252,12 @@ def _logische_zeilen(text):
     for zeile in text.splitlines():
         kern = FORMEL_STOERER.sub("", zeile).strip()
         vorher = zeilen[-1] if zeilen else ""
-        letzter = _letzter_satz(vorher) if vorher.strip() else ""
+        # Eine Zeile mit kleinem Anfang ist nie Listenpunkt oder Überschrift.
         if (zeile.strip()[:1].islower() and vorher.strip()
-                and not LISTENPUNKT_RE.match(zeile)
                 and not (LISTENPUNKT_RE.match(vorher) and not zeile[:1].isspace())
-                and not re.match(r"\s*#", zeile)
                 and not re.match(r"\s*#", vorher)
-                and not (EXTERN_TREFFER_RE.match(kern)
-                         or EXTERN_UNGELESEN_RE.match(kern)
-                         or ETIKETT_RE.match(kern))
-                and not _etikett_nackt(letzter)
+                and not (_etikett_4c(kern) or ETIKETT_RE.match(kern))
+                and not _etikett_nackt(_letzter_satz(vorher))
                 and not SATZENDE_RE.search(vorher)):
             zeilen[-1] = vorher.rstrip() + " " + zeile.strip()
         else:
@@ -1288,8 +1314,7 @@ def _extern_angaben(antwort):
     for zeile in _logische_zeilen(text):
         listenpunkt = bool(LISTENPUNKT_RE.match(zeile))
         eingerueckt = zeile[:1].isspace()
-        rumpf = LISTENPUNKT_RE.sub("", re.sub(r"^\s*#{1,6}\s*", "", zeile))
-        rumpf = rumpf.strip()
+        rumpf = _zeilenrumpf(zeile)
         if not rumpf:
             leer = ziel is not None
             continue
@@ -1300,17 +1325,15 @@ def _extern_angaben(antwort):
         nachsatz = False
         for nummer, satz in enumerate(SATZGRENZE_RE.split(rumpf)):
             kern = FORMEL_STOERER.sub("", satz).strip()
-            etikett = (EXTERN_TREFFER_RE.match(kern)
-                       or EXTERN_UNGELESEN_RE.match(kern))
+            etikett = _etikett_4c(kern)
             if etikett:
-                ziel = treffer if EXTERN_TREFFER_RE.match(kern) else ungelesen
+                ziel = treffer if etikett.re is EXTERN_TREFFER_RE else ungelesen
                 block, kopf, liste_im_block = [], None, False
                 zusatz = _ohne_rueckfragen(etikett.group("zusatz") or "")[0]
                 # Eine Rückfrage hinter dem Etikett ist keine Angabe.
                 ohne = _ohne_rueckfragen(satz)[0]
                 kern_ohne = FORMEL_STOERER.sub("", ohne).strip()
-                rest = (EXTERN_TREFFER_RE.match(kern_ohne)
-                        or EXTERN_UNGELESEN_RE.match(kern_ohne))
+                rest = _etikett_4c(kern_ohne)
                 text_danach = (kern_ohne[rest.end():].strip(" :—–-")
                                if rest else "")
                 if text_danach or _angabeartig(zusatz):
@@ -1456,14 +1479,18 @@ def _nennt_dokument(angabe, dokument):
     return bool(_dokument_spannen(_ohne_hervorhebung(angabe), dokument))
 
 
+def _ausblenden(text, anfang, ende):
+    """Eine Spanne durch Leerzeichen gleicher Länge ersetzen, damit die
+    Stellen dahinter bleiben, wo sie sind."""
+    return text[:anfang] + " " * (ende - anfang) + text[ende:]
+
+
 def _ohne_dokument(text, dokument):
-    """Der Text ohne jede Nennung des Dokuments, und ob es eine gab. Der Text
-    muss schon ohne Hervorhebung sein; jede Nennung wird zu Leerzeichen
-    derselben Länge, damit Stellen erhalten bleiben."""
-    spannen = _dokument_spannen(text, dokument)
-    for anfang, ende in spannen:
-        text = text[:anfang] + " " * (ende - anfang) + text[ende:]
-    return text, bool(spannen)
+    """Der Text ohne jede Nennung des Dokuments. Der Text muss schon ohne
+    Hervorhebung sein; jede Nennung wird zu Leerzeichen derselben Länge."""
+    for anfang, ende in _dokument_spannen(text, dokument):
+        text = _ausblenden(text, anfang, ende)
+    return text
 
 
 def _eigener_pfad(vault, pfad):
@@ -1530,8 +1557,10 @@ def _stellenartig(text):
         return True
     for fund in SCHRAEG_PFAD_RE.finditer(text):
         pfad = fund.group(1)
+        # Mindestens zwei Glieder hat jeder Treffer; leer ist nur das hinter
+        # einem Schrägstrich am Ende.
         glieder = [glied for glied in pfad.split("/") if glied]
-        if (len(glieder) > 1 and all(len(glied) >= 3 for glied in glieder)
+        if (all(len(glied) >= 3 for glied in glieder)
                 and not pfad.startswith("knowledge/")
                 and not ORDNER_DAVOR_RE.search(text[:fund.start()])):
             return True
@@ -1551,9 +1580,9 @@ def _leermeldung(text):
     if not KEIN_TREFFER_RE.search(rein):
         return False
     uebrig = BEGRIFFSLISTE_RE.sub(" ", KEIN_TREFFER_RE.sub(" ", rein))
-    woerter = (wort.strip("./-") for wort in re.findall(r"[\w][\w./-]*", uebrig))
+    woerter = (wort.strip("./-") for wort in re.findall(r"\w[\w./-]*", uebrig))
     inhalt = [wort for wort in woerter
-              if wort and not wort.isdigit()
+              if not wort.isdigit()
               and wort.casefold() not in NEUTRALE_WOERTER
               and not wort.casefold().startswith("knowledge/")]
     return len(inhalt) <= 2
@@ -1562,9 +1591,16 @@ def _leermeldung(text):
 def _auszug(angabe):
     """Eine Angabe kurz für eine Meldung, ohne ihr Etikett; ein Unterstrich
     im Wort bleibt stehen."""
-    text = re.sub(r"(?i)^\W*extern\s*\(\s*nicht\s+im\s+bestand\s*\)\W*", "",
+    text = re.sub(r"(?i)^\W*" + ETIKETT_TREFFER + r"\W*", "",
                   " ".join(_ohne_hervorhebung(angabe).split()))
     return text if len(text) <= 90 else text[:87] + "…"
+
+
+def _extern_offline(vault, frage):
+    """query --extern mit gesetztem Offline-Schalter: Die Nachprüfung ruft
+    nichts ab und schreibt nichts in log.md."""
+    return lauf(vault, "query", "--extern", frage,
+                umgebung={OFFLINE_SCHALTER: "1"})
 
 
 def bindung_pruefen(vault, lauf_extern, fragen):
@@ -1586,8 +1622,7 @@ def bindung_pruefen(vault, lauf_extern, fragen):
         return
     probe = None
     for frage in dict.fromkeys(fragen):
-        antwort = lauf(vault, "query", "--extern", frage,
-                       umgebung={"SKILLSAFE_OFFLINE": "1"})
+        antwort = _extern_offline(vault, frage)
         if (antwort.get("state") in ("candidates_found", "no_candidates")
                 and (antwort.get("external") or {}).get("state")
                 != "invalid_query"):
@@ -1621,8 +1656,7 @@ def _pruefe_extern(vault, frage, antwort, aufgefuehrt, offline, bindung_bekannt,
     die Antwort einen Verzicht ausweist, den das Werkzeug als solchen
     nimmt."""
     verstoesse, hinweise = [], []
-    extern = lauf(vault, "query", "--extern", frage,
-                  umgebung={"SKILLSAFE_OFFLINE": "1"}).get("external") or {}
+    extern = _extern_offline(vault, frage).get("external") or {}
     zustand = extern.get("state")
     quellen = {str(quelle["id"]).upper(): quelle
                for quelle in extern.get("sources", []) if quelle.get("id")}
@@ -1717,8 +1751,8 @@ def _pruefe_extern(vault, frage, antwort, aufgefuehrt, offline, bindung_bekannt,
                 if str(stelle["source_id"]).upper() in bezug]
         # Nur das Etikett fällt weg; ein Klammerzusatz dahinter kann das
         # Dokument nennen („Extern (nicht im Bestand) (X-0001, README.md):").
-        ohne = re.sub(r"(?i)^\W*extern\s*\(\s*nicht\s+im\s+bestand\s*\)"
-                      r"\s*:?", "", _ohne_hervorhebung(angabe))
+        ohne = re.sub(r"(?i)^\W*" + ETIKETT_TREFFER + r"\s*:?", "",
+                      _ohne_hervorhebung(angabe))
         # Genannt ist ein geliefertes Dokument auch in Anführungszeichen.
         # Ein Zitat, das nur einen Dokumentpfad enthält, ist eine Nennung wie
         # ohne Anführungszeichen: geliefert oder fremd. Nach fremden Pfaden in
@@ -1727,15 +1761,14 @@ def _pruefe_extern(vault, frage, antwort, aufgefuehrt, offline, bindung_bekannt,
                     for stelle in hier)
         rest = ZITAT_RE.sub(_zitat_ausblenden, ohne)
         for stelle in hier:
-            rest, _ = _ohne_dokument(rest, stelle.get("document"))
+            rest = _ohne_dokument(rest, stelle.get("document"))
         # Dateien des geprüften Tresors (knowledge/…, sources/EXTERN.md …)
         # sind kein Treffer, solange die Angabe sie keiner Quelle zuschreibt.
         for fund in list(DOKUMENT_RE.finditer(rest)):
             if (_eigener_pfad(vault, fund.group(1))
                     and (fund.group(1).casefold().startswith("knowledge/")
                          or not _quellbezug(rest, fund.start(1), fund.end(1)))):
-                rest = (rest[:fund.start(1)] + " " * len(fund.group(1))
-                        + rest[fund.end(1):])
+                rest = _ausblenden(rest, fund.start(1), fund.end(1))
         fremd = []
         for fund in list(DOKUMENT_RE.finditer(rest)) + list(
                 FREMDE_STELLE_RE.finditer(rest)):
@@ -1763,9 +1796,9 @@ def _pruefe_extern(vault, frage, antwort, aufgefuehrt, offline, bindung_bekannt,
     # Abfrage nicht meldet. Ob die Angabe das wirklich behauptet, liest das
     # Werkzeug nicht sicher heraus: ein Hinweis, kein Verstoß.
     if bindung_bekannt:
-        gelesen = (set(quellen) - ungelesen - netz
-                   if zustand in ("external_candidates_found",
-                                  "no_external_candidates") else set())
+        # In einem Zustand, der nichts liest, ist jede Quelle ungelesen
+        # (oben), und gelesen bleibt leer.
+        gelesen = set(quellen) - ungelesen - netz
         doch_gelesen = sorted(genannt & gelesen)
         if doch_gelesen:
             hinweise.append(
@@ -1963,10 +1996,10 @@ def pruefe(vault, eintrag, bestand, mit_4c=True, offline=None,
             and rueckfall.get("external_lookup_available") is True):
         zeile["extern_pflicht"] = True
         if offline is None:
-            offline = (os.environ.get("SKILLSAFE_OFFLINE", "").strip()
+            offline = (os.environ.get(OFFLINE_SCHALTER, "").strip()
                        in OFFLINE_WERTE)
-        aufgefuehrt = set(rueckfall.get("external_source_ids") or ()) | {
-            kennung for kennung in bestand["extern"]}
+        aufgefuehrt = (set(rueckfall.get("external_source_ids") or ())
+                       | set(bestand["extern"]))
         verstoesse, hinweise, verzicht = _pruefe_extern(
             vault, eintrag["frage"], antwort, aufgefuehrt, offline,
             bindung_bekannt, eintrag.get("vorgabe"))
@@ -2162,6 +2195,15 @@ def bericht(zeilen, bestand, ausfuehrlich):
 
 
 def main(argv=None):
+    vorher = getattr(_LAUF, "laeufe", None)
+    _LAUF.laeufe = {}
+    try:
+        return _main(argv)
+    finally:
+        _LAUF.laeufe = vorher
+
+
+def _main(argv):
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--vault", default=str(STANDARD_VAULT))
     parser.add_argument("--antworten", required=True,
@@ -2199,8 +2241,9 @@ def main(argv=None):
                 abweichung + "; ob Schritt 4c Pflicht ist, sagt der Vertrag "
                 "des geprüften Tresors")
         mit_4c = vertrag_4c(vault, stand)
-        if not mit_4c and vertrag_4c_hinweis(vault):
-            hinweise_lauf.append(vertrag_4c_hinweis(vault))
+        hinweis_4c = None if mit_4c else vertrag_4c_hinweis(vault)
+        if hinweis_4c:
+            hinweise_lauf.append(hinweis_4c)
         lauf_extern = stand.get("extern") or {}
         if mit_4c:
             bindung_pruefen(vault, lauf_extern,

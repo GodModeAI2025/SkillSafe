@@ -16,6 +16,7 @@ import time
 import unittest
 import stat
 from pathlib import Path
+from unittest import mock
 
 
 REPOSITORY = Path(__file__).resolve().parents[1]
@@ -30,6 +31,31 @@ RELEASE_TARGETS = (
 
 
 class VaultSecurityTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        # Eine gepinnte Vorlage je Klasse: checksum läuft einmal statt für
+        # jede Kopie. Eine Kopie der Vorlage ist bytegleich mit Kopie plus
+        # checksum, denn checksum schreibt nur das Manifest, deterministisch.
+        cls.vorlagen = tempfile.TemporaryDirectory(prefix="wissenstresor-vorlage-")
+        cls.vorlage = Path(cls.vorlagen.name) / "wissenstresor"
+        try:
+            shutil.copytree(SOURCE_SKILL, cls.vorlage, symlinks=True)
+            result = subprocess.run(
+                [sys.executable, "-B", str(cls.vorlage / "scripts" / "vault.py"),
+                 "checksum"],
+                cwd=cls.vorlage, env=dict(os.environ, PYTHONDONTWRITEBYTECODE="1"),
+                text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                check=False, timeout=60)
+            if result.returncode != 0:
+                raise AssertionError(result.stdout + result.stderr)
+        except BaseException:
+            cls.vorlagen.cleanup()
+            raise
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.vorlagen.cleanup()
+
     def setUp(self):
         self.tempdir = tempfile.TemporaryDirectory(prefix="wissenstresor-tests-")
         self.work = Path(self.tempdir.name)
@@ -42,9 +68,7 @@ class VaultSecurityTests(unittest.TestCase):
     def new_vault(self):
         self.copy_number += 1
         root = self.work / f"wissenstresor-{self.copy_number}"
-        shutil.copytree(SOURCE_SKILL, root, symlinks=True)
-        result = self.run_cli("checksum", root=root)
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        shutil.copytree(self.vorlage, root, symlinks=True)
         return root
 
     def run_cli(self, *args, root=None):
@@ -642,15 +666,8 @@ class VaultSecurityTests(unittest.TestCase):
             if sid != "S-0002":
                 self.assertNotIn("suspicious_instruction", quelle)
 
-        env_vorher = os.environ.get("SKILLSAFE_OFFLINE")
-        os.environ["SKILLSAFE_OFFLINE"] = "1"
-        try:
+        with mock.patch.dict(os.environ, {"SKILLSAFE_OFFLINE": "1"}):
             extern = ausgabe("query", "--extern", frage)["external"]
-        finally:
-            if env_vorher is None:
-                os.environ.pop("SKILLSAFE_OFFLINE", None)
-            else:
-                os.environ["SKILLSAFE_OFFLINE"] = env_vorher
         nach_id = {quelle["id"]: quelle for quelle in extern["sources"]}
         self.assertIsNone(nach_id["X-0002"]["title"])
         self.assertIs(nach_id["X-0002"]["suspicious_instruction"], True)
@@ -1281,15 +1298,8 @@ class VaultSecurityTests(unittest.TestCase):
                       "Frontmatters", result.stdout)
         release = self.run_cli("release", "patch")
         self.assertEqual(release.returncode, 0, release.stdout + release.stderr)
-        env_vorher = os.environ.get("SKILLSAFE_OFFLINE")
-        os.environ["SKILLSAFE_OFFLINE"] = "1"
-        try:
+        with mock.patch.dict(os.environ, {"SKILLSAFE_OFFLINE": "1"}):
             ausgabe = self.run_cli("query", "--extern", "Was ist OKF?").stdout
-        finally:
-            if env_vorher is None:
-                os.environ.pop("SKILLSAFE_OFFLINE", None)
-            else:
-                os.environ["SKILLSAFE_OFFLINE"] = env_vorher
         self.assertNotIn("<system>", ausgabe)
         quellen = {q["id"]: q for q in json.loads(ausgabe)["external"]["sources"]}
         self.assertIsNone(quellen["X-0002"]["target"])
@@ -2056,8 +2066,6 @@ class VaultSecurityTests(unittest.TestCase):
                 self.assertIn(fragment, vault._https_praefix(roh)[1])
 
     def test_offline_switch_blocks_every_fetch_before_the_socket(self):
-        from unittest import mock
-
         vault = self.load_vault(self.root, "offline")
         praefix = "https://example.invalid/"
 

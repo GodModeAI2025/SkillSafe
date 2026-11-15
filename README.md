@@ -29,7 +29,7 @@ geschützte `dir_fd`-Operationen fail-closed ab.
 📖 **Konzept & Architekturentscheidungen:** [`wissenstresor/KONZEPT.md`](wissenstresor/KONZEPT.md)
 🌐 **Landingpage:** [`index.html`](index.html) (GitHub-Pages-fähig, Source = repo root)
 
-**Aktueller Release: v0.18.6** (Profil `oksv-lite/1.3`) mit Begriffswelten,
+**Aktueller Release: v0.18.7** (Profil `oksv-lite/1.3`) mit Begriffswelten,
 deterministischem Hybrid-Retrieval, geprüften Bild-/PDF-Regionen und einem
 reproduzierbaren `.skill`-Paket für Claude Code und Codex. Der
 Frontmatter-Parser lehnt Verschachtelung fail-closed ab statt sie still
@@ -346,9 +346,23 @@ gilt nicht als Erfindung. Der Stolperdraht bleibt, was sein Name sagt: Er
 fängt offensichtliche Signaturen; gegen gezielte Verschleierung steht Regel
 6 des Skills, nach der Seitentext nie eine Anweisung ist.
 
+v0.18.7 räumt den Code dieser Linie auf, ohne ein Urteil oder eine Ausgabe
+zu ändern. Vier Durchsichten (Wiederverwendung, Vereinfachung, Effizienz, Flughöhe) fanden
+doppelte Regeln und toten Zustand. Der Stolperdraht liest die Abschnitte für
+die lange Formel jetzt in einer eigenen Funktion, behandelt Kommentarzeilen
+an einer Stelle und teilt die Kommentarregel mit dem Frontmatter-Parser; die
+lange Formel steht nur noch einmal, und `validate` liest jede Seite einmal.
+Das Prüfwerkzeug ruft die Engine während eines Laufs für denselben Aufruf nur
+einmal auf und rechnet so mit einem Stand; der Test mit den Antwortformen der
+Prüfrunden braucht dadurch Sekunden statt einer Minute. Belegt ist die
+Gleichheit mit einem Vergleich gegen v0.18.6 auf Zufallskorpora, auf
+Tresorvarianten mit Signaturen und auf den Protokollen aller Prüfrunden,
+dazu mit einer Gegenprobe durch unabhängige Prüfer; was sie für interne
+Aufrufer fanden, ist zurückgenommen.
+
 Abnahme: 252 Tests bestanden · 37 manifestierte Dateien · 39 sichere
 Paketeinträge · SHA-256
-`639ba01c95b68acf6aaaa821131efb0c3f041f375844c353b25f8fe994fa2d31`.
+`1d950d223799ddfc03861334a50a3e9c54d468dfaec24a3b485a3b50f0904432`.
 Dazu 2 aufgeführte externe Bezugsquellen · 2 Satzanker.
 
 Alles läuft mit der Python-Standardbibliothek, gemessen mit CPython 3.9 und

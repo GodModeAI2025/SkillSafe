@@ -781,7 +781,7 @@ def pruefe_summen(stand, runden, readme, landing, abweichungen, konzept=None,
     # jede danach genannt, mit genau so vielen Quittungen, alle gültig, und
     # keine Runde ausgelassen oder erfunden.
     teil = r"in Runde (\w+) zu (\w+) von (\w+)(?: Fragen)?"
-    teil_still = r"in Runde \w+ zu \w+ von \w+(?: Fragen)?"
+    teil_still = teil.replace(r"(\w+)", r"\w+")
     if "KONZEPT.md" in texte:
         for treffer in fundstellen(
                 "KONZEPT.md", r"In den ersten (?P<erste>\w+) Runden reichte "
@@ -820,6 +820,14 @@ def pruefe_summen(stand, runden, readme, landing, abweichungen, konzept=None,
     im_umfang = sum(stand.get(f"e2e_negativ_umfang_{runde}", 0)
                     for runde in runden)
     umfang_zusatz = r'( oder "in diesem Umfang nicht gefunden")?'
+
+    def umfang_pruefen(datei, treffer):
+        if bool(treffer.group(3)) != bool(im_umfang):
+            melde(datei, f"Negativfragen: {im_umfang} im vorgegebenen "
+                         f"Umfang abgelehnt, der Satz nennt 'in diesem "
+                         f"Umfang nicht gefunden' "
+                         f"{'' if treffer.group(3) else 'nicht'}")
+
     quittungen = [stand[f"e2e_quittungen_{runde}"] for runde in runden]
     erwartet = (negativ, quittiert, korrekt - quittiert)
     for treffer in fundstellen(
@@ -827,11 +835,7 @@ def pruefe_summen(stand, runden, readme, landing, abweichungen, konzept=None,
             r'(\w+) mit gültiger Quittung als "Nicht im Bestand"' + umfang_zusatz
             + r', (\w+) mit dem Befund des Scripts', "Summe der Negativfragen"):
         ist = tuple(zahl_aus_wort(treffer.group(nummer)) for nummer in (1, 2, 4))
-        if bool(treffer.group(3)) != bool(im_umfang):
-            melde("README.md", f"Negativfragen: {im_umfang} im vorgegebenen "
-                               f"Umfang abgelehnt, der Satz nennt 'in diesem "
-                               f"Umfang nicht gefunden' "
-                               f"{'' if treffer.group(3) else 'nicht'}")
+        umfang_pruefen("README.md", treffer)
         if ist != erwartet or korrekt != negativ:
             melde("README.md", f"Negativfragen {ist!r}, die Protokolle zählen "
                                f"{erwartet!r} bei {korrekt} korrekt "
@@ -842,11 +846,7 @@ def pruefe_summen(stand, runden, readme, landing, abweichungen, konzept=None,
             r'im Bestand"' + umfang_zusatz + r', (\w+) mit dem Befund des Scripts',
             "Summe der Negativfragen"):
         ist = tuple(zahl_aus_wort(treffer.group(nummer)) for nummer in (1, 2, 4))
-        if bool(treffer.group(3)) != bool(im_umfang):
-            melde("index.html", f"Negativfragen: {im_umfang} im vorgegebenen "
-                                f"Umfang abgelehnt, der Satz nennt 'in diesem "
-                                f"Umfang nicht gefunden' "
-                                f"{'' if treffer.group(3) else 'nicht'}")
+        umfang_pruefen("index.html", treffer)
         if ist != seite:
             melde("index.html", f"Negativfragen {ist!r}, die Protokolle "
                                 f"zählen {seite!r}")

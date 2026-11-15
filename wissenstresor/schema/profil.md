@@ -178,19 +178,22 @@ eine aufgeführte externe Bezugsquelle.
   eine Überschrift oder ein neuer Listenpunkt trennt. Kommentare liest das
   Modell mit, sie bilden aber eigene Absätze und werden nie mit Text oder
   Code verbunden: Kommentarzeilen im Frontmatter, in einem Code-Zaun und in
-  einem eingerückten Codeblock (ohne ihr `#`; eine leere Kommentarzeile
-  trennt) und HTML-Kommentare, auch über mehrere Zeilen (eine Überschrift
+  einem eingerückten Codeblock außerhalb eines Listenpunkts (ohne ihr `#`;
+  eine leere Kommentarzeile trennt) und HTML-Kommentare, auch über mehrere Zeilen (eine Überschrift
   darin steht für sich; Text hinter einem Kommentar, der in derselben Zeile
   schließt, gehört zum Absatz). Eine Codezeile bleibt ganz, auch mit `#`
   darin, denn ob das ein Kommentar oder ein String ist, sagt erst die
-  Sprache. Vor `#` und `<!--` zählt jeder Leerraum, auch ein geschütztes
-  Leerzeichen, wie im Frontmatter-Parser: Was er als Kommentar überspringt,
-  prüft `validate` als Kommentar; ein Hashtag (`#ki`) ist keine Überschrift.
+  Sprache; ein Kommentar am Ende einer Codezeile liest sich deshalb mit der
+  Codezeile darunter (`rolle: assistant # oder: system` vor `prompt: |`
+  warnt, ein Fehlalarm als Preis). Vor `#` und `<!--` zählt jeder
+  Leerraum, auch ein geschütztes Leerzeichen, wie im Frontmatter-Parser:
+  Was er als Kommentar überspringt, prüft `validate` als Kommentar; ein
+  Hashtag (`#ki`) ist keine Überschrift.
   Ein Code-Zaun öffnet am Zeilenanfang mit höchstens drei Leerzeichen
   Einzug, in einem Listenpunkt auch tiefer und direkt auf der Listenmarke
   (```` - ```bash ````). Ein Listenpunkt bleibt offen, bis nach einer
-  Leerzeile eine Zeile ohne Einzug folgt; auch eine leere Marke (`-`)
-  beginnt einen. Der Zaun schließt nur mit demselben Zeichen in mindestens
+  Leerzeile eine Zeile ohne Einzug folgt, auch ein Zaun oder ein
+  HTML-Kommentar; auch eine leere Marke (`-`) beginnt einen. Der Zaun schließt nur mit demselben Zeichen in mindestens
   derselben Länge und ohne Text dahinter, außerhalb eines Listenpunkts mit
   höchstens drei Leerzeichen Einzug, in einem höchstens drei tiefer als
   seine Öffnung; sein Info-String ist ein eigener Absatz, und
@@ -743,8 +746,9 @@ und ein Wort einer geschlossenen Liste von Homographen
 (`HOMOGRAPHE_SUBSTANTIVE`: „Waren", „Soll", „Haben", „Würde" …), wenn es
 mitten im Satz großgeschrieben steht, denn dann ist es ein Substantiv („Was
 sind Waren?"). Am Satzanfang (auch nach Doppelpunkt, Semikolon,
-Gedankenstrich und einer Aufzählungsmarke wie „1)", Anführungszeichen und
-Klammern davor zählen nicht, auch nicht hinter einer Aufzählungsmarke)
+Gedankenstrich und einer Aufzählungsmarke wie „1)"; Anführungszeichen und
+Klammern davor zählen nicht, hinter einer Aufzählungsmarke nur
+Anführungszeichen)
 zählt es nur, wenn es für sich steht („Begriffsfrage: Waren – …"); vor
 einem Wort ist es meist das Verb eines Satzes oder eine Präposition
 („Frage: Muss ich …", „Muss bei Auszug …", „Soll oder muss …", „Laut des

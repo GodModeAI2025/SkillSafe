@@ -429,19 +429,23 @@ def _freitext_laeufe(datei_zeilen, offset, rumpf_zeilen):
     Tabellenzeile) beginnt einen neuen, und eine Überschrift steht für sich,
     auch in einem HTML-Kommentar. Kommentare bilden eigene Läufe und werden
     nie mit Text oder Code verbunden: "#"-Zeilen im Frontmatter, in einem
-    Code-Zaun und in einem eingerückten Codeblock (ohne das "#"; eine leere
-    Kommentarzeile trennt) und HTML-Kommentare, auch über mehrere Zeilen.
-    Als Kommentarzeile gilt, was der Frontmatter-Parser überspringt
-    (_ist_kommentarzeile); eine Codezeile bleibt ganz, auch mit "#" darin.
-    Ein Code-Zaun gilt nach CommonMark: Er öffnet mit höchstens drei
-    Leerzeichen Einzug (in einem Listenpunkt auch weiter eingerückt),
-    schließt nur mit demselben Zeichen in mindestens derselben Länge, ohne
-    Text dahinter und nicht weiter als drei Leerzeichen über den Einzug der
-    Öffnung hinaus eingerückt; sein Info-String ist ein eigener Lauf, und
-    die Codezeilen darin bilden Läufe wie Absätze. Eine Claim-Zeile beginnt
-    einen Lauf wie ein Listenpunkt; ihre Fortsetzung gehört dazu. Zurück
-    kommen Läufe aus (Zeilennummer, Text, ist_claim). Abschnittsweise liest
-    _freitext_abschnitte."""
+    Code-Zaun und in einem eingerückten Codeblock außerhalb eines
+    Listenpunkts (ohne das "#"; eine leere Kommentarzeile trennt) und
+    HTML-Kommentare, auch über mehrere Zeilen; Text hinter einem Kommentar,
+    der in derselben Zeile schließt, gehört zum Absatz. Als Kommentarzeile
+    gilt, was der Frontmatter-Parser überspringt (_ist_kommentarzeile); eine
+    Codezeile bleibt ganz, auch mit "#" darin. Ein Listenpunkt bleibt offen,
+    bis nach einer Leerzeile eine Zeile ohne Einzug folgt, auch ein Zaun
+    oder ein HTML-Kommentar. Ein Code-Zaun gilt nach CommonMark: Er öffnet
+    mit höchstens drei Leerzeichen Einzug, in einem Listenpunkt auch tiefer
+    und direkt auf der Listenmarke; er schließt nur mit demselben Zeichen in
+    mindestens derselben Länge, ohne Text dahinter, außerhalb eines
+    Listenpunkts mit höchstens drei Leerzeichen Einzug, in einem Listenpunkt
+    höchstens drei tiefer als die Öffnung. Sein Info-String ist ein eigener
+    Lauf, und die Codezeilen darin bilden Läufe wie Absätze. Eine
+    Claim-Zeile beginnt einen Lauf wie ein Listenpunkt; ihre Fortsetzung
+    gehört dazu. Zurück kommen Läufe aus (Zeilennummer, Text, ist_claim).
+    Abschnittsweise liest _freitext_abschnitte."""
     laeufe, lauf = [], []
     art = None
 
@@ -522,6 +526,10 @@ def _freitext_laeufe(datei_zeilen, offset, rumpf_zeilen):
                               and "`" in oeffnung.group(2))
                 and (punkt or einzug <= 3 or in_liste)):
             schliessen()
+            if nach_leer and not punkt and not rest[:1].isspace():
+                # Nach einer Leerzeile beendet ein Zaun ohne Einzug die
+                # Liste wie eine Textzeile.
+                in_liste = False
             if punkt:
                 in_liste = True
                 grenze = punkt.end() + 3
@@ -537,6 +545,9 @@ def _freitext_laeufe(datei_zeilen, offset, rumpf_zeilen):
             nach_leer = code_block = False
             continue
         if im_html or rest.lstrip().startswith("<!--"):
+            if not im_html and nach_leer and not rest[:1].isspace():
+                # Ebenso ein HTML-Kommentar ohne Einzug.
+                in_liste = False
             oeffnet, schliesst = rest.rfind("<!--"), rest.rfind("-->")
             # Ohne "<!--" in der Zeile war der Kommentar schon offen.
             im_html = oeffnet > schliesst if oeffnet >= 0 else schliesst < 0
@@ -3733,9 +3744,21 @@ MELDUNG_ESCAPE_RE = re.compile(
     r"\\(?:[tnrfv]|x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8})")
 
 
+# Grob getrennt bleibt ein Anker oder eine Query am Pfad
+# ("a/b.md#ignore-all-previous-instructions", "…/suche?q=…"): Fein getrennt
+# hätte das abgetrennte Stück weder "/" noch eine Endung.
+MELDUNG_TRENNER_GROB_RE = re.compile(r"[\s'\"„“”‚‘’»«()\[\],;]+")
+
+
 def _meldung_pfade(text):
+    """Die Pfade einer Meldung: fein getrennt, auch an ":" und "#"
+    ("datei.md:3"), und grob, mit Anker und Query am Pfad."""
     for token in MELDUNG_TRENNER_RE.split(text):
         token = token.strip(".")
+        if "/" in token or MELDUNG_DATEI_RE.search(token):
+            yield token
+    for token in MELDUNG_TRENNER_GROB_RE.split(text):
+        token = token.rstrip(":.")
         if "/" in token or MELDUNG_DATEI_RE.search(token):
             yield token
 

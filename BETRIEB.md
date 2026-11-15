@@ -345,16 +345,21 @@ ebenfalls ein Verstoß, sonst ein Hinweis. Ausgenommen sind zitierte Sätze
 (ein zitierter Dokumentpfad zählt wie ohne Anführungszeichen), Dateien des
 geprüften Tresors unter `knowledge/` und andere, solange die Angabe sie
 keiner Quelle zuschreibt, und eine Leermeldung („keine Treffer", „kein
-Zeiger"), die neben Kennung, Zustand und Lesestatus höchstens zwei
-Inhaltswörter nennt und nichts, was nach einer Fundstelle aussieht. Eine
-Rückfrage zählt nicht als Angabe, ob als eigener Satz, in Klammern, als
-Teilsatz oder direkt hinter dem Etikett. Als Rückfrage gilt das letzte
-Segment nach Semikolon, Doppelpunkt oder Gedankenstrich, wenn es wie eine
-Frage beginnt; sonst der letzte Teilsatz nach einem Komma, wenn das davor
-einen Lesestatus, Zustand, Grund oder Treffer nennt, und sonst der ganze
-Satz. Eine zitierte Frage ist keine Rückfrage. Einen Verzicht nimmt es nur
-an, wenn das Protokoll den
-Wunsch des Nutzers oder die Vorgabe der Umgebung im Feld `vorgabe` festhält.
+Zeiger"), die neben Kennung, Zustand, Lesestatus und den Wörtern der Frage
+höchstens zwei Inhaltswörter nennt (ein Zahlwort zählt mit, außer vor
+„Dokumente", „Quellen" oder „Treffer") und nichts, was nach einer
+Fundstelle aussieht. Eine Rückfrage zählt nicht als Angabe, ob als eigener
+Satz, in Klammern, als Teilsatz oder direkt hinter dem Etikett. Die
+Rückfrage wächst vom letzten Teilsatz rückwärts über jeden Teil, der wie
+eine Frage beginnt (Frageverb, „oder", Fragewort, „falls", „wenn",
+„damit" …, Verb vor der Anrede) und keinen Lesestatus, Zustand oder
+Treffer nennt, vor einer Nachfrage wie „passt das?" auch über einen Teil,
+der nichts aussagt; ein Segment zwischen Semikolon, Doppelpunkt oder
+Gedankenstrich, das so beginnt, gehört ganz dazu. Was davor steht, bleibt
+Angabe, auch mit eigenen Worten („X-0001 ist hier nicht eingebunden, soll
+ich …?"). Eine zitierte Frage ist keine Rückfrage. Einen Verzicht nimmt es
+nur an, wenn das Protokoll den Wunsch des Nutzers oder die Vorgabe der
+Umgebung im Feld `vorgabe` festhält.
 Ob der Schritt Pflicht ist, liest es aus dem Vertrag des geprüften Tresors
 (`references/antworten.md`); ein Stand, dessen Vertrag ihn freistellte, wird
 ohne die Regel geprüft. Die Abfrage rechnet es selbst nach, immer offline.

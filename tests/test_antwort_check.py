@@ -1928,6 +1928,75 @@ class AntwortCheckTests(unittest.TestCase):
                              + "\nExtern (nicht im Bestand): X-0001 – kein "
                              "direkter Treffer; am ehesten "
                              "handbuch/mietminderung\n" + ung),
+            # Aus der siebten Prüfung: Hinter der Begriffsliste, mit einem
+            # Zahlwort oder vor einer Rückfrage bleibt eine Erfindung eine
+            # Erfindung; die Wörter der Frage, ein Zahlwort vor „Dokumente",
+            # ein Paragraf hinter „für", ein verneintes Kapitel und „in
+            # X-0001 nichts gefunden" behaupten nichts.
+            "O-begriffe-dann-inhalt": (ohne, "Nicht im Bestand.\n\n" + s_ohne
+                                       + "\nExtern (nicht im Bestand): X-0001 – "
+                                       "keine Treffer für die Anfragebegriffe "
+                                       "hoch und mietkaution, das "
+                                       "Beispielhandbuch behandelt Mietrecht "
+                                       "nur am Rand\n" + ung),
+            "O-zahlwort-inhalt": (ohne, "Nicht im Bestand.\n\n" + s_ohne
+                                  + "\nExtern (nicht im Bestand): X-0001 – "
+                                  "keine Treffer; üblich sind drei "
+                                  "Monatsmieten\n" + ung),
+            "O-zahlwort-dokumente": (ohne, "Nicht im Bestand.\n\n" + s_ohne
+                                     + "\nExtern (nicht im Bestand): Die "
+                                     "zweistufige Suche über alle vier "
+                                     "Dokumente von X-0001 ergab keine "
+                                     "Treffer\n" + ung),
+            "O-begriffe-dativ": (ohne, "Nicht im Bestand.\n\n" + s_ohne
+                                 + "\nExtern (nicht im Bestand): keine Treffer "
+                                 "zu den Anfragebegriffen hoch, hoechstens, "
+                                 "mietkaution (X-0001, lokal gelesen)\n" + ung),
+            "O-paragraf-fuer": (ohne, "Nicht im Bestand.\n\n" + s_ohne
+                                + "\nExtern (nicht im Bestand): X-0001 lokal "
+                                "gelesen, keine Treffer für § 551 BGB\n" + ung),
+            "O-kapitel-verneint": (ohne, "Nicht im Bestand.\n\n" + s_ohne
+                                   + "\nExtern (nicht im Bestand): keine "
+                                   "Treffer in X-0001, auch kein passender "
+                                   "Abschnitt zur Mietkaution\n" + ung),
+            "O-kapitel-nicht-danach": (ohne, "Nicht im Bestand.\n\n" + s_ohne
+                                       + "\nExtern (nicht im Bestand): X-0001 "
+                                       "lokal gelesen, keine Treffer; ein "
+                                       "Kapitel zur Kaution gibt es dort "
+                                       "nicht\n" + ung),
+            "O-saetzen": (ohne, "Nicht im Bestand.\n\n" + s_ohne
+                          + "\nExtern (nicht im Bestand): X-0001 – keine "
+                          "passenden Treffer, nur Nennungen in den Sätzen 4 "
+                          "und 7.\n" + ung),
+            "O-nichts-gefunden-ort": (ohne, "Nicht im Bestand.\n\n" + s_ohne
+                                      + "\nExtern (nicht im Bestand): in "
+                                      "X-0001 nichts gefunden\n" + ung),
+            "T-erfunden-mit-rueckfrage": (ohne, "Nicht im Bestand.\n\n"
+                                          + s_ohne + "\nExtern (nicht im "
+                                          "Bestand): X-0001 regelt die Kaution "
+                                          "in handbuch/mietkaution.md, soll ich "
+                                          "die Stelle zitieren?\n" + ung),
+            "T-treffer-mit-nachfrage": (mit, kern + "Extern (nicht im Bestand): "
+                                        + alle[0] + ", passt das?\n"
+                                        + "\n".join("Extern (nicht im Bestand): "
+                                                    + z for z in alle[1:])
+                                        + "\n" + ung),
+            "T-rueckfrage-mit-nebensatz": (mit, kern + zeilen.replace(
+                alle[0], alle[0] + ", bei dieser Abfrage lokal gelesen, soll "
+                "ich auch handbuch/erfunden.md durchsehen, falls dort mehr "
+                "steht?", 1) + "\n" + ung),
+            # Ebenfalls aus der siebten Prüfung: Ein Pfad mit Schrägstrich am
+            # Ende nennt einen Ordner. Ein kleingeschriebenes Begriffspaar
+            # ist von einem Pfad ohne Endung nicht zu unterscheiden und
+            # zählt als Fundstelle (Preis).
+            "O-ordner-schraegstrich": (ohne, "Nicht im Bestand.\n\n" + s_ohne
+                                       + "\nExtern (nicht im Bestand): X-0001 "
+                                       "– keine Treffer unter "
+                                       "beispiel-extern/handbuch/ (lokal "
+                                       "gelesen)\n" + ung),
+            "O-begriffspaar": (ohne, "Nicht im Bestand.\n\n" + s_ohne
+                               + "\nExtern (nicht im Bestand): keine Treffer "
+                               "zu miete/kaution in X-0001\n" + ung),
             # Ein Verzicht unter einer Überschrift, mit Vorgabe.
             "O-verzicht-ueberschrift": (
                 ohne, "Nicht im Bestand.\n\n" + s_ohne + "\n### Extern nicht "
@@ -1994,6 +2063,12 @@ class AntwortCheckTests(unittest.TestCase):
             "O-paragraf-als-stelle": "ohne Treffer der Abfrage",
             "O-abschnitt-ueber": "ohne Treffer der Abfrage",
             "O-am-ehesten": "ohne Treffer der Abfrage",
+            "O-begriffe-dann-inhalt": "ohne Treffer der Abfrage",
+            "O-zahlwort-inhalt": "ohne Treffer der Abfrage",
+            "O-saetzen": "ohne Treffer der Abfrage",
+            "T-erfunden-mit-rueckfrage": "ohne Treffer der Abfrage: X-0001 "
+                                         "handbuch/mietkaution.md",
+            "O-begriffspaar": "ohne Treffer der Abfrage",
         }
         hinweise = {
             "O-zustand": "Zustand not_bound genannt, die Abfrage meldet "
@@ -2140,6 +2215,38 @@ class AntwortCheckTests(unittest.TestCase):
                                    "diesem Host nicht gebunden ist, ist sie "
                                    "nicht gelesen worden, soll ich sie binden "
                                    "lassen? Kein Negativbefund."),
+            # Aus der siebten Prüfung: Eine Rückfrage aus zwei Teilsätzen
+            # oder über einen Gedankenstrich weist nicht aus; eine Aussage
+            # mit eigenen Worten davor schon.
+            "F-frage-mit-nebensatz": (ohne, "Nicht im Bestand.\n\n" + s_frei
+                                      + "\nExtern nicht gelesen: X-0002 "
+                                      "(SKILLSAFE_OFFLINE gesetzt), Zustand "
+                                      "unreachable, soll ich X-0001 binden "
+                                      "lassen, damit ich dort nachschlagen "
+                                      "kann?"),
+            "F-frage-strich-oder": (ohne, "Nicht im Bestand.\n\n" + s_frei
+                                    + "\nExtern nicht gelesen: X-0002 "
+                                    "(SKILLSAFE_OFFLINE gesetzt), Zustand "
+                                    "unreachable, soll ich X-0001 binden "
+                                    "lassen – oder lieber eine Quelle "
+                                    "aufnehmen?"),
+            "F-frage-strich-eigener-satz": (ohne, kopf + "Soll ich X-0001 "
+                                            "binden lassen – oder antworte ich "
+                                            "ohne externe Quelle?"),
+            "F-aussage-eingebunden": (ohne, "Nicht im Bestand.\n\n" + s_frei
+                                      + "\nExtern nicht gelesen: X-0001 ist "
+                                      "auf diesem Host nicht eingebunden, soll "
+                                      "ich es binden lassen?\nExtern nicht "
+                                      "gelesen: X-0002 (SKILLSAFE_OFFLINE "
+                                      "gesetzt), Zustand unreachable — kein "
+                                      "Negativbefund"),
+            "F-aussage-konnte-nicht": (ohne, "Nicht im Bestand.\n\n" + s_frei
+                                       + "\nExtern nicht gelesen: X-0001 "
+                                       "konnte ich nicht lesen, soll ich es "
+                                       "binden lassen? X-0002 wurde wegen "
+                                       "SKILLSAFE_OFFLINE nicht abgerufen, "
+                                       "Zustand unreachable — kein "
+                                       "Negativbefund."),
             "F-klammerfrage-einleitung": (ohne, "Nicht im Bestand.\n\n"
                                           + s_frei + "\nExtern nicht gelesen "
                                           "(kein Negativbefund):\nBeide Quellen "
@@ -2155,7 +2262,8 @@ class AntwortCheckTests(unittest.TestCase):
                         "F-frage-hinter-etikett", "F-klammer-umbrochen",
                         "F-frage-mit-oder", "F-falls-du", "F-bindest-oder",
                         "F-komma-frage", "F-apposition", "F-etikett-falls",
-                        "F-frage-mit-grund-im-einschub"):
+                        "F-frage-mit-grund-im-einschub", "F-frage-mit-nebensatz",
+                        "F-frage-strich-oder", "F-frage-strich-eigener-satz"):
             self.assertTrue(any("fehlt für X-0001" in m
                                 for m in frei[kennung]["verstoesse"]),
                             (kennung, frei[kennung]))
@@ -2167,7 +2275,8 @@ class AntwortCheckTests(unittest.TestCase):
         self.assertIs(nachsatz["extern_verzicht"], False)
         for kennung in ("F-strich-aussage-frage", "F-bindestrich-aussage",
                         "F-einleitung-liste", "F-code-liste",
-                        "F-grund-dann-frage", "F-klammerfrage-einleitung"):
+                        "F-grund-dann-frage", "F-klammerfrage-einleitung",
+                        "F-aussage-eingebunden", "F-aussage-konnte-nicht"):
             self.assertEqual(frei[kennung]["verstoesse"], [],
                              (kennung, frei[kennung]))
 

@@ -42,8 +42,11 @@ B-Kennung. Das gilt für jede Antwort, nicht nur im Kennungsfall; welche S-,
 X- und B-Kennungen es gibt, liest das Werkzeug aus den Registern des
 Bestands. Umgekehrt ist es ein Verstoß, eine Kennung, die es gibt, als
 fehlend hinzustellen; nur bestritten zählt sie weder als Zitat noch als
-Fund. Im Kennungsfall nennt die Antwort keine andere Kennung: Ein Vorschlag
-(„Meinten Sie S-0004?") ist ein Zitat.
+Fund. Eine externe Quelle hinter „in", „aus", „bei" oder „innerhalb"
+oder in einer Angabe zu Schritt 4c ist dabei der Ort der Suche, nicht
+bestritten („in X-0001 nichts gefunden"). Im Kennungsfall nennt die
+Antwort keine andere Kennung: Ein Vorschlag („Meinten Sie S-0004?") ist
+ein Zitat.
 
 Gibt der Mensch einen Umfang vor, oder nennt die Frage selbst eine Domäne
 oder Seite als Umfang, erfüllt die Sichtung dieses Umfangs die Pflicht, und
@@ -54,68 +57,74 @@ den Umfang in ``sweep_args``.
 Schritt 4c ist seit dem Vertrag von v0.17.0 Pflicht. Ob er es für den
 geprüften Tresor ist, liest das Werkzeug aus dessen references/antworten.md,
 nicht aus einer Versionsnummer: Ein eigener Tresor beginnt bei 1.0.0, ein
-alter Stand stellte den Schritt frei. Bleibt eine Frage nach der Vollsichtung
-des ganzen Bestands ganz oder teilweise ungedeckt (die Antwort sagt „Nicht im
-Bestand", auch als Zeile „Nicht im Bestand: …") und sind externe Quellen
-aufgeführt (``fallback.external_lookup_available``), weist die Antwort aus,
-was extern gefunden oder nicht gelesen wurde: je Treffer eine Angabe
-„Extern (nicht im Bestand):" mit Quelle und Dokument, für jede ungelesene
-Quelle „Extern nicht gelesen:". Beide Etiketten gelten am Anfang einer Zeile
-oder eines Satzes, auch als Überschrift mit einer Liste darunter; dann ist
-jeder Listenpunkt eine eigene Angabe. Eine Rückfrage ist keine Angabe, auch
-umbrochen, in Klammern oder direkt hinter dem Etikett („Soll ich X-0001
-binden lassen?"): Eine Kennung darin weist die Quelle nicht als ungelesen
-aus, ebenso wenig in einem Listenpunkt, der als Ganzes fragt, oder als
-Teilsatz. Ob ein Satz fragt, entscheidet sein Ende außerhalb von Zitaten:
-Endet er mit einem Fragezeichen, ist das letzte Segment nach Semikolon,
-Doppelpunkt oder Gedankenstrich die Rückfrage, wenn es wie eine Frage
-beginnt; sonst nur sein letzter Teilsatz nach einem Komma, und zwar nur,
-wenn das davor wie eine Angabe einen Lesestatus, Zustand, Grund oder
-Treffer nennt („X-0001 ist nicht gebunden, soll ich es binden?"); sonst
-fragt das ganze Segment („Falls du X-0001 nutzen willst, soll ich es
-binden?"). Eine zitierte Frage ist keine Rückfrage, und eine Frage in
-Klammern macht den Satz nicht zur Frage. Umgekehrt nennt jede Angabe zu
-einem Treffer ein Dokument, das die Abfrage für eine genannte Quelle
-geliefert hat, auch in Anführungszeichen, mit „./" oder im Klammerzusatz
-des Etiketts, und jeder Pfad darin ist ein solches Dokument, auch in
-Anführungszeichen. Ausgenommen sind zitierte Sätze und Dateien des
-geprüften Tresors, eine Datei außerhalb von knowledge/ aber nur, solange
-die Angabe sie keiner Quelle zuschreibt („X-0001, INDEX.md" ist eine
+alter Stand stellte den Schritt frei. Bleibt eine Frage nach der
+Vollsichtung des ganzen Bestands ganz oder teilweise ungedeckt (die Antwort
+sagt „Nicht im Bestand", auch als Zeile „Nicht im Bestand: …") und sind
+externe Quellen aufgeführt (``fallback.external_lookup_available``), weist
+die Antwort aus, was extern gefunden oder nicht gelesen wurde: je Treffer
+eine Angabe „Extern (nicht im Bestand):" mit Quelle und Dokument, für jede
+ungelesene Quelle „Extern nicht gelesen:". Beide Etiketten gelten am Anfang
+einer Zeile oder eines Satzes, auch als Überschrift mit einer Liste
+darunter; dann ist jeder Listenpunkt eine eigene Angabe. Eine Rückfrage ist
+keine Angabe, auch umbrochen, in Klammern oder direkt hinter dem Etikett
+(„Soll ich X-0001 binden lassen?"): Eine Kennung darin weist die Quelle
+nicht als ungelesen aus, ebenso wenig in einem Listenpunkt, der als Ganzes
+fragt, oder als Teilsatz. Ob ein Satz fragt, entscheidet sein Ende außerhalb
+von Zitaten: Endet er mit einem Fragezeichen, wächst die Rückfrage vom
+letzten Teilsatz rückwärts über jeden Teil, der wie eine Frage beginnt
+(Frageverb, „oder", Fragewort, „falls", „wenn", „damit" …, Verb vor der
+Anrede) und keinen Lesestatus, Zustand oder Treffer nennt, und vor einer
+Nachfrage wie „passt das?" über einen Teil, der nichts aussagt; ein Segment
+zwischen Semikolon, Doppelpunkt oder Gedankenstrich, das so beginnt, gehört
+ganz dazu. Was davor steht, bleibt Angabe („X-0001 ist hier nicht
+eingebunden, soll ich es binden?"); ein Vorsatz, der selbst fragt oder
+bedingt, gehört zur Frage („Falls du X-0001 nutzen willst, soll ich es
+binden?", „X-0001 binden, passt das?"). Eine zitierte Frage ist keine
+Rückfrage, und eine Frage in Klammern macht den Satz nicht zur Frage.
+Umgekehrt nennt jede Angabe zu einem Treffer ein Dokument, das die Abfrage
+für eine genannte Quelle geliefert hat, auch in Anführungszeichen, mit „./"
+oder im Klammerzusatz des Etiketts, und jeder Pfad darin ist ein solches
+Dokument, auch in Anführungszeichen. Ausgenommen sind zitierte Sätze und
+Dateien des geprüften Tresors, eine Datei außerhalb von knowledge/ aber nur,
+solange die Angabe sie keiner Quelle zuschreibt („X-0001, INDEX.md" ist eine
 Fundstelle in X-0001). Eine Angabe ohne geliefertes Dokument behauptet nur
 dann nichts, wenn sie ausdrücklich keinen Treffer meldet („keine Treffer",
 „kein Zeiger", „Treffer: keine", „nichts gefunden"), sonst nichts über den
-Inhalt einer Quelle sagt (neben Kennung, Zustand, Lesestatus und den
-aufgezählten Anfragebegriffen höchstens zwei Inhaltswörter) und nichts
-nennt, was nach einer Fundstelle aussieht: eine URL, eine Datei mit
-Dokumentendung, einen Pfad mit „./", „../", „/", zwei Schrägstrichen oder
-kleingeschrieben ohne Endung (nicht als Ordner), eine Satz-, Absatz-,
-Zeilen- oder Seitenzahl (auch in der Mehrzahl), einen Paragrafen (außer als
-Thema der Suche: „zu § 551 BGB"), ein Kapitel oder einen Abschnitt mit
-Nummer, Titel oder Präposition („Abschnitt über …"; ein verneintes „keinen
-Abschnitt" zählt nicht). Bei bekannter
-Bindung (lokale Quelle) und bei einem Lauf ohne Netz (Netzquelle) ist eine
-erfundene Angabe ein Verstoß, sonst ein Hinweis. Weist eine Antwort eine Quelle als ungelesen aus, die die
+Inhalt einer Quelle sagt (neben Kennung, Zustand, Lesestatus und den Wörtern
+der Frage höchstens zwei Inhaltswörter; ein Zahlwort zählt mit, außer vor
+„Dokumente", „Quellen" oder „Treffer") und nichts nennt, was nach einer
+Fundstelle aussieht: eine URL, eine Datei mit Dokumentendung, einen Pfad mit
+„./", „../", „/", zwei Schrägstrichen oder kleingeschrieben ohne Endung
+(nicht hinter „Ordner" und nicht mit Schrägstrich am Ende; ein
+kleingeschriebenes Begriffspaar wie „miete/kaution" und ein Ordnerpfad ohne
+beides zählen mit, ein Fehlalarm als Preis), eine Satz-, Absatz-, Zeilen-
+oder Seitenzahl (auch in der Mehrzahl), einen Paragrafen (außer als Thema
+der Suche: aus der Frage oder hinter „zu", „für", „bei" …), ein Kapitel oder
+einen Abschnitt mit Nummer, Titel oder Präposition („Abschnitt über …";
+verneint zählt er nicht: „kein passender Abschnitt zur Kaution", „ein
+Kapitel dazu gibt es nicht"). Bei bekannter Bindung (lokale Quelle) und bei
+einem Lauf ohne Netz (Netzquelle) ist eine erfundene Angabe ein Verstoß,
+sonst ein Hinweis. Weist eine Antwort eine Quelle als ungelesen aus, die die
 Nachrechnung bei bekannter Bindung gelesen hat, oder nennt sie einen
-Zustand, den die Abfrage nicht meldet, ist das ein Hinweis. Den
-Verzicht („Extern nicht gelesen: X-0001, X-0002 nicht nachgeschlagen
-(<Grund>) — kein Negativbefund") nimmt es an, wenn das Protokoll die Vorgabe
-dafür festhält (``vorgabe``: den Wunsch des Nutzers oder die Vorgabe der
-Umgebung im Wortlaut) oder wenn solche Zeilen zusammen jede aufgeführte
-Quelle nennen; ohne Vorgabe ist der Verzicht ein Verstoß. Nie im Kennungsfall, nie
-bei begrenztem Umfang. Die Abfrage mit ``--extern`` rechnet das Werkzeug
-selbst nach, mit gesetztem Offline-Schalter: Es ruft nichts ab und schreibt
-nichts in log.md. Was eine Netzquelle geliefert hätte, weiß es deshalb nur,
-wenn auch der Lauf offline war. Das sagt ``stand.extern.offline`` im
-Protokoll, sonst ``SKILLSAFE_OFFLINE`` in der Umgebung des Werkzeugs; ohne
-beides bleibt die Netzquelle ein Hinweis. Welche Quellen der Lauf gebunden
-hatte, sagt ``stand.extern.gebunden``: Bindet der prüfende Host andere,
-bricht das Werkzeug ab wie bei einem fremden Manifest. Endet jede Frage des
-Protokolls extern in invalid_query, liest keine etwas, und die Probe
-entfällt. Fehlt die Angabe und
-nennt die Antwort Treffer einer Quelle, die die Nachrechnung nicht lesen
-kann, ist das ein Hinweis auf eine abweichende Bindung. Nennt das Protokoll
-eine Version, die nicht zum Tresor passt, bricht das Werkzeug bei gebundenem
-Manifest ab; ohne Manifest ist das ein Hinweis.
+Zustand, den die Abfrage nicht meldet, ist das ein Hinweis. Den Verzicht
+(„Extern nicht gelesen: X-0001, X-0002 nicht nachgeschlagen (<Grund>) — kein
+Negativbefund") nimmt es an, wenn das Protokoll die Vorgabe dafür festhält
+(``vorgabe``: den Wunsch des Nutzers oder die Vorgabe der Umgebung im
+Wortlaut) oder wenn solche Zeilen zusammen jede aufgeführte Quelle nennen;
+ohne Vorgabe ist der Verzicht ein Verstoß. Nie im Kennungsfall, nie bei
+begrenztem Umfang. Die Abfrage mit ``--extern`` rechnet das Werkzeug selbst
+nach, mit gesetztem Offline-Schalter: Es ruft nichts ab und schreibt nichts
+in log.md. Was eine Netzquelle geliefert hätte, weiß es deshalb nur, wenn
+auch der Lauf offline war. Das sagt ``stand.extern.offline`` im Protokoll,
+sonst ``SKILLSAFE_OFFLINE`` in der Umgebung des Werkzeugs; ohne beides
+bleibt die Netzquelle ein Hinweis. Welche Quellen der Lauf gebunden hatte,
+sagt ``stand.extern.gebunden``: Bindet der prüfende Host andere, bricht das
+Werkzeug ab wie bei einem fremden Manifest. Endet jede Frage des Protokolls
+extern in invalid_query, liest keine etwas, und die Probe entfällt. Fehlt
+die Angabe und nennt die Antwort Treffer einer Quelle, die die Nachrechnung
+nicht lesen kann, ist das ein Hinweis auf eine abweichende Bindung. Nennt
+das Protokoll eine Version, die nicht zum Tresor passt, bricht das Werkzeug
+bei gebundenem Manifest ab; ohne Manifest ist das ein Hinweis.
 
 Kennungen mit typografischem Strich (C‑0001 mit U+2011, C–0001) liest das
 Werkzeug als Kennung. Eine Angabe zur Sichtung ist die Zeile „Sichtung:" in
@@ -279,19 +288,23 @@ externes bestand tresor ordner katalog volltext stufe gefunden getroffen
 ab bis seit abschnitt abschnitte kapitel lokalen
 lokale nachschlagen nachgeschlagen nachschlag kam kamen zustande
 möglich moeglich gelang gelungen erfolgt erfolgte durchgeführt
-durchgefuehrt ich wir du man mir mich uns dir dich habe hast hatten bin bist
-werde kann konnte konnten können koennen muss musste soll darf
+durchgefuehrt ich wir du mir mich uns dir dich habe hast hatten bin bist
+werde konnte konnten
 alle alles allen beide beiden einige mehrere jede jeder jedes jeden jedem
-insgesamt sämtliche saemtliche eins zwei drei vier fünf fuenf sechs sieben
-acht neun zehn durchsucht gesucht geprüft geprueft nachgesehen abgefragt
+insgesamt sämtliche saemtliche durchsucht gesucht geprüft geprueft
+nachgesehen abgefragt anfragebegriffen suchbegriffen begriffen
 angefragt untersucht leider ebenfalls jedoch allerdings also somit daher
 deshalb fachbegriffe statt eigennamen verwenden bewusst bester fehltreffer
 geliefert befund gilt
 """.split())
-# Die Begriffe, die eine Leermeldung aufzählt („… enthält die
-# Anfragebegriffe hoch, mietkaution", wie im Grund der Engine), sagen nichts
-# über die Quelle.
-BEGRIFFSLISTE_RE = re.compile(r"(?i)\b(?:anfrage|such)?begriffe?\b[^().;]*")
+# Ein Zahlwort zählt nur vor einem dieser Wörter nicht als Inhalt („alle
+# vier Dokumente"); „drei Monatsmieten" sagt etwas über die Quelle.
+ZAHLWOERTER = frozenset(
+    "eins zwei drei vier fünf fuenf sechs sieben acht neun zehn".split())
+ZAEHLWOERTER = frozenset("""
+dokument dokumente dokumenten quelle quellen treffer zeiger datei dateien
+seiten fundstellen
+""".split())
 # Was nach einer Fundstelle aussieht: eine URL, eine Datei mit
 # Dokumentendung, ein Pfad mit ./, ../, / oder mindestens zwei
 # Schrägstrichen, eine Satz-, Absatz-, Zeilen- oder Seitenzahl, ein
@@ -301,26 +314,39 @@ STELLENARTIG_RE = re.compile(
     r"|(?<![\w/.-])[\w.-]+\.(?:" + DOKUMENT_ENDUNGEN + r")\b"
     r"|(?<![\w/.-])(?:\.{1,2}/|/)[\w./-]*\w"
     r"|(?<![\w/.-])[\w.-]+/[\w.-]+/[\w./-]*\w"
-    r"|\b(?:satz(?:position(?:en)?|nummern?)?|s(?:ä|ae)tze|sentence(?:_index)?|"
-    r"abs(?:atz|(?:ä|ae)tze)|zeilen?|seiten?|s\.|rn\.?)\s*[:=]?\s*\d")
-KAPITEL_RE = re.compile(r"\b(?i:kapitel|abschnitt)\s+(?:\d|[„\"»«]|[A-ZÄÖÜ]|"
-                        r"(?i:über|ueber|zu|zum|zur|für|fuer)\s)")
+    r"|\b(?:satz(?:position(?:en)?|nummern?)?|s(?:ä|ae)tzen?|sentence(?:_index)?|"
+    r"abs(?:atz|(?:ä|ae)tzen?)|zeilen?|seiten?|s\.|rn\.?)\s*[:=]?\s*\d")
+KAPITEL_RE = re.compile(r"\b(?i:kapitel|abschnitt)\s+(?:\d|[„\"»«]|[A-ZÄÖÜ])")
 VERNEINUNG_DAVOR_RE = re.compile(r"(?i)\b(?:kein|keine|keinen|keinem|keiner|ohne)\s+$")
+# Ein Kapitel oder Abschnitt mit Thema („der Abschnitt über Mietminderung")
+# ist eine Fundstelle, außer der Satzteil verneint ihn („kein passender
+# Abschnitt zur Kaution", „ein Kapitel dazu gibt es dort nicht", „weder ein
+# Kapitel noch ein Abschnitt …").
+KAPITEL_THEMA_RE = re.compile(
+    r"(?i)\b(?:kapitel|abschnitt)\s+(?:über|ueber|zu|zum|zur|für|fuer)\s")
+SATZTEIL_GRENZE_RE = re.compile(r"[,;:()\[\]–—]|\s-\s|[.!?](?=\s|$)")
+VERNEINUNG_NAH_DAVOR_RE = re.compile(
+    r"(?i)(?:\b(?:kein\w*|ohne)\s+(?:\S+\s+){0,2}"
+    r"|\bweder\s+(?:\S+\s+){0,4})$")
+NICHT_DANACH_RE = re.compile(r"(?i)\bnichts?\b")
 # Ein kleingeschriebener Pfad ohne Endung ist ein Zeiger („am ehesten
 # handbuch/mietminderung"), außer er nennt einen Ordner („Ordner
-# beispiel-extern/handbuch") oder liegt im geprüften Tresor (knowledge/…).
-# Glieder unter drei Zeichen („km/h") und „und/oder" sind keine Pfade.
+# beispiel-extern/handbuch", „beispiel-extern/handbuch/") oder liegt im
+# geprüften Tresor (knowledge/…). Glieder unter drei Zeichen („km/h") und
+# „und/oder" sind keine Pfade; ein kleingeschriebenes Begriffspaar
+# („miete/kaution") ist von einem Pfad nicht zu unterscheiden und zählt mit.
 SCHRAEG_PFAD_RE = re.compile(
     r"(?<![\w/.-])(?!und/oder(?![\w/.-])|and/or(?![\w/.-]))"
     r"([a-z0-9][a-z0-9._-]*(?:/[a-z0-9][a-z0-9._-]*)+/?)(?![\w/.-])")
 ORDNER_DAVOR_RE = re.compile(
     r"(?i)\b(?:ordner|verzeichnis|unterordner|quellordner|wurzel)\s+$")
 # Ein Paragraf ist eine Fundstelle („§ 4 regelt nur die Minderung"), außer er
-# nennt das Thema der Suche („keine Treffer zu § 551 BGB").
-PARAGRAF_RE = re.compile(r"§\s*\d")
+# nennt das Thema der Suche: Er steht in der Frage, oder eine Präposition des
+# Themas steht davor („keine Treffer für § 551 BGB", „zu §§ 535 ff.").
+PARAGRAF_RE = re.compile(r"§§?\s*(\d+)")
 THEMA_DAVOR_RE = re.compile(
-    r"(?i)\b(?:zu|zum|zur|über|ueber|nach|wegen|bezüglich|bezueglich|bzgl\.?|"
-    r"betreffend|um)\s+$")
+    r"(?i)\b(?:zu|zum|zur|über|ueber|für|fuer|bei|hinsichtlich|nach|wegen|"
+    r"bezüglich|bezueglich|bzgl\.?|betreffend|um)\s+$")
 # Ein Pfad ohne Endung, dem eine Satzposition folgt: auch das ist eine
 # Fundstelle („handbuch/eigenbedarf, Satzposition 2"). Ein Pfad ist es nur
 # mit kleinem Anfang jedes Glieds; „Mieter/Vermieter, Satzposition 7" nennt
@@ -699,6 +725,11 @@ NICHT_QUELLE_KERN = frozenset("quelle quellen fundstelle beleg belege".split())
 AUSSCHLUSS_VOR = (("nicht", "aus"), ("nicht", "von"), ("statt",),
                   ("anstatt",), ("anstelle",), ("anstelle", "von"))
 ERLAUBTE_NENNUNG = {"fehlen", "rueckfrage", "ausschluss", "frage", "abgrenzung"}
+# Eine externe Quelle hinter „in", „aus", „bei", „innerhalb" oder in einer
+# Angabe zu Schritt 4c ist der Ort der Suche, nicht das, was fehlt („in
+# X-0001 nichts gefunden", „Extern (nicht im Bestand): X-0001 – nichts
+# gefunden").
+ORT_VOR = {("in",), ("aus",), ("bei",), ("innerhalb",)}
 LISTENPUNKT_RE = re.compile(r"^\s*(?:[-*•+–—]|\d{1,3}[.)])\s+")
 
 
@@ -892,6 +923,10 @@ def _nennungen(text, kennung):
                         + [einordnung[nummer] for nummer in ebene
                            if nummer > stelle and einordnung[nummer]])
                     art = nachbarn[0] if nachbarn else "beleg"
+                if (art == "fehlen" and kennung.upper().startswith("X-")
+                        and (davor[-1:] in ORT_VOR
+                             or EXTERN_ETIKETT_TEXT_RE.search(satz))):
+                    art = "beleg"
                 arten.append(art if art in ERLAUBTE_NENNUNG else "beleg")
     return arten
 
@@ -1146,7 +1181,35 @@ AUSSAGE_RE = re.compile(
     r"skillsafe_offline|nicht\s+gelesen|ungelesen|gelesen|nicht\s+abgerufen|"
     r"abgerufen|nicht\s+nachgeschlagen|nachgeschlagen|negativbefund|"
     r"nicht\s+verf(?:ü|ue)gbar|satzposition|sentence_index|lexikalisch|"
-    r"zeiger|treffer|" + "|".join(EXTERN_ZUSTAENDE) + r")\b")
+    r"zeiger|treffer|nicht\s+(?:ein|an)gebunden|keine\s+bindung|"
+    r"nicht\s+lesbar|nicht\s+abgefragt|(?:ü|ue)bersprungen|"
+    r"nicht\s+ge(?:ö|oe)ffnet|nicht\s+geladen|gefunden|ergebnis(?:se)?|"
+    r"satz\s*\d+|" + "|".join(EXTERN_ZUSTAENDE) + r")\b")
+# Wie eine Rückfrage über _fragt hinaus beginnt: mit einer Bedingung oder
+# einem Zweck („Falls du …, soll ich …?", „Damit …") oder mit einem Verb vor
+# der Anrede („Bindest du …?"). Ein begründender Vorsatz („Da …, ist …")
+# fragt nicht.
+FRAGE_SUBJUNKTIONEN = frozenset(
+    "falls wenn sofern soweit ob damit sobald bevor".split())
+ANREDE_NACH_VERB = frozenset("du ich wir ihr sie man es".split())
+KEIN_VERB_VORN = frozenset("""
+jetzt nicht erst zuerst sonst selbst fast bereits seit meist zumindest
+wenigstens trotzdem zuletzt
+""".split())
+# Eine Nachfrage, die auf das Gesagte davor zurückweist („…, passt das?",
+# „…, einverstanden?").
+NACHFRAGE_RE = re.compile(
+    r"(?i)^\s*(?:(?:passt|geht|reicht|hilft|ist|wäre|waere|klingt|stimmt|"
+    r"genügt|genuegt)(?:\s+[\w']+){0,3}|einverstanden|okay|ok|"
+    r"in\s+ordnung|richtig|oder|ja|nicht\s+wahr|recht\s+so|gut\s+so)\s*$")
+# Verben, mit denen ein Teilsatz etwas aussagt („X-0001 regelt …").
+AUSSAGE_VERBEN = frozenset("""
+ist sind war waren wurde wurden wird hat hatte hatten habe konnte konnten
+liegt liegen steht stehen fehlt fehlen gibt gab enthält enthaelt regelt nennt
+behandelt beschreibt liefert lieferte lieferten ergab ergibt bleibt blieb kam
+kamen betrifft beträgt betraegt gilt
+""".split())
+TEILGRENZE_RE = re.compile(r"[;:]|\s[—–-]\s|[—–]|,")
 
 
 def _fragt(teil):
@@ -1164,23 +1227,64 @@ def _fragt(teil):
         "," not in teil or (len(woerter) > 1 and woerter[1] in FRAGE_VERBEN))
 
 
+def _beginnt_frage(teil):
+    """Beginnt ein Teil wie eine Frage: wie _fragt, mit einer Bedingung oder
+    einem Zweck („Falls du …") oder mit einem Verb vor der Anrede
+    („Bindest du …")?"""
+    woerter = [wort.casefold() for wort in WORT_IM_SATZ_RE.findall(teil)]
+    if not woerter:
+        return False
+    if _fragt(teil) or woerter[0] in FRAGE_SUBJUNKTIONEN:
+        return True
+    return (len(woerter) > 1 and woerter[1] in ANREDE_NACH_VERB
+            and woerter[0].endswith(("st", "t", "en"))
+            and woerter[0] not in KEIN_VERB_VORN)
+
+
+def _fragt_teil(teil):
+    """Setzt ein Teilsatz eine Rückfrage fort? Er beginnt wie eine Frage und
+    nennt keinen Lesestatus, Zustand oder Treffer („ist sie nicht gelesen
+    worden" sagt aus)."""
+    return _beginnt_frage(teil) and not AUSSAGE_RE.search(teil)
+
+
+def _sagt_aus(teil):
+    """Sagt ein Teilsatz etwas aus: Lesestatus, Zustand, Treffer, ein
+    Dokument oder ein Verb einer Aussage?"""
+    return bool(AUSSAGE_RE.search(teil) or DOKUMENT_RE.search(teil)
+                or any(wort.casefold() in AUSSAGE_VERBEN
+                       for wort in WORT_IM_SATZ_RE.findall(teil)))
+
+
+def _nachfrage(teil):
+    """Weist ein Teilsatz nur auf das Gesagte zurück („passt das?")?"""
+    teil = FRAGE_RE.sub("", teil.rstrip())
+    return bool(NACHFRAGE_RE.match(teil)) and not _angabeartig(teil)
+
+
 def _ohne_rueckfragen(satz):
     """Ein Satz ohne die Rückfrage darin, und ob eine Frage abgetrennt wurde.
 
     Fort fällt jede Klammer mit Fragezeichen; sie macht den Satz nicht zur
-    Frage. Endet der Satz danach mit einem Fragezeichen, ist das letzte
-    Segment nach Semikolon, Doppelpunkt oder Gedankenstrich (auch „ - ") die
-    Rückfrage, wenn es wie eine Frage beginnt („— soll ich X-0001 binden,
-    oder nicht?", „Soll ich X-0001, das Beispielhandbuch, binden?"). Sonst
-    ist nur sein letzter Teilsatz nach einem Komma die Rückfrage, sofern das
-    davor eine Aussage wie eine Angabe ist (AUSSAGE_RE: „X-0001 ist nicht
-    gebunden, soll ich es binden?", „Da der Schalter gesetzt ist, ist X-0002
-    nicht abgerufen worden, soll ich …?"); fehlt eine solche Aussage, fragt
-    das ganze Segment („Falls du X-0001 nutzen willst, soll ich es
-    binden?", „Bindest du X-0001, oder soll ich?"). Beginnt der letzte
-    Teilsatz mit „oder", gehört eine Frage davor dazu. Zitate zählen dabei
-    nicht. Zurück kommen der Rest und ob eine Frage abgetrennt wurde; ein
-    leerer Rest heißt: Der ganze Satz war eine Rückfrage."""
+    Frage. Endet der Satz danach mit einem Fragezeichen, zerfällt er an
+    Semikolon, Doppelpunkt, Gedankenstrich (auch „ - ") und Komma in Teile,
+    und die Rückfrage wächst vom letzten Teil rückwärts. Ein Segment
+    zwischen starken Grenzen, das wie eine Frage beginnt (_beginnt_frage),
+    gehört ganz dazu („Soll ich X-0001, das Beispielhandbuch, binden?",
+    „Falls du X-0001 nutzen willst, soll ich es binden?", „Bindest du
+    X-0001, oder soll ich?"). Sonst gehört jeder Teil davor dazu, der so
+    beginnt und keinen Lesestatus, Zustand oder Treffer nennt („…, Zustand
+    unreachable, soll ich X-0001 binden lassen, damit …?"), und vor einer
+    Nachfrage wie „passt das?" ein Teil, der nichts aussagt („X-0001 binden,
+    passt das?"). Was davor steht, bleibt Aussage, auch ohne festes
+    Vokabular („X-0001 ist hier nicht eingebunden, soll ich …?", „Da der
+    Schalter gesetzt ist, ist X-0002 nicht abgerufen worden, soll ich …?",
+    „X-0001 regelt das in a.md, soll ich zitieren?"). Erreicht die
+    Rückfrage den Anfang eines Segments, setzt sie sich ins Segment davor
+    fort, wenn dessen letzter Teil wie eine Frage beginnt („Soll ich X-0001
+    binden lassen – oder antworte ich ohne?"). Zitate zählen dabei nicht.
+    Zurück kommen der Rest und ob eine Frage abgetrennt wurde; ein leerer
+    Rest heißt: Der ganze Satz war eine Rückfrage."""
     maske = _maske(satz)
     while True:
         klammer = RUECKFRAGE_KLAMMER_RE.search(maske)
@@ -1190,20 +1294,41 @@ def _ohne_rueckfragen(satz):
         satz, maske = satz[:anfang] + satz[ende:], maske[:anfang] + maske[ende:]
     if not FRAGE_RE.search(FORMEL_STOERER.sub("", maske).rstrip()):
         return satz, False
-    grenzen = list(STARKE_GRENZE_RE.finditer(maske))
-    beginn = grenzen[-1].end() if grenzen else 0
-    schnitt = grenzen[-1].start() if grenzen else 0
-    segment = maske[beginn:]
-    kommas = [fund.start() for fund in re.finditer(",", segment)]
-    if (kommas and not _fragt(segment)
-            and AUSSAGE_RE.search(segment[:kommas[-1]])):
-        schnitt = beginn + kommas[-1]
-        letzter = segment[kommas[-1] + 1:]
-        woerter = WORT_IM_SATZ_RE.findall(letzter)
-        if (woerter and woerter[0].casefold() == "oder" and len(kommas) > 1
-                and _fragt(segment[kommas[-2] + 1:kommas[-1]])):
-            schnitt = beginn + kommas[-2]
-    return satz[:schnitt].rstrip(), True
+    # Teile als (Anfang der Grenze davor, Anfang, Ende, Grenze davor stark).
+    teile, grenze, anfang, stark = [], 0, 0, True
+    for fund in TEILGRENZE_RE.finditer(maske):
+        teile.append((grenze, anfang, fund.start(), stark))
+        grenze, anfang, stark = fund.start(), fund.end(), fund.group() != ","
+    teile.append((grenze, anfang, len(maske), stark))
+
+    def text(nummer):
+        return maske[teile[nummer][1]:teile[nummer][2]]
+
+    erster = ende = len(teile) - 1
+    zuletzt = True
+    while True:
+        beginn = ende
+        while not teile[beginn][3]:
+            beginn -= 1
+        segment = maske[teile[beginn][1]:teile[ende][2]]
+        if (_beginnt_frage(segment) if zuletzt else _fragt_teil(segment)):
+            erster = beginn
+        else:
+            if not zuletzt and not _fragt_teil(text(ende)):
+                break
+            nummer = ende
+            while nummer > beginn and (
+                    _fragt_teil(text(nummer - 1))
+                    or (_nachfrage(text(nummer))
+                        and not _sagt_aus(text(nummer - 1)))):
+                nummer -= 1
+            erster = nummer
+            if nummer > beginn:
+                break
+        if beginn == 0:
+            break
+        ende, zuletzt = beginn - 1, False
+    return satz[:teile[erster][0]].rstrip(), True
 
 
 def _etikett_4c(text):
@@ -1545,33 +1670,53 @@ def _quellbezug(text, anfang, ende):
                 or QUELLBEZUG_DAHINTER_RE.match(text[ende:]))
 
 
-def _stellenartig(text):
+def _satzteil(text, anfang, ende):
+    """Anfang und Ende des Satzteils um eine Stelle: bis zur Grenze davor und
+    danach."""
+    links = [fund.end() for fund in SATZTEIL_GRENZE_RE.finditer(text, 0, anfang)]
+    rechts = SATZTEIL_GRENZE_RE.search(text, ende)
+    return (links[-1] if links else 0), (rechts.start() if rechts else len(text))
+
+
+def _stellenartig(text, frage=""):
     """Nennt ein Text etwas, das nach einer Fundstelle aussieht? Ein
     verneintes „kein Kapitel", „keinen Abschnitt" zählt nicht, ein Paragraf
-    als Thema der Suche („zu § 551 BGB") ebenso wenig, und ein Pfad ohne
-    Endung nur kleingeschrieben und nicht als Ordner."""
+    als Thema der Suche (aus der Frage oder „für/zu § 551 BGB") ebenso
+    wenig, und ein Pfad ohne Endung nur kleingeschrieben und nicht als
+    Ordner (hinter „Ordner" oder mit Schrägstrich am Ende)."""
     if STELLENARTIG_RE.search(text):
         return True
+    thema = {nummer for nummer in PARAGRAF_RE.findall(frage)}
     if any(not THEMA_DAVOR_RE.search(text[:fund.start()])
+           and fund.group(1) not in thema
            for fund in PARAGRAF_RE.finditer(text)):
         return True
     for fund in SCHRAEG_PFAD_RE.finditer(text):
         pfad = fund.group(1)
-        # Mindestens zwei Glieder hat jeder Treffer; leer ist nur das hinter
-        # einem Schrägstrich am Ende.
+        # Mindestens zwei Glieder hat jeder Treffer; ein Schrägstrich am
+        # Ende nennt einen Ordner („unter beispiel-extern/handbuch/").
         glieder = [glied for glied in pfad.split("/") if glied]
         if (all(len(glied) >= 3 for glied in glieder)
                 and not pfad.startswith("knowledge/")
+                and not pfad.endswith("/")
                 and not ORDNER_DAVOR_RE.search(text[:fund.start()])):
             return True
-    return any(not VERNEINUNG_DAVOR_RE.search(text[:fund.start()])
-               for fund in KAPITEL_RE.finditer(text))
+    if any(not VERNEINUNG_DAVOR_RE.search(text[:fund.start()])
+           for fund in KAPITEL_RE.finditer(text)):
+        return True
+    for fund in KAPITEL_THEMA_RE.finditer(text):
+        links, rechts = _satzteil(text, fund.start(), fund.end())
+        if not (VERNEINUNG_NAH_DAVOR_RE.search(text[links:fund.start()])
+                or NICHT_DANACH_RE.search(text[fund.end():rechts])):
+            return True
+    return False
 
 
-def _leermeldung(text):
+def _leermeldung(text, frage=""):
     """Meldet eine Angabe ausdrücklich keinen Treffer, und sagt sie sonst
-    nichts über den Inhalt einer Quelle? Kennungen, Zustände und
-    Lesestatus zählen nicht; mehr als zwei andere Inhaltswörter schon."""
+    nichts über den Inhalt einer Quelle? Kennungen, Zustände, Lesestatus und
+    die Wörter der Frage (wie die Anfragebegriffe im Grund der Engine)
+    zählen nicht; mehr als zwei andere Inhaltswörter schon."""
     rein = X_KENNUNG_RE.sub(" ", text)
     rein = re.sub(r"(?i)\b(?:" + "|".join(EXTERN_ZUSTAENDE)
                   + r"|external_candidates_found)\b", " ", rein)
@@ -1579,11 +1724,17 @@ def _leermeldung(text):
         return True
     if not KEIN_TREFFER_RE.search(rein):
         return False
-    uebrig = BEGRIFFSLISTE_RE.sub(" ", KEIN_TREFFER_RE.sub(" ", rein))
-    woerter = (wort.strip("./-") for wort in re.findall(r"\w[\w./-]*", uebrig))
+    uebrig = KEIN_TREFFER_RE.sub(" ", rein)
+    aus_frage = set(_woerter(frage))
+    woerter = [wort.strip("./-") for wort in re.findall(r"\w[\w./-]*", uebrig)]
+    woerter = [wort for nummer, wort in enumerate(woerter)
+               if not (wort.casefold() in ZAHLWOERTER
+                       and nummer + 1 < len(woerter)
+                       and woerter[nummer + 1].casefold() in ZAEHLWOERTER)]
     inhalt = [wort for wort in woerter
               if not wort.isdigit()
               and wort.casefold() not in NEUTRALE_WOERTER
+              and not (set(_woerter(wort)) and set(_woerter(wort)) <= aus_frage)
               and not wort.casefold().startswith("knowledge/")]
     return len(inhalt) <= 2
 
@@ -1776,7 +1927,7 @@ def _pruefe_extern(vault, frage, antwort, aufgefuehrt, offline, bindung_bekannt,
             eintrag = f"{_kennung_zum_pfad(rest, fund, angabe)} {pfad}".strip()
             if eintrag not in fremd:
                 fremd.append(eintrag)
-        leer = _leermeldung(rest) and not _stellenartig(rest)
+        leer = _leermeldung(rest, frage) and not _stellenartig(rest, frage)
         if not fremd and (nennt or leer):
             continue
         pruefbar = all((offline if kennung in netz else bindung_bekannt)

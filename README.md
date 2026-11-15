@@ -29,7 +29,7 @@ geschützte `dir_fd`-Operationen fail-closed ab.
 📖 **Konzept & Architekturentscheidungen:** [`wissenstresor/KONZEPT.md`](wissenstresor/KONZEPT.md)
 🌐 **Landingpage:** [`index.html`](index.html) (GitHub-Pages-fähig, Source = repo root)
 
-**Aktueller Release: v0.18.7** (Profil `oksv-lite/1.3`) mit Begriffswelten,
+**Aktueller Release: v0.18.8** (Profil `oksv-lite/1.3`) mit Begriffswelten,
 deterministischem Hybrid-Retrieval, geprüften Bild-/PDF-Regionen und einem
 reproduzierbaren `.skill`-Paket für Claude Code und Codex. Der
 Frontmatter-Parser lehnt Verschachtelung fail-closed ab statt sie still
@@ -360,9 +360,29 @@ Tresorvarianten mit Signaturen und auf den Protokollen aller Prüfrunden,
 dazu mit einer Gegenprobe durch unabhängige Prüfer; was sie für interne
 Aufrufer fanden, ist zurückgenommen.
 
+v0.18.8 behebt, was eine siebte Prüfung an v0.18.6 fand, ebenfalls vor
+`main`. Die Korrekturen aus v0.18.6 waren am Prüfwerkzeug wieder in beide
+Richtungen zu grob. Eine Rückfrage erkennt es jetzt an ihrem Anfang: Sie
+wächst vom letzten Teilsatz rückwärts über Teile, die wie eine Frage
+beginnen. Was davor steht, bleibt Angabe, auch mit eigenen Worten („X-0001
+ist hier nicht eingebunden, soll ich …?"), und eine erfundene Fundstelle
+vor „, soll ich …?" fällt wieder auf. In einer Leermeldung zählen die
+Wörter der Frage nicht mit, Zahlwörter (außer vor „Dokumente" oder
+„Treffer") und Modalverben dagegen schon: „man muss drei Monatsmieten
+zahlen" ist keine Leermeldung. Ein Paragraf aus der Frage oder hinter „für"
+ist das Thema der Suche, ein verneintes Kapitel („kein passender Abschnitt
+zur Kaution") keine Fundstelle, ein Pfad mit Schrägstrich am Ende ein
+Ordner, und „in X-0001 nichts gefunden" bestreitet die Kennung nicht. Die
+Engine schwärzt eine Meldung auch, wenn die Signatur in einem Anker oder
+einer Query am Pfad steht, und nach einer Leerzeile beendet auch ein Zaun
+oder ein HTML-Kommentar ohne Einzug eine Liste. Drei Preise sind jetzt
+dokumentiert: Ein Zeilenendkommentar liest sich mit der Codezeile darunter,
+eingerückter Code in einem Listenpunkt bleibt Listentext, und ein
+kleingeschriebenes Begriffspaar („miete/kaution") gilt als Pfad.
+
 Abnahme: 252 Tests bestanden · 37 manifestierte Dateien · 39 sichere
 Paketeinträge · SHA-256
-`1d950d223799ddfc03861334a50a3e9c54d468dfaec24a3b485a3b50f0904432`.
+`2f5c1cbf9417293cc592f104046ac37ceb7f70698575ef732a7e6a9fc9bedc19`.
 Dazu 2 aufgeführte externe Bezugsquellen · 2 Satzanker.
 
 Alles läuft mit der Python-Standardbibliothek, gemessen mit CPython 3.9 und

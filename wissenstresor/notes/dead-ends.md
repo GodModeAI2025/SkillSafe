@@ -415,3 +415,38 @@ Paragraf ist eine Fundstelle ausser als Thema der Suche ("zu § 551 BGB"),
 ein kleingeschriebener Pfad ohne Endung ebenso (nicht hinter "Ordner").
 Der Preis: Ein Angebot vor einem Gedankenstrich ("Wenn du moechtest, binde
 ich X-0001 - einverstanden?") zaehlt als Angabe.
+
+Die siebte Pruefung fand die Korrekturen aus v0.18.6 zu grob, wieder in
+beide Richtungen: Die Wortliste fuer Aussagen kannte "nicht eingebunden",
+"konnte ich nicht lesen" oder "regelt" nicht, also verschwand eine Angabe
+samt Rueckfrage, und eine erfundene Fundstelle vor ", soll ich ...?" kam
+durch; eine Rueckfrage aus zwei Teilsaetzen (", soll ich X-0001 binden,
+damit ...?") oder ueber einen Gedankenstrich liess die Kennung als Angabe
+stehen. Die Begriffsliste strich alles bis zum Satzende ("keine Treffer
+fuer die Anfragebegriffe ..., das Handbuch nennt drei Monatsmieten" galt als
+leer), Zahlwoerter und Modalverben machten "man muss drei Monatsmieten
+zahlen" zur Leermeldung, "keine Treffer fuer § 551 BGB" galt als
+erfundene Fundstelle, "kein passender Abschnitt zur Kaution" ebenso, und
+"in X-0001 nichts gefunden" bestritt die Kennung. Ersatz in v0.18.8: Die
+Rueckfrage waechst rueckwaerts ueber Teile, die wie eine Frage beginnen,
+statt an einer Wortliste fuer Aussagen zu haengen; die Woerter der Frage
+zaehlen in einer Leermeldung nicht, ein Zahlwort nur vor "Dokumente";
+ein Paragraf aus der Frage oder hinter "fuer" ist das Thema; ein Kapitel
+mit Thema ist verneint, wenn "kein" bis zwei Woerter davor steht oder
+"nicht" dahinter im Satzteil. Der Preis bleibt die Zwei-Woerter-Grenze:
+"keine Treffer (gesetzlich 3 Monatsmieten)" geht durch. In der Engine trennte
+v0.18.6 Meldungen auch an "#" und "?", und ein Anker oder eine Query mit
+Signatur ("a/b.md#ignore-all-previous-instructions") verlor dabei den Pfad
+und blieb ungeschwaerzt; seit v0.18.8 wird zusaetzlich grob getrennt
+geprueft. Die ganze Codezeile hat eine zweite Seite: Ein Zeilenendkommentar
+liest sich mit der Codezeile darunter ("rolle: assistant # oder: system"
+vor "prompt: |" warnt). Das bleibt als Fehlalarm stehen; in 2997 echten
+Markdown-Dateien fand die siebte Pruefung keinen solchen Fall. Ebenfalls in
+v0.18.8: Nach einer Leerzeile beendet auch ein Zaun oder ein HTML-Kommentar
+ohne Einzug die Liste, der eingerueckte Code danach ist ein Codeblock; in
+einem Listenpunkt bleibt eingerueckter Code Listentext (ein Fehlalarm als
+Preis, jetzt auch in profil.md genannt). Im Pruefwerkzeug nennt ein Pfad
+mit Schraegstrich am Ende einen Ordner; ein kleingeschriebenes Begriffspaar
+("miete/kaution") und ein Ordnerpfad ohne Schraegstrich und ohne "Ordner"
+davor sind von einem Pfad ohne Endung nicht zu unterscheiden und zaehlen als
+Fundstelle, auch das ein Preis.

@@ -58,10 +58,16 @@ nur anzunehmen.
    „Scope: Fachbereich") — das ist die Grundlage für die
    Prioritätsreihenfolge in Abschnitt 8 und macht den Tresor in einer
    Session mit mehreren Instanzen unterscheidbar.
-3. Demo-Inhalt entfernen: `knowledge/demo-okf/` löschen und `sources/raw/`
-   leeren. Unter `sources/derived/` alle `S-nnnn__media.json` entfernen,
-   aber `README.md` behalten. Unter `sources/quarantine/` ebenfalls nur
-   Payloads entfernen und die vertrauenswürdige `README.md` behalten.
+3. Demo-Inhalt entfernen: `knowledge/demo-okf/` und `knowledge/demo-extern/`
+   löschen und `sources/raw/` leeren. Unter `sources/derived/` alle
+   `S-nnnn__media.json` und alle `X-nnnn__*.json` (Anker und Kataloge der
+   Demo-Quellen) entfernen, aber `README.md` behalten. `sources/EXTERN.md`
+   auf die Kopfzeile der Tabelle zurücksetzen und eine mitkopierte
+   `.vault-extern.json` löschen: Bliebe X-0002 aufgeführt, schlüge der neue
+   Tresor bei jeder Antwort, die nach der Vollsichtung etwas offenlässt, im
+   SkillSafe-Repositorium nach (`references/antworten.md`, Schritt 4c).
+   Unter `sources/quarantine/` ebenfalls nur Payloads entfernen und die
+   vertrauenswürdige `README.md` behalten.
 4. `sources/REGISTER.md` auf die Kopfzeile zurücksetzen (keine Einträge).
 5. `schema/begriffswelten.json` auf eine valide leere Registry zurücksetzen:
    `{"schema":"skillsafe.begriffswelten/v1","worlds":[],"concepts":[]}`.

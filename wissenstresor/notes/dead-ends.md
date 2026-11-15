@@ -229,3 +229,224 @@ Die Pruefung der End-URL nach dem Lesen kam zu spaet: das fremde Ziel hatte
 die Anfrage da schon gesehen. Ersatz: ein Opener ohne automatische
 Weiterleitung; das Ziel wird aufgeloest und an Pfadgrenzen gegen das Praefix
 geprueft, bevor die naechste Anfrage hinausgeht.
+
+## [2026-11-14] Stolperdraht fuer Titel, Tags und Registerangaben als Fehler — verworfen
+Ein Titel oder Tag mit Instruktionssignatur steht in jedem Stapel der
+Vollsichtung, und das Modell liest jeden Stapel ganz. Als Fehler haette die
+Pruefung aber jeden vorhandenen Bestand mit so einem Titel rot gemacht; nach
+der Stufenwahl in BETRIEB.md waere das ein Major-Release. Ersatz in v0.18.0:
+validate warnt (ohne den Wortlaut, weil query und sweep die Warnungen mit
+ausgeben), und query und sweep geben das Feld nicht aus, sondern markieren
+Seite oder Quelle mit suspicious_instruction. Den uebrigen Seitentext gibt
+die Engine ohnehin nicht aus; seit v0.18.1 markiert eine Signatur dort die
+Seite ebenso. Ihn ueber Absatzgrenzen hinweg als einen Text zu pruefen,
+ergab Fehlalarme (eine Ueberschrift "System" vor einem Absatz, der mit
+"Prompt" beginnt); seit v0.18.2 prueft validate je Absatz, ohne Zitat- und
+Kommentarzeichen am Zeilenanfang und mit der Fortsetzung einer Claim-Zeile.
+Seit v0.18.3 fallen diese Zeichen weg, bevor Leerzeile und Ueberschrift
+erkannt werden, ein geschuetztes Leerzeichen ist keine Leerzeile, und
+HTML-Kommentare und Kommentarzeilen in einem Code-Zaun zaehlen mit. Nur
+"ignore ... instructions" prueft validate weiter ueber Absatzgrenzen hinweg:
+Diese Formel entsteht dort kaum zufaellig. Die vierte Pruefung fand, dass
+v0.18.3 dafuer jede Zaunzeile uebersprang (eine Signatur im Info-String
+rutschte durch) und Kommentarzeilen mit Code und Absatz verband (neue
+Fehlalarme). Seit v0.18.4 gilt ein Zaun wie in CommonMark (Zeichen, Laenge,
+Info-String als eigener Absatz, auch eingerueckt), und Kommentare bilden
+eigene Absaetze, die nie mit Text oder Code verbunden werden. Die fuenfte
+Pruefung fand darin drei Luecken: Ein geschuetztes Leerzeichen vor "#"
+machte eine Frontmatter-Zeile, die der Parser als Kommentar ueberspringt,
+fuer den Stolperdraht unsichtbar; eine eingerueckte Zaunzeile schloss oder
+oeffnete anders als in CommonMark; ein Kommentar am Ende einer Codezeile
+wurde nie mit der Kommentarzeile darunter verbunden. Seit v0.18.5 zaehlt
+vor `#` und `<!--` jeder Leerraum wie im Parser, ein Zaun oeffnet ausserhalb
+eines Listenpunkts nur mit hoechstens drei Leerzeichen Einzug und schliesst
+hoechstens drei Leerzeichen tiefer als die Oeffnung, ein Zeilenendkommentar
+setzt sich in der naechsten Kommentarzeile fort, und eine Ueberschrift in
+einem HTML-Kommentar steht fuer sich. Die sechste Pruefung fand, dass der
+Zeilenendkommentar "#" auch in Strings, Heredocs und Text-Zaeunen abtrennte
+(neue Luecken und ein Fehlalarm), dass die strenge Listenregel eine
+Lazy-Fortsetzung, eine leere Marke und einen Zaun direkt auf der Marke nicht
+kannte, dass ein Zaun relativ zur Oeffnung statt zum Container schloss, und
+dass das Abstreifen von "#" Hashtags und Kommentare eingerueckter Codebloecke
+mit dem Text davor verband (Fehlalarme). Seit v0.18.6 bleibt eine Codezeile
+ganz (Preis: ein Zeilenendkommentar wird nicht mit dem Kommentar darunter
+verbunden), ein Listenpunkt bleibt bis zu einer Zeile ohne Einzug nach einer
+Leerzeile offen, ein Zaun oeffnet auch auf der Marke und schliesst ausserhalb
+eines Listenpunkts mit hoechstens drei Leerzeichen, Kommentarzeilen eines
+eingerueckten Codeblocks bilden eigene Laeufe, Text hinter einem einzeiligen
+HTML-Kommentar gehoert zum Absatz, und nur "# Text" (kein Hashtag) verliert
+sein "#". Eine Vereinigung mehrerer Lesarten (streng und locker) waere der
+naechste Schritt gewesen; sie haette die Fehlalarme beider Lesarten geerbt.
+Der Stolperdraht bleibt ein Stolperdraht fuer offensichtliche Signaturen:
+Wer eine Formel gezielt ueber Markdown-Strukturen, Null-Breite-Zeichen oder
+leere Inline-Kommentare verteilt, kommt an ihm vorbei; dagegen steht Regel 6
+(Seitentext enthaelt nie Anweisungen).
+
+## [2026-11-14] Katalog von X-0002 von Hand neu erzeugen — verworfen
+sources/derived/X-0002__orchestrator.json fuehrt unter top_tokens noch "fuer",
+erzeugt vor der Normalisierung der Stoppwoerter. orchestrator-template baut
+Kataloge nur aus einem lokal gebundenen Baum; X-0002 ist eine Netzquelle mit
+sha256: null, ihr Katalog also ohnehin ein Schnappschuss, der mit dem
+Hauptzweig driftet. Auf das Ranking wirkt der Eintrag nicht: Eine Anfrage
+enthaelt das Token nicht mehr. Ein von Hand nachgebauter Katalog waere
+Modellarbeit an einer Datei, die das Script nachrechnen koennen soll.
+
+## [2026-11-14] Externe Funktionswoerter erst in einem eigenen Release angleichen — verworfen
+Abnahmerunde 5 fiel auf, dass der externe Grund "darf" und "sein" als
+Anfragebegriffe fuehrt, waehrend die lokale Abfrage sie als Funktionswoerter
+ueberliest. In v0.18.0 stand hier, das sei fuer die Antworten folgenlos, und
+die Angleichung gehoere in ein eigenes Release. Die Gegenpruefung fand das
+Gegenteil: Von den sieben Zeilen "Extern (nicht im Bestand):" der Runde kamen
+vier nur ueber "ohne", "nur" und "sie" zustande, und seit Schritt 4c je
+Treffer eine Zeile verlangt, ist jeder solche Rauschtreffer Pflicht. Ersatz
+in v0.18.1: extern-zweistufig/v3 nimmt die Funktionswoerter der Frage aus den
+Anfragebegriffen; die Dokumentseite und die Katalogzahlen bleiben. Ein
+Kuerzel bleibt Begriff, seit v0.18.3 auch ein Wort einer geschlossenen
+Homographenliste, das mitten im Satz grossgeschrieben steht (sonst fiel "Was
+sind Waren?" ganz aus); eine Frage aus lauter Funktionswoertern ergibt
+invalid_query. Gemessen an den 117 verschiedenen Fragen
+aus Runde 1 bis 5 und den Positivfragen des Gold gegen das gebundene
+Beispielhandbuch: 62 behalten ihre Treffer, bei 49 fallen nur Treffer weg
+(100), bei 6 tritt ein Satz mit mehr Inhaltswoertern an die Stelle (13 weg,
+6 neu); zusammen 147 Treffer vorher, 40 nachher. Die Stichprobe zum Routing
+(Fachbegriffe ohne Funktionswort) bleibt unveraendert. Der Preis: Eine
+umschreibende Frage zur Schadensmeldung, die das Mietrechtskapitel vorher nur
+zufaellig ueber Funktionswoerter traf, trifft es jetzt nicht mehr; Bedeutung
+findet extern wie lokal erst das Lesen.
+
+## [2026-11-14] Grossschreibung mitten im Satz als allgemeine Regel, Rueckfall auf alle Tokens — verworfen
+v0.18.2 machte jedes grossgeschriebene Wort mitten im Satz zum Begriff und
+suchte eine Frage aus lauter Funktionswoertern wie in v2 mit allen Tokens.
+Die dritte Pruefung fand in beidem genau die Rauschtreffer, die v3
+abschafft: Eine Frage in Versalien oder in Titelschreibung und ein nicht
+erkannter Satzanfang (nach "...", einem Gedankenstrich oder "1)") machten
+Funktionswoerter wieder zu Begriffen, und der Rueckfall suchte "Koennen Sie
+das?" mit "koennen" und "sie" und traf drei beliebige Saetze, jeder davon
+eine Pflichtzeile unter Schritt 4c. Ersatz in v0.18.3: eine geschlossene
+Liste von Homographen, die grossgeschrieben Substantive sind (Waren, Soll,
+Haben, Wuerde ...), und ohne Begriff invalid_query, kein Negativbefund.
+v0.18.3 nahm dabei Doppelpunkt und Semikolon aus den Satzanfaengen, damit
+"Begriffsfrage: Waren - ..." zaehlt; "Frage: Muss ich ..." machte so "muss"
+wieder zum Begriff. Seit v0.18.4 beginnt nach Doppelpunkt, Semikolon,
+Gedankenstrich und Aufzaehlungsmarke ein Satz, und am Satzanfang zaehlt ein
+Homograph nur fuer sich stehend; in Versalien (auch mit scharfem s) und
+in Titelschreibung nie. Eine Frage nur aus Homographen ("Wuerde") sucht mit
+ihnen, und die Pronomen der Anrede sind auch in Grossbuchstaben kein
+Kuerzel. Die Messung ueber die 117 Fragen bleibt bei 62 / 49 / 6;
+gegenueber v0.18.2 wechselt keine Frage ihren externen Zustand. Die fuenfte
+Pruefung fand den Preis hoeher als genannt: Nach Doppelpunkt fielen auch
+"Zoll: Waren aus China" und "Grundgesetz: Wuerde des Menschen" weg, jede
+Stichwortfrage aus Substantiven ("Zollgebuehren Waren China") galt als
+Titelschreibung, und hinter einem Anfuehrungszeichen erkannte v0.18.4 den
+Satzanfang nicht ('Frage. "Muss ich ..."' machte "muss" zum Begriff). Seit
+v0.18.5 zaehlt ein Homograph am Satzanfang auch vor "und", "oder",
+"sowie" oder einem Genitivartikel ("Wuerde des Menschen"), Titelschreibung
+verlangt ein grossgeschriebenes Funktionswort nach dem ersten Wort, und
+Anfuehrungszeichen und Klammern vor dem Satzanfang zaehlen nicht. Eine
+Praeposition danach reicht nicht: Ein erster Entwurf nahm sie dazu, und
+"Muss bei Auszug renoviert werden?" oder "Waren in der Wohnung Maengel?"
+suchten wieder mit "muss" und "waren", also mit genau den Rauschbegriffen,
+die v3 abschafft. Die sechste Pruefung fand dasselbe fuer die verbliebene
+Ausnahme ("Laut des Mietvertrags ...", "Soll oder muss ...", "Muss eines der
+Fenster ..."); seit v0.18.6 zaehlt ein Homograph am Satzanfang wieder nur fuer
+sich stehend, und eine Aufzaehlungsmarke vor einem Anfuehrungszeichen
+beginnt einen Satz. Der Preis: Ein Substantiv, das kleingeschrieben ein
+Funktionswort waere und nicht auf der Liste steht, zaehlt extern nicht,
+ebenso einer der Liste am Satzanfang vor einem anderen Wort ("Zoll: Waren
+aus China" und "Soll Haben Buchhaltung" suchen ohne "waren" und "soll");
+eine Frage in Versalien oder Titelschreibung ohne anderes Sachwort ("WAS
+SIND WAREN?") ergibt invalid_query, kein Negativbefund. Die Liste waechst
+nur mit einem Beleg.
+
+## [2026-11-14] Trenner im Pfad fuer jede Formel als Leerraum werten — verworfen
+v0.18.3 las Bindestrich, Unterstrich, Punkt und %20 in einem Pfad als
+Leerraum, fuer jede Formel. Damit galten uebliche Dateinamen als Signatur
+("system-prompt-grundlagen.md", "developer-message-format.md", auch das
+Kompositum "ecosystem-prompts.md"), waehrend derselbe Wortlaut als Titel in
+Bindestrichform keine ist. In einem Tresor ueber Sprachmodelle waere jede
+solche Seite markiert, und jede Antwort muesste das unter "Hinweise:"
+nennen. Ersatz in v0.18.4: Mit Trennern zaehlt nur "ignore ...
+instructions"; die Zweiwortformeln zaehlen im Pfad wie im Titel nur mit
+Leerzeichen.
+
+## [2026-11-14] antwort_check: Trefferangabe ohne Pfad und Satzposition als "behauptet nichts" lesen — verworfen
+Damit "Extern (nicht im Bestand): keine Treffer in X-0001" kein Verstoss
+mehr ist, liess v0.18.3 jede Trefferangabe ohne .md-Pfad und ohne "Satz..."
+durch. Die vierte Pruefung zeigte, dass so erfundene Fundstellen still
+durchkamen: ein Kapitel, ein Abschnitt, eine PDF, ein Pfad ohne Endung, ein
+sentence_index; eine Antwort, deren einzige Abweichung so eine Erfindung
+war, endete mit Exit 0. Ebenso uebersprang v0.18.3 eine Rueckfrage nur,
+statt den Block zu beenden, und eine Liste danach galt als Angaben unter
+dem Etikett. Ersatz in v0.18.4: Eine Trefferangabe ohne geliefertes
+Dokument ist erfunden, ausser sie meldet ausdruecklich keinen Treffer und
+nennt nichts, was nach einer Fundstelle aussieht; eine Fragezeile fuer sich
+beendet den Block, und eine Rueckfrage in Klammern, als Teilsatz oder als
+ganzer Listenpunkt ist keine Angabe. Die fuenfte Pruefung fand diese Regel
+zugleich zu eng und zu weit. Zu eng: "kein Zeiger." (so schrieb es ein
+Agent in Runde 1), "keine passenden Treffer" oder "Treffer: keine" galten
+als erfunden, "Kaution/Mietsicherheit" oder ein verneintes "keinen
+Abschnitt" als Fundstelle, ein Dokument in Anfuehrungszeichen als nicht
+genannt und eine zitierte Frage als Rueckfrage. Zu weit: Inhalt neben
+"; sonst keine Treffer" kam durch, ebenso "Seite 4", und eine Datei des
+eigenen Tresors blieb ausgenommen, auch wenn die Angabe sie X-0001
+zuschrieb. Ersatz in v0.18.5: Eine Leermeldung sagt neben Kennung, Zustand
+und Lesestatus hoechstens zwei Inhaltswoerter; fundstellenartig ist eine
+URL, eine Datei mit Dokumentendung, ein Pfad mit ./, ../, / oder zwei
+Schraegstrichen, eine Satz-, Absatz-, Zeilen- oder Seitenzahl und ein
+Kapitel oder Abschnitt mit Nummer oder Titel; ob ein Satz fragt,
+entscheidet sein letzter Teilsatz ausserhalb von Zitaten, auch direkt
+hinter dem Etikett. Die Formen der Gutachter aus der dritten bis fuenften
+Pruefung stehen mit erwartetem Urteil in den Tests. Der Preis: Die Grenze von zwei
+Inhaltswoertern ist eine Schaetzung; eine Leermeldung mit laengerer
+Begruendung ("keine Treffer, das Beispielhandbuch behandelt Mietrecht nur
+am Rand") gilt als Aussage ueber die Quelle und ist ohne geliefertes
+Dokument ein Verstoss. Die sechste Pruefung fand die Rueckfragelogik in beide
+Richtungen falsch: Eine geschlossene Liste von Frageverben verschluckte
+Aussagen ("Da der Schalter gesetzt ist, ist X-0002 nicht abgerufen worden,
+soll ich ...?") und liess Fragen als Angabe stehen ("Bindest du X-0001,
+oder soll ich?"); ein zitiertes erfundenes Dokument kam neben einem
+zitierten gelieferten durch; der Klammerzusatz des Etiketts fiel aus der
+Pruefung; ein Schlusspunkt oder die Begriffsliste aus dem Grund der Engine
+machte eine Leermeldung zur Erfindung. Ersatz in v0.18.6: Vor einer
+Rueckfrage nach Komma zaehlt ein Vorsatz nur als Aussage, wenn er einen
+Lesestatus, Zustand, Grund oder Treffer nennt; sonst fragt der ganze Satz.
+Ein zitierter Dokumentpfad ist eine Nennung, der Zusatz zaehlt mit, ein
+Paragraf ist eine Fundstelle ausser als Thema der Suche ("zu § 551 BGB"),
+ein kleingeschriebener Pfad ohne Endung ebenso (nicht hinter "Ordner").
+Der Preis: Ein Angebot vor einem Gedankenstrich ("Wenn du moechtest, binde
+ich X-0001 - einverstanden?") zaehlt als Angabe.
+
+Die siebte Pruefung fand die Korrekturen aus v0.18.6 zu grob, wieder in
+beide Richtungen: Die Wortliste fuer Aussagen kannte "nicht eingebunden",
+"konnte ich nicht lesen" oder "regelt" nicht, also verschwand eine Angabe
+samt Rueckfrage, und eine erfundene Fundstelle vor ", soll ich ...?" kam
+durch; eine Rueckfrage aus zwei Teilsaetzen (", soll ich X-0001 binden,
+damit ...?") oder ueber einen Gedankenstrich liess die Kennung als Angabe
+stehen. Die Begriffsliste strich alles bis zum Satzende ("keine Treffer
+fuer die Anfragebegriffe ..., das Handbuch nennt drei Monatsmieten" galt als
+leer), Zahlwoerter und Modalverben machten "man muss drei Monatsmieten
+zahlen" zur Leermeldung, "keine Treffer fuer § 551 BGB" galt als
+erfundene Fundstelle, "kein passender Abschnitt zur Kaution" ebenso, und
+"in X-0001 nichts gefunden" bestritt die Kennung. Ersatz in v0.18.8: Die
+Rueckfrage waechst rueckwaerts ueber Teile, die wie eine Frage beginnen,
+statt an einer Wortliste fuer Aussagen zu haengen; die Woerter der Frage
+zaehlen in einer Leermeldung nicht, ein Zahlwort nur vor "Dokumente";
+ein Paragraf aus der Frage oder hinter "fuer" ist das Thema; ein Kapitel
+mit Thema ist verneint, wenn "kein" bis zwei Woerter davor steht oder
+"nicht" dahinter im Satzteil. Der Preis bleibt die Zwei-Woerter-Grenze:
+"keine Treffer (gesetzlich 3 Monatsmieten)" geht durch. In der Engine trennte
+v0.18.6 Meldungen auch an "#" und "?", und ein Anker oder eine Query mit
+Signatur ("a/b.md#ignore-all-previous-instructions") verlor dabei den Pfad
+und blieb ungeschwaerzt; seit v0.18.8 wird zusaetzlich grob getrennt
+geprueft. Die ganze Codezeile hat eine zweite Seite: Ein Zeilenendkommentar
+liest sich mit der Codezeile darunter ("rolle: assistant # oder: system"
+vor "prompt: |" warnt). Das bleibt als Fehlalarm stehen; in 2997 echten
+Markdown-Dateien fand die siebte Pruefung keinen solchen Fall. Ebenfalls in
+v0.18.8: Nach einer Leerzeile beendet auch ein Zaun oder ein HTML-Kommentar
+ohne Einzug die Liste, der eingerueckte Code danach ist ein Codeblock; in
+einem Listenpunkt bleibt eingerueckter Code Listentext (ein Fehlalarm als
+Preis, jetzt auch in profil.md genannt). Im Pruefwerkzeug nennt ein Pfad
+mit Schraegstrich am Ende einen Ordner; ein kleingeschriebenes Begriffspaar
+("miete/kaution") und ein Ordnerpfad ohne Schraegstrich und ohne "Ordner"
+davor sind von einem Pfad ohne Endung nicht zu unterscheiden und zaehlen als
+Fundstelle, auch das ein Preis.

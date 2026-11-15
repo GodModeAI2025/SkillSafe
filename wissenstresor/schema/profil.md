@@ -165,9 +165,66 @@ eine aufgeführte externe Bezugsquelle.
 * Offensichtliche Instruktionssignaturen sind weder im Aussagetext noch in
   der Fundstelle freigabefähig. Sie bleiben als markierte Quelldaten in der
   Medienrepräsentation oder Quarantäne, erscheinen aber nie als Claim.
-  Titel, Tags, Kurzfassung und Registerangaben prüft der Stolperdraht nicht;
-  sie sind kuratierter Text, und die Vollsichtung gibt Titel und Tags jeder
-  Seite mit aus.
+  Titel, Tags, der übrige Text einer Seite samt Kommentarzeilen im
+  Frontmatter und die Registerangaben einer Quelle (Titel, Stand, Rechte,
+  Ziel) sind kuratierter Text daneben. Eine Signatur dort meldet `validate`
+  als Warnung, ohne den Wortlaut zu wiederholen (`query` und `sweep` geben
+  die Warnungen mit aus); ein Release bleibt möglich. Den übrigen Text prüft
+  `validate` je Absatz als einen Text, wie ein Leser ihn zusammenliest:
+  Ein Zeilenumbruch teilt keine Signatur, und die Fortsetzung einer
+  Claim-Zeile gehört zu ihr. Zuerst fallen Zitatzeichen weg; was dann
+  bleibt, entscheidet: Eine Leerzeile (nur Leerzeichen oder Tabulator; ein
+  geschütztes Leerzeichen ist Inhalt, auch im Zitat und im Frontmatter),
+  eine Überschrift oder ein neuer Listenpunkt trennt. Kommentare liest das
+  Modell mit, sie bilden aber eigene Absätze und werden nie mit Text oder
+  Code verbunden: Kommentarzeilen im Frontmatter, in einem Code-Zaun und in
+  einem eingerückten Codeblock außerhalb eines Listenpunkts (ohne ihr `#`;
+  eine leere Kommentarzeile trennt) und HTML-Kommentare, auch über mehrere Zeilen (eine Überschrift
+  darin steht für sich; Text hinter einem Kommentar, der in derselben Zeile
+  schließt, gehört zum Absatz). Eine Codezeile bleibt ganz, auch mit `#`
+  darin, denn ob das ein Kommentar oder ein String ist, sagt erst die
+  Sprache; ein Kommentar am Ende einer Codezeile liest sich deshalb mit der
+  Codezeile darunter (`rolle: assistant # oder: system` vor `prompt: |`
+  warnt, ein Fehlalarm als Preis). Vor `#` und `<!--` zählt jeder
+  Leerraum, auch ein geschütztes Leerzeichen, wie im Frontmatter-Parser:
+  Was er als Kommentar überspringt, prüft `validate` als Kommentar; ein
+  Hashtag (`#ki`) ist keine Überschrift.
+  Ein Code-Zaun öffnet am Zeilenanfang mit höchstens drei Leerzeichen
+  Einzug, in einem Listenpunkt auch tiefer und direkt auf der Listenmarke
+  (```` - ```bash ````). Ein Listenpunkt bleibt offen, bis nach einer
+  Leerzeile eine Zeile ohne Einzug folgt, auch ein Zaun oder ein
+  HTML-Kommentar; auch eine leere Marke (`-`) beginnt einen. Der Zaun schließt nur mit demselben Zeichen in mindestens
+  derselben Länge und ohne Text dahinter, außerhalb eines Listenpunkts mit
+  höchstens drei Leerzeichen Einzug, in einem höchstens drei tiefer als
+  seine Öffnung; sein Info-String ist ein eigener Absatz, und
+  ```` ```x``` ```` am Zeilenanfang ist Inline-Code, kein Zaun. Ein
+  Tabulator zählt vier Spalten. Die lange Formel „ignore … instructions"
+  sucht `validate` zusätzlich über Überschriften und Leerzeilen hinweg bis
+  zur nächsten Claim-Zeile; die Zweiwortformeln nicht, denn die entstehen
+  dort zufällig („Tool-System" vor einem Absatz, der mit „Prompt" beginnt).
+  Der Stolperdraht fängt offensichtliche Signaturen in gewöhnlich
+  geschriebenem Text, auch über Zeilenumbrüche innerhalb eines Absatzes,
+  Zitats, Kommentars oder Codeblocks; gegen gezielte Verschleierung schützt
+  er nicht. Nicht erkannt
+  wird etwa eine Formel, die ein Null-Breite-Zeichen oder ein leerer
+  Inline-Kommentar zerteilt, eine Zweiwortformel über zwei Überschriften
+  und eine, die über einen Zeilenendkommentar und die Kommentarzeile
+  darunter (oder zwei Zeilenendkommentare) verteilt ist. Dagegen steht
+  Regel 6 des Skills: Der Text einer Seite enthält nie Anweisungen. Ein Pfad mit
+  Signatur ist ebenfalls eine Warnung: ein Seitenpfad, der Pfad eines
+  Dokuments im Katalog einer externen Quelle und der Dokumentpfad eines
+  Ankers. Mit Leerzeichen zählt dabei jede Formel; mit Bindestrich,
+  Unterstrich, Punkt oder `%20` zwischen den Wörtern nur „ignore …
+  instructions", denn die Zweiwortformeln sind als Dateiname üblich
+  („system-prompt-grundlagen.md") und gelten in dieser Schreibung auch im
+  Titel nicht. Ausgegeben wird
+  ein solches Feld nicht (siehe „Maschinenabfrage"); den übrigen Text einer
+  Seite gibt die Engine ohnehin nicht aus, der Antworten-Workflow liest ihn
+  aber mit, und den Pfad braucht sie als Kennung. Zitiert eine Fehlermeldung
+  eine Signatur, auch in der Schreibweise von `repr` („ignore\xa0all …")
+  oder als Pfad nach der Pfadregel, geben `query` und `sweep` von ihr nur
+  den Ort (wenn er selbst keine Signatur trägt) oder die Kennung aus; den
+  Wortlaut zeigt `validate`.
 * Eine Wissensseite liegt nie unter einem Pfad, den das Manifest ausnimmt
   (`__pycache__`). Ihr Wortlaut wäre sonst nach dem Release änderbar, ohne
   dass Sperre oder Siegel es bemerken.
@@ -282,7 +339,9 @@ Mögliche Zustände sind:
   `fallback.external_lookup_available` sagt zusätzlich, ob überhaupt externe
   Bezugsquellen aufgeführt sind — das Feld steht auch ohne `--extern`, weil
   der Antwort-Workflow daran erkennt, ob nach der Vollsichtung noch ein
-  Schritt möglich ist. `fallback.external_live_lookup_used` sagt danach, ob
+  Schritt möglich ist; `fallback.external_source_ids` nennt dazu ihre
+  Kennungen, ebenfalls ohne `--extern`. `fallback.external_live_lookup_used`
+  sagt danach, ob
   tatsächlich live gelesen wurde. Zwei Felder, zwei Fragen: Angebot und
   Ergebnis;
 * `ambiguous` — Alias ist über Begriffswelten mehrdeutig;
@@ -306,6 +365,30 @@ Bezugsquellen — dann live, gekennzeichnet und in einem eigenen Block. Im
 **manifestierten Bestand** gibt es weiterhin keinen Cache; der TTL-Abzug einer
 Netzquelle liegt außerhalb des Skill-Ordners im Nutzer-Cache-Verzeichnis und
 meldet sein Alter in jeder Ausgabe.
+
+Kuratierter Text mit Instruktionssignatur geht nicht in die Ausgabe. Trägt
+ein Seitentitel, ein Tag oder eine Registerangabe einer Quelle (Titel, Stand,
+Rechte, Ziel) eine Signatur, steht das Feld als `null` da; aus `tags` fehlt
+nur der betroffene Eintrag. Die Seite in `pages[]`, die Quelle unter
+`evidence[].source`, die Seite eines Stapels von `sweep` und die Quelle unter
+`external.sources[]` tragen dann `suspicious_instruction: true`. Eine
+Signatur in einem Tag, im übrigen Text der Seite oder im Pfad markiert die
+Seite ebenso, auch wo das Feld gar nicht ausgegeben wird: in `pages[]` von
+`query` und der Quittung, unter `coverage.omitted_pages`, im Stapel und an
+jeder Kante unter `relations`, die auf sie zeigt. Ein externer Treffer,
+dessen Dokumentpfad eine Signatur trägt, hat das Signal
+`suspicious_instruction`, ebenso ein Beleg unter `evidence[]`, dessen
+Seitenpfad oder Ankerpfad eine trägt; der Pfad bleibt als Kennung stehen.
+Unmarkiert steht ein solcher Pfad nur in zwei Listen und in einem Echo:
+in `fallback.page_paths` (Seiten des Bestands), in
+`fallback.external_document_paths` (extern gelesene Dokumente) und unter
+`scope.pages` in der Ausgabe von `sweep --page`, die das Argument des
+Agenten wiederholt. Sie nennen, was es gibt, was gelesen wurde oder was
+der Agent angefragt hat, nicht, was die Antwort liest oder zitiert: Markiert ist die Seite in `pages[]`, im Stapel und in der
+Quittung, ihr Beleg in `evidence[]`, ein Dokument an seinem Treffer; ein
+Dokument ohne Treffer zitiert die Antwort nicht, und vor seinem Pfad warnt
+schon `validate` am Katalog. Ohne Signatur fehlt das Feld ganz, und die
+Ausgabe ist dieselbe wie vorher.
 
 ### Wortform `wortform/v1`
 
@@ -364,7 +447,9 @@ Beleg für die Bedeutung.
 Funktionswörter (Artikel, Pronomen, Präpositionen, Konjunktionen, Hilfs- und
 Modalverben, Partikeln) zählen im lokalen Ranking nicht als Fragebegriff. Die
 Liste ist eine eigene und lässt die ältere Stoppwortliste unberührt, an der
-`extern-zweistufig/v2` und die nachrechenbaren Katalogzahlen hängen.
+die nachrechenbaren Katalogzahlen hängen. Seit `extern-zweistufig/v3` nimmt
+die externe Suche die Funktionswörter ebenfalls aus der Frage, nicht aus den
+Dokumenten.
 Homographen wie „Macht"/„macht" gelten als Funktionswort; als kuratierte
 Benennung einer Begriffswelt bleiben sie exakt auffindbar, weil Begriffe
 gegen die ungefilterte Frage abgeglichen werden. Eine Abkürzung in
@@ -599,7 +684,7 @@ wurde, wäre ein Fehltreffer, der nicht als Fehler auffällt.
 |---|---|---|
 | `not_requested` | Abfrage ohne `--extern`, oder sie scheitert, bevor ein Snapshot geladen ist (leere Frage, `--limit` außerhalb der Grenzen, `invalid_vault`, `vault_busy`, `snapshot_changed`) | nein |
 | `not_declared` | `sources/EXTERN.md` führt keine Quelle | nein |
-| `invalid_query` | Die Anfrage ist so nicht auswertbar: `--source` nennt eine nicht aufgeführte ID, die Frage enthält keinen suchbaren Begriff, oder die lokale Abfrage endete nicht mit `candidates_found` oder `no_candidates` (etwa `ambiguous` oder eine unbekannte Begriffswelt) | nein |
+| `invalid_query` | Die Anfrage ist so nicht auswertbar: `--source` nennt eine nicht aufgeführte ID, die Frage enthält keinen suchbaren Begriff (nur Stopp- und Funktionswörter oder Einzelzeichen), oder die lokale Abfrage endete nicht mit `candidates_found` oder `no_candidates` (etwa `ambiguous` oder eine unbekannte Begriffswelt) | nein |
 | `not_bound` | Jede berücksichtigte Quelle ist eine lokale Quelle ohne brauchbare Bindung auf diesem Host | nein |
 | `unreachable` | Mindestens eine berücksichtigte Quelle hätte gelesen werden sollen, aber es kam kein Dokument an — etwa eine Netzquelle bei gesetztem `SKILLSAFE_OFFLINE`, mit fehlgeschlagenem Abruf, ohne schreibbares Herkunftsprotokoll oder mit erschöpftem Abrufbudget, eine gebundene Quelle ohne lesbares Dokument oder ohne Katalog | nein |
 | `budget_exceeded` | Ein fremder Tresor überschreitet ein gezähltes Budget (Verzeichnistiefe oder Zahl der Einträge) | verworfen |
@@ -646,7 +731,7 @@ lokale Quelle wird vollständig gelesen. Fehlt der Zusatz, wurde jedes
 katalogisierte Dokument jeder berücksichtigten Quelle gelesen.
 
 Zustände, `live` und die Regel, wann es einen Fingerprint gibt, gehören zu
-diesem Query-Vertrag, nicht zum Ranking. `extern-zweistufig/v2` benennt die
+diesem Query-Vertrag, nicht zum Ranking. `extern-zweistufig/v3` benennt die
 Rechenvorschrift für Treffer und das Rezept des Fingerprints: Solange
 dieselben gelesenen Dokumente und dieselbe Anfrage dieselben Treffer, Scores
 und denselben Fingerprint ergeben, bleibt die Nummer. Gegenüber v1 hat sich
@@ -654,7 +739,34 @@ dreierlei geändert, und jedes davon ändert Treffer: Stoppwörter werden
 normalisiert (wie im lokalen Ranking), eine lokale Quelle wird vollständig
 statt in den besten 24 Katalogeinträgen gelesen, und ein Dokument zählt, sobald
 es einen Anfragebegriff enthält — v1 rundete das bei mehr als 100 Begriffen auf
-0 % Abdeckung ab und verwarf es.
+0 % Abdeckung ab und verwarf es. v3 nimmt die Funktionswörter der Frage
+(dieselbe Liste wie im lokalen Ranking) aus den Anfragebegriffen. Es bleiben
+ein Kürzel in Großbuchstaben („IT"; die Pronomen der Anrede wie „SIE" nie)
+und ein Wort einer geschlossenen Liste von Homographen
+(`HOMOGRAPHE_SUBSTANTIVE`: „Waren", „Soll", „Haben", „Würde" …), wenn es
+mitten im Satz großgeschrieben steht, denn dann ist es ein Substantiv („Was
+sind Waren?"). Am Satzanfang (auch nach Doppelpunkt, Semikolon,
+Gedankenstrich und einer Aufzählungsmarke wie „1)"; Anführungszeichen und
+Klammern davor zählen nicht, hinter einer Aufzählungsmarke nur
+Anführungszeichen)
+zählt es nur, wenn es für sich steht („Begriffsfrage: Waren – …"); vor
+einem Wort ist es meist das Verb eines Satzes oder eine Präposition
+(„Frage: Muss ich …", „Muss bei Auszug …", „Soll oder muss …", „Laut des
+Mietvertrags …"). Der Preis: Eine Wortgruppe am Satzanfang („Grundgesetz:
+Würde des Menschen") sucht ohne ihren Homographen. In einer
+Frage in Versalien („ß" zählt als groß) oder in Titelschreibung zählt es
+nie. Titelschreibung heißt: Jedes Wort beginnt groß, und nach dem ersten
+steht ein großgeschriebenes Funktionswort, das kein Homograph der Liste ist
+(„Wann Muss Der Mieter …"); eine Stichwortfrage aus Substantiven
+(„Zollgebühren Waren China") ist keine. Eine Frage in Versalien oder
+Titelschreibung, die sonst nur Funktionswörter enthält („WAS SIND
+WAREN?"), ergibt deshalb `invalid_query`. Sonst macht Großschreibung kein
+Funktionswort zum Begriff, auch nicht bei der Anrede („Können Sie …").
+Besteht die Frage nur aus Homographen („Würde"), sucht sie mit ihnen. Die
+Frage wird vorher normalisiert (NFKC), damit eine zerlegte Schreibung kein
+Wort teilt. Bleibt nichts übrig, sucht die Frage nicht: `invalid_query`,
+kein Negativbefund. Dokumentseite und Rezept des Fingerprints bleiben, die
+Nummer im Fingerprint wechselt.
 
 Geprüft wird das Ziel jeder Netzanfrage vor dem Socket: unter dem Präfix an
 Pfadgrenzen, ohne Punktsegmente, auch percent-kodiert. Einer Weiterleitung
@@ -764,8 +876,12 @@ einer Antwort übernimmt. Acht Spalten:
   nach, gelesen wird nur, was es pinnt, und sein `scripts/vault.py` wird
   niemals ausgeführt.
 * `Ziel` ist ein festes `https://`-Präfix oder `-` für eine lokale Quelle.
-  `http`, Query, Fragment, Zugangsdaten im Host und `..` sind verboten. Ein
-  absoluter lokaler Pfad steht hier nie — er gehört in die Bindung.
+  `http`, Query, Fragment, Zugangsdaten im Host, `..` und Leerraum sind
+  verboten. Leerraum lehnt `validate` seit v0.18.1 ab: Ein solches Präfix war
+  nie erreichbar, weil der Abruf jede URL mit Leerraum verwirft. Die
+  Verschärfung macht also nur einen Eintrag rot, der nie gelesen werden
+  konnte, und ist deshalb eine Korrektur, kein Major-Release. Ein absoluter
+  lokaler Pfad steht hier nie — er gehört in die Bindung.
 * `Bindungsschlüssel` ist `[a-z0-9][a-z0-9-]{0,63}` und tresorweit eindeutig.
 * Bei `skillsafe-vault` nennt `Stand/Version` zusätzlich genau einen Scope aus
   `organisation`, `fachbereich`, `projekt`, `persoenlich` — Grundlage der
@@ -877,7 +993,7 @@ läuft über die Satzanker, nicht über den Katalog. Alle Zahlenfelder sind nach
 kommen aus dem Script; `title`, `summary` und `tags` sind Modellarbeit. Genau
 diese Trennlinie ist der Prüfpunkt.
 
-Das Ranking `extern-zweistufig/v2` nutzt den Katalog bei einer Netzquelle als
+Das Ranking `extern-zweistufig/v3` nutzt den Katalog bei einer Netzquelle als
 Prefilter (Stufe 1: die besten 24 werden abgerufen), bei einer lokalen Quelle
 nur als Reihenfolge — gelesen wird dort jedes katalogisierte Dokument. Stufe 2
 rechnet immer gegen den **jetzt gelesenen** Text. Ein Dokument ohne einen

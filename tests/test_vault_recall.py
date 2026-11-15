@@ -2219,15 +2219,15 @@ class RecallGateTests(unittest.TestCase):
                                     for m in gemeldet), gemeldet)
         # Richtig, nur anders geschrieben: kein Fehler.
         legitim = {
-            "Ziffern": (text.replace("Zwanzig frische Agenten",
-                                     "20 frische Agenten"), html),
+            "Ziffern": (text.replace("Vierundzwanzig frische Agenten",
+                                     "24 frische Agenten"), html),
             "typografisches Zeichen": (text.replace(
-                'als „Nicht im Bestand", 1 mit',
-                "als „Nicht im Bestand“, 1 mit"), html),
+                'nicht gefunden", 2 mit',
+                "nicht gefunden“, 2 mit"), html),
             "Ziffern in den Runden": (text, html.replace(
-                "in allen vier Runden", "in allen 4 Runden")),
+                "in allen fünf Runden", "in allen 5 Runden")),
             "Ordnungszahl als Ziffer": (text, html.replace(
-                "In der zweiten bis vierten Runde", "In der 2. bis 4. Runde")),
+                "In der zweiten bis fünften Runde", "In der 2. bis 5. Runde")),
             "je mit Ziffern": (text.replace(
                 "je sechs Sichtungen über drei", "je 6 Sichtungen über 3"),
                 html),
@@ -2246,12 +2246,13 @@ class RecallGateTests(unittest.TestCase):
             # ohne Trennzeile Prosa, keine Tabellenzeile.
             "Strich in Prosa nach der Tabelle": (
                 text + "\n\nEnde zu Ende, Runde 3 | falsch | 1\n", html),
-            "eine statt 1": (text.replace('„Nicht im Bestand", 1 mit',
-                                          '„Nicht im Bestand", eine mit'),
-                             html.replace('„Nicht im Bestand", 1 mit',
-                                          '„Nicht im Bestand", eine mit')),
+            "zwei statt 2": (text.replace('nicht gefunden", 2 mit',
+                                          'nicht gefunden", zwei mit'),
+                             html.replace('nicht gefunden", 2 mit',
+                                          'nicht gefunden", zwei mit')),
             "Entity im Satz der Landingpage": (text, html.replace(
-                "Zwanzig frische Agenten", "Zwanzig&nbsp;frische Agenten")),
+                "Vierundzwanzig frische Agenten",
+                "Vierundzwanzig&nbsp;frische Agenten")),
             "alter Satz im Kommentar": (text + "\n<!-- Sechzehn frische Agenten "
                                         "bekamen je eine Frage. -->\n", html),
         }
@@ -2272,9 +2273,10 @@ class RecallGateTests(unittest.TestCase):
                 "fett in der Summe": "\nAlle **40** Fragen, deren Claim das "
                                      "Ranking verfehlte, wurden über die "
                                      "Vollsichtung gefunden.\n",
-                "einfache Zeichen": "\nAlle 22 Negativfragen wurden korrekt "
-                                    "abgelehnt: 22 mit gültiger Quittung als "
-                                    "‚Nicht im Bestand‘, 0 mit dem Befund des "
+                "einfache Zeichen": "\nAlle 28 Negativfragen wurden korrekt "
+                                    "abgelehnt: 28 mit gültiger Quittung als "
+                                    "‚Nicht im Bestand‘ oder ‚in diesem Umfang "
+                                    "nicht gefunden‘, 0 mit dem Befund des "
                                     "Scripts.\n"}.items():
             with self.subTest(zweiter_satz=name):
                 gemeldet = meldungen(text + zusatz, html)
@@ -2283,9 +2285,9 @@ class RecallGateTests(unittest.TestCase):
         # Eine Runde ohne Protokoll, auch mit Zusatz, und eine zweite
         # Messzeile mit Zusatz.
         gemeldet = meldungen(text.replace(
-            dritte_md, dritte_md + "\n| Ende zu Ende, Runde 5 (Nachtrag) | "
+            dritte_md, dritte_md + "\n| Ende zu Ende, Runde 6 (Nachtrag) | "
             "v0.16.0 | 12 | 12 | 12 | 0 | 0 | 0 | 0 | **0** |"), html)
-        self.assertTrue(any("Runde 5 steht in der Tabelle" in m
+        self.assertTrue(any("Runde 6 steht in der Tabelle" in m
                             for m in gemeldet), gemeldet)
         zeile_kontrolle = next(
             zeile for zeile in text.splitlines()
@@ -2297,10 +2299,10 @@ class RecallGateTests(unittest.TestCase):
         self.assertTrue(any("'kontrolle' steht 2-mal da" in m
                             for m in gemeldet), gemeldet)
         # Die dritte Zahl der Negativsumme auf der Landingpage.
-        gemeldet = meldungen(text, html.replace("1 mit dem Befund",
+        gemeldet = meldungen(text, html.replace("2 mit dem Befund",
                                                 "5 mit dem Befund"))
         self.assertEqual(len(gemeldet), 1, gemeldet)
-        self.assertIn("(21, 22, 5)", gemeldet[0])
+        self.assertIn("(26, 28, 5)", gemeldet[0])
         # Kein Traceback: eine Hochzahl in einer Zelle, 100 Agenten.
         hoch = meldungen(text.replace(
             "| Ende zu Ende, Runde 4 | v0.15.0 | 12 | 7 | 7 | 4 | 4 | 5 | 5 | **0** |",
@@ -2311,7 +2313,7 @@ class RecallGateTests(unittest.TestCase):
         viele = Stand(stand)
         viele["e2e_agenten_1"] = 90
         gemeldet = meldungen(text, html, viele)
-        self.assertTrue(any("die Protokolle nennen 102" in m
+        self.assertTrue(any("die Protokolle nennen 106" in m
                             for m in gemeldet), gemeldet)
 
     def test_doc_check_reads_markdown_context_and_binds_every_number(self):
@@ -2394,8 +2396,8 @@ class RecallGateTests(unittest.TestCase):
                 ("frische", falsch.replace("vier Agenten",
                                            "vier frische Agenten"), "2-mal"),
                 ("Nachtrag ohne Protokoll",
-                 "| 5 (Nachtrag), vier Agenten | v0.16.0 | 12 | 7 | 7 | 4 | 4 "
-                 "| 5 | 5 | 0 |", "Runde 5 steht in der Tabelle"),
+                 "| 6 (Nachtrag), vier Agenten | v0.16.0 | 12 | 7 | 7 | 4 | 4 "
+                 "| 5 | 5 | 0 |", "Runde 6 steht in der Tabelle"),
                 ("zweistellig ohne Protokoll",
                  "| 10, vier Agenten | v0.17.0 | 12 | 7 | 7 | 4 | 4 | 5 | 5 "
                  "| 0 |", "Runde 10 steht in der Tabelle")):
@@ -2406,9 +2408,9 @@ class RecallGateTests(unittest.TestCase):
 
         # Unsichtbare Zeichen, Referenzlinks und Fußnoten im Fließtext.
         landing = texte["index.html"]
-        self.assertTrue(any("frische Agenten, die Protokolle nennen 20" in m
+        self.assertTrue(any("frische Agenten, die Protokolle nennen 24" in m
                             for m in meldungen(index_html=landing.replace(
-                                "Zwanzig frische Agenten bekamen",
+                                "Vierundzwanzig frische Agenten bekamen",
                                 "Ein&shy;und&shy;zwanzig frische Agenten "
                                 "bekamen"))))
         for name, ersatz in (
@@ -2419,14 +2421,14 @@ class RecallGateTests(unittest.TestCase):
             with self.subTest(fliesstext=name):
                 self.assertTrue(any("frische Agenten, die Protokolle nennen"
                                     in m for m in meldungen(
-                    KONZEPT_md=konzept.replace("Lauf. Zwanzig frische Agenten",
-                                               ersatz))), name)
+                    KONZEPT_md=konzept.replace(
+                        "Lauf. Vierundzwanzig frische Agenten", ersatz))), name)
         # "keine Verstöße" ist null, ein harter Umbruch trennt nichts.
         self.assertEqual(meldungen(KONZEPT_md=konzept.replace(
-            "68 Fragen, 0 Verstöße", "68 Fragen, keine Verstöße")), [])
+            "80 Fragen, 0 Verstöße", "80 Fragen, keine Verstöße")), [])
         self.assertEqual(meldungen(KONZEPT_md=konzept.replace(
-            "21 mit gültiger Quittung und eine Frage\nnach",
-            "21 mit gültiger Quittung und eine Frage\\\nnach")), [])
+            "zwei Fragen nach\neiner Kennung",
+            "zwei Fragen nach\\\neiner Kennung")), [])
 
         # Jede Form des Stapelsatzes in jeder Datei, die Zahlen der Grenzen,
         # die übrigen Fragen, die Agenten der ersten Runde.
@@ -2434,12 +2436,12 @@ class RecallGateTests(unittest.TestCase):
                 ("Stapel in README-Form", "KONZEPT_md", "Siegel gelten nur",
                  "Siegel gelten nur. In Runde 2 bis 4 liefen je fünf "
                  "Sichtungen über drei Stapel. Die"),
-                ("Grenzen", "KONZEPT_md", "ausdrücklich: 68 Fragen",
+                ("Grenzen", "KONZEPT_md", "ausdrücklich: 80 Fragen",
                  "ausdrücklich: 64 Fragen"),
-                ("übrige", "KONZEPT_md", "die beiden\nübrigen", "die drei\nübrigen"),
+                ("übrige", "KONZEPT_md", "die drei übrigen", "die vier übrigen"),
                 ("erste Runde", "KONZEPT_md", "Sieben von acht Agenten",
                  "Sieben von neun Agenten"),
-                ("LIESMICH", "LIESMICH_md", "68 Fragen, ein Demo-Bestand",
+                ("LIESMICH", "LIESMICH_md", "80 Fragen, ein Demo-Bestand",
                  "64 Fragen, ein Demo-Bestand")):
             with self.subTest(zahl=name):
                 quelle = texte[datei.replace("_", ".")]
@@ -2451,18 +2453,18 @@ class RecallGateTests(unittest.TestCase):
         # Eine Riesenzahl ist eine Meldung, kein MemoryError.
         for alt, neu in (("in Runde 4 zu zehn von zwölf",
                           "in Runde 999999999999 zu zehn von zwölf"),
-                         ("in Runde 2 bis 4 liefen",
+                         ("in Runde 2 bis 5 liefen",
                           "in Runde 2 bis 999999999999 liefen")):
             with self.subTest(riesig=neu):
                 gemeldet = meldungen(KONZEPT_md=konzept.replace(alt, neu))
                 self.assertEqual(len(gemeldet), 1, gemeldet)
 
         # Der Quittungssatz: jede Bedingung einzeln.
-        fuenfte = Stand(stand)
-        for schluessel in [k for k in stand if k.endswith("_4")]:
-            fuenfte[schluessel[:-1] + "5"] = stand[schluessel]
+        sechste = Stand(stand)
+        for schluessel in [k for k in stand if k.endswith("_5")]:
+            sechste[schluessel[:-1] + "6"] = stand[schluessel]
         self.assertTrue(any("In den ersten drei Runden" in m
-                            for m in meldungen(fuenfte)))
+                            for m in meldungen(sechste)))
         ungueltig = Stand(stand, e2e_quittungen_3=(12, 11))
         self.assertTrue(any("In den ersten drei Runden" in m
                             for m in meldungen(ungueltig)))
@@ -2473,17 +2475,17 @@ class RecallGateTests(unittest.TestCase):
         # Der Abnahmeblock mit verschiedenen Zahlen an jeder Stelle: Welche
         # Summe wohin gehört, zeigt sich nur, wenn sie verschieden sind.
         frei = Stand(stand, e2e_runde_1=(32, 24, 23, 19, 18, 8, 7, 1))
-        block_alt = ("Zwanzig frische Agenten, 68 Fragen, 0 Verstöße · bei 46 "
-                     "von 46 Fragen mit\nerwartetem Claim wurde er gefunden, 36 "
-                     "davon nach verfehltem Ranking · 22 von\n22 Negativfragen "
-                     "korrekt abgelehnt, 21 mit gültiger Quittung und eine "
-                     "Frage")
+        block_alt = ("Vierundzwanzig frische Agenten, 80 Fragen, 0 Verstöße · "
+                     "bei 51 von 51 Fragen\nmit erwartetem Claim wurde er "
+                     "gefunden, 38 davon nach verfehltem Ranking · 28 von\n28 "
+                     "Negativfragen korrekt abgelehnt, 26 mit gültiger Quittung "
+                     "und zwei Frage")
         self.assertEqual(konzept.count(block_alt), 1)
-        block_neu = ("Zwanzig frische Agenten, 68 Fragen, 1 Verstöße · bei 45 "
-                     "von 46 Fragen mit erwartetem Claim wurde er gefunden, 35 "
-                     "davon nach verfehltem Ranking · 21 von 22 Negativfragen "
-                     "korrekt abgelehnt, 21 mit gültiger Quittung und keine "
-                     "Frage")
+        block_neu = ("Vierundzwanzig frische Agenten, 80 Fragen, 1 Verstöße · "
+                     "bei 50 von 51 Fragen mit erwartetem Claim wurde er "
+                     "gefunden, 37 davon nach verfehltem Ranking · 27 von 28 "
+                     "Negativfragen korrekt abgelehnt, 26 mit gültiger Quittung "
+                     "und eine Frage")
         tabelle = konzept.replace(
             "| 1, acht Agenten | v0.12.1 | 32 | 24 | 24 | 19 | 19 | 8 | 8 | 0 |",
             "| 1, acht Agenten | v0.12.1 | 32 | 24 | 23 | 19 | 18 | 8 | 7 | 1 |")
@@ -2491,9 +2493,9 @@ class RecallGateTests(unittest.TestCase):
             frei, KONZEPT_md=tabelle.replace(block_alt, block_neu))
             if "KONZEPT.md" in m and "Abnahmeblock" in m]
         self.assertEqual(abnahme, [])
-        for alt, neu in (("bei 45 von 46", "bei 46 von 45"),
-                         ("und keine Frage", "und eine Frage"),
-                         ("21 von 22 Negativfragen", "22 von 21 Negativfragen")):
+        for alt, neu in (("bei 50 von 51", "bei 51 von 50"),
+                         ("und eine Frage", "und keine Frage"),
+                         ("27 von 28 Negativfragen", "28 von 27 Negativfragen")):
             with self.subTest(abnahme=neu):
                 abnahme = [m for m in meldungen(
                     frei, KONZEPT_md=tabelle.replace(
@@ -2684,58 +2686,86 @@ class RecallGateTests(unittest.TestCase):
 
                 # Die Summen im Fließtext hängen an denselben Protokollen.
                 summen = {
-                    "verfehlt": ("README.md", "Alle 36 Fragen, deren Claim",
-                                 "Alle 35 Fragen, deren Claim"),
-                    "negativ": ("README.md", "Alle 22 Negativfragen",
-                                "Alle 21 Negativfragen"),
-                    "quittiert": ("README.md", "abgelehnt: 21 mit",
-                                  "abgelehnt: 22 mit"),
-                    "Befund": ("README.md", "1 mit dem Befund",
-                               "0 mit dem Befund"),
-                    "Agenten README": ("README.md", "Zwanzig frische Agenten",
+                    "verfehlt": ("README.md", "Alle 38 Fragen, deren Claim",
+                                 "Alle 37 Fragen, deren Claim"),
+                    "negativ": ("README.md", "Alle 28 Negativfragen",
+                                "Alle 27 Negativfragen"),
+                    "quittiert": ("README.md", "abgelehnt: 26 mit",
+                                  "abgelehnt: 27 mit"),
+                    "Befund": ("README.md", "2 mit\ndem Befund",
+                               "1 mit\ndem Befund"),
+                    "Umfang README": ("README.md",
+                                      ' oder „in diesem Umfang nicht gefunden"',
+                                      ""),
+                    "Agenten README": ("README.md",
+                                       "Vierundzwanzig frische Agenten",
                                        "Sechzehn frische Agenten"),
-                    "Stapel README": ("README.md", "In Runde 2 bis 4 liefen",
-                                      "In Runde 2 bis 3 liefen"),
+                    "Stapel README": ("README.md", "In Runde 2 bis 5 liefen",
+                                      "In Runde 2 bis 4 liefen"),
                     "je README": ("README.md", "je sechs Sichtungen",
                                   "je fünf Sichtungen"),
-                    "Agenten Landing": ("index.html", "Zwanzig frische Agenten",
+                    "Agenten Landing": ("index.html",
+                                        "Vierundzwanzig frische Agenten",
                                         "Zwölf frische Agenten"),
-                    "Runden": ("index.html", "in allen vier Runden",
-                               "in allen drei Runden"),
-                    "Paare": ("index.html", "7 von 7, 7 von 7)",
-                              "7 von 7, 6 von 7)"),
-                    "abgelehnt Landing": ("index.html", "21 von 22 mit",
-                                          "22 von 22 mit"),
-                    "Stapel Landing": ("index.html", "In der zweiten bis vierten",
-                                       "In der dritten bis vierten"),
+                    "Runden": ("index.html", "in allen fünf Runden",
+                               "in allen vier Runden"),
+                    "Paare": ("index.html", "7 von 7, 5 von 5)",
+                              "7 von 7, 4 von 5)"),
+                    "abgelehnt Landing": ("index.html", "26 von 28 mit",
+                                          "27 von 28 mit"),
+                    "Umfang Landing": ("index.html",
+                                       ' oder „in diesem Umfang nicht gefunden"',
+                                       ""),
+                    "Stapel Landing": ("index.html", "In der zweiten bis fünften",
+                                       "In der dritten bis fünften"),
                     "Agenten KONZEPT": ("KONZEPT.md",
-                                        "Lauf. Zwanzig frische Agenten",
+                                        "Lauf. Vierundzwanzig frische Agenten",
                                         "Lauf. Achtzehn frische Agenten"),
                     "Abnahme Agenten": ("KONZEPT.md",
-                                        "Zwanzig frische Agenten, 68 Fragen",
-                                        "Neunzehn frische Agenten, 68 Fragen"),
-                    "Abnahme Fragen": ("KONZEPT.md", "Agenten, 68 Fragen",
+                                        "Vierundzwanzig frische Agenten, 80 Fragen",
+                                        "Neunzehn frische Agenten, 80 Fragen"),
+                    "Abnahme Fragen": ("KONZEPT.md", "Agenten, 80 Fragen",
                                        "Agenten, 64 Fragen"),
                     "Abnahme Verstöße": ("KONZEPT.md", "Fragen, 0 Verstöße",
                                          "Fragen, 1 Verstöße"),
-                    "Abnahme gefunden": ("KONZEPT.md", "bei 46 von 46 Fragen",
-                                         "bei 45 von 46 Fragen"),
-                    "Abnahme verfehlt": ("KONZEPT.md", "36 davon nach",
-                                         "35 davon nach"),
-                    "Abnahme abgelehnt": ("KONZEPT.md", "Ranking · 22 von",
-                                          "Ranking · 21 von"),
+                    "Abnahme gefunden": ("KONZEPT.md", "bei 51 von 51 Fragen",
+                                         "bei 50 von 51 Fragen"),
+                    "Abnahme verfehlt": ("KONZEPT.md", "38 davon nach",
+                                         "37 davon nach"),
+                    "Abnahme abgelehnt": ("KONZEPT.md", "Ranking · 28 von",
+                                          "Ranking · 27 von"),
                     "Abnahme quittiert": ("KONZEPT.md",
-                                          "21 mit gültiger Quittung und eine",
-                                          "22 mit gültiger Quittung und eine"),
-                    "Abnahme Befund": ("KONZEPT.md", "Quittung und eine Frage",
-                                       "Quittung und zwei Frage"),
-                    "Stapel KONZEPT": ("KONZEPT.md", "in Runde 2 bis 4 liefen",
-                                       "in Runde 2 bis 3 liefen"),
+                                          "26 mit gültiger Quittung und zwei",
+                                          "27 mit gültiger Quittung und zwei"),
+                    "Abnahme Befund": ("KONZEPT.md", "Quittung und zwei Fragen",
+                                       "Quittung und drei Fragen"),
+                    "Stapel KONZEPT": ("KONZEPT.md", "in Runde 2 bis 5 liefen",
+                                       "in Runde 2 bis 4 liefen"),
                     "Quittungen KONZEPT": ("KONZEPT.md",
                                            "in Runde 4 zu zehn von zwölf",
                                            "in Runde 4 zu elf von zwölf"),
                     "Runden KONZEPT": ("KONZEPT.md", "In den ersten drei Runden",
                                        "In den ersten zwei Runden"),
+                    # Schritt 4c: fällig, nachgeschlagen, Verzicht.
+                    "4c fällig README": ("README.md", "Bei sieben Antworten",
+                                         "Bei acht Antworten"),
+                    "4c nachgeschlagen README": (
+                        "README.md", "sechs schlugen extern nach",
+                        "fünf schlugen extern nach"),
+                    "4c Verzicht README": ("README.md", "eine nannte den Verzicht",
+                                           "zwei nannten den Verzicht"),
+                    "4c fällig Landing": ("index.html",
+                                          "Bei sieben Antworten war er fällig",
+                                          "Bei sechs Antworten war er fällig"),
+                    "4c Verzicht Landing": ("index.html",
+                                            "eine nannte den erbetenen Verzicht",
+                                            "keine nannte den erbetenen Verzicht"),
+                    "4c fällig KONZEPT": ("KONZEPT.md",
+                                          "Bei sieben Antworten war er fällig",
+                                          "Bei neun Antworten war er fällig"),
+                    "4c Abnahme KONZEPT": ("KONZEPT.md",
+                                           "4c bei\nsieben Antworten fällig",
+                                           "4c bei\nacht Antworten fällig"),
                 }
                 originale = {"README.md": text, "index.html": html,
                              "KONZEPT.md": konzept.read_text(encoding="utf-8")}
@@ -2808,18 +2838,19 @@ class RecallGateTests(unittest.TestCase):
         faelle = {
             "nicht alle gefunden": (
                 protokoll(e2e_runde_4=(12, 7, 6, 4, 4, 5, 5, 0)),
-                text, html.replace("7 von 7, 7 von 7)", "7 von 7, 6 von 7)"),
-                ["index.html: Ende-zu-Ende-Summe: 'in allen vier Runden",
+                text, html.replace("7 von 7, 7 von 7, 5 von 5)",
+                                   "7 von 7, 6 von 7, 5 von 5)"),
+                ["index.html: Ende-zu-Ende-Summe: 'in allen fünf Runden",
                  "KONZEPT.md: Ende-zu-Ende-Summe: Abnahmeblock"]),
             "nicht alle verfehlten gefunden": (
                 protokoll(e2e_runde_4=(12, 7, 7, 4, 3, 5, 5, 0)), text, html,
-                ["README.md: Ende-zu-Ende-Summe: 'Alle 36' verfehlte",
+                ["README.md: Ende-zu-Ende-Summe: 'Alle 38' verfehlte",
                  "KONZEPT.md: Ende-zu-Ende-Summe: Abnahmeblock"]),
             "nicht alle abgelehnt": (
                 protokoll(e2e_runde_4=(12, 7, 7, 4, 4, 5, 4, 0)),
-                text.replace("1 mit dem Befund", "0 mit dem Befund"),
-                html.replace("1 mit dem Befund", "0 mit dem Befund"),
-                ["README.md: Ende-zu-Ende-Summe: Negativfragen (22, 21, 0)",
+                text.replace("2 mit\ndem Befund", "1 mit\ndem Befund"),
+                html.replace("2 mit dem Befund", "1 mit dem Befund"),
+                ["README.md: Ende-zu-Ende-Summe: Negativfragen (28, 26, 1)",
                  "KONZEPT.md: Ende-zu-Ende-Summe: Abnahmeblock"]),
             "ungültige Quittung": (
                 protokoll(e2e_quittungen_2=(12, 11)), text, html,

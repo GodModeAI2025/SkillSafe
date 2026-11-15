@@ -57,7 +57,11 @@ jobs:
     # exakt 15:02 nach dem Anlegen abgeräumt. Ein so beendeter Lauf ist kein
     # roter Lauf, sondern gar keiner — siehe BETRIEB.md, "Ein fehlender Lauf
     # ist kein grüner Lauf".
-    timeout-minutes: 15
+    # Seit 14.11.2026 30 statt 15 Minuten: Mit den Antwortformen der
+    # Prüfrunden brauchte die Kette rund 15 Minuten, und die Läufe zu 0f2bae9
+    # wurden nach 15:15 abgeräumt, der 3.9-Job jedes Mal ("cancelled", kein
+    # grüner Lauf). Die Frist räumt weiter hängende Läufe ab.
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:

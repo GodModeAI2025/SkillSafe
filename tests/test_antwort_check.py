@@ -8,6 +8,7 @@ hier deshalb vor allem, dass es Verstöße findet, die ein Protokoll verschweigt
 
 import importlib.util
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -28,19 +29,37 @@ UMSCHREIBUNG = ("Welche Adresse fungiert als dauerhafter Schlüssel einer "
                 "Wissenseinheit?")
 NEGATIV = "Wie hoch ist der Urlaubsanspruch in Teilzeit?"
 BEGRIFF = "Welche Vertrauensstufen gibt es?"
+# Seit v0.17.0 ist Schritt 4c Pflicht, sobald nach der Vollsichtung etwas
+# ungedeckt bleibt. Im Testtresor ist X-0001 nicht gebunden und X-0002 hinter
+# dem Offline-Schalter: Gelesen wird nichts, und genau das steht in der Zeile.
+EXTERN = ("Extern nicht gelesen: X-0001 (nicht gebunden), X-0002 "
+          "(SKILLSAFE_OFFLINE gesetzt), Zustand unreachable — kein "
+          "Negativbefund")
 
 
-def _cli(root, *args):
+def _cli(root, *args, umgebung=None):
     return subprocess.run(
         [sys.executable, "-B", str(root / "scripts/vault.py"), *args],
         cwd=root, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         check=False, timeout=60,
+        env=dict(os.environ, **umgebung) if umgebung else None,
     )
 
 
-def tool_urteil(zeile):
-    """Das Urteil, wie das Werkzeug es druckt (geladen ohne Bytecode)."""
-    spec = importlib.util.spec_from_file_location("antwort_check_urteil", TOOL)
+def _extern(root, frage):
+    """external aus query --extern, mit gesetztem Offline-Schalter; ohne JSON
+    mit der Ausgabe der Engine als Meldung."""
+    lauf = _cli(root, "query", "--extern", frage,
+                umgebung={"SKILLSAFE_OFFLINE": "1"})
+    try:
+        return json.loads(lauf.stdout)["external"]
+    except ValueError as exc:
+        raise AssertionError(lauf.stdout + lauf.stderr) from exc
+
+
+def _werkzeug(name):
+    """Das Werkzeug als Modul, geladen ohne Bytecode."""
+    spec = importlib.util.spec_from_file_location(name, TOOL)
     modul = importlib.util.module_from_spec(spec)
     vorher = sys.dont_write_bytecode
     sys.dont_write_bytecode = True
@@ -48,7 +67,12 @@ def tool_urteil(zeile):
         spec.loader.exec_module(modul)
     finally:
         sys.dont_write_bytecode = vorher
-    return modul.urteil(zeile)
+    return modul
+
+
+def tool_urteil(zeile):
+    """Das Urteil, wie das Werkzeug es druckt (geladen ohne Bytecode)."""
+    return _werkzeug("antwort_check_urteil").urteil(zeile)
 
 
 class AntwortCheckTests(unittest.TestCase):
@@ -94,17 +118,24 @@ class AntwortCheckTests(unittest.TestCase):
                 f"{fertig['sweep_fingerprint'][:12]}")
 
     def pruefe(self, antworten, stand=None, argumente=(), ort=None,
-               vault=None, cwd=None):
+               vault=None, cwd=None, offline=True):
         ziel = ort or (self.basis / f"protokoll-{self.id().split('.')[-1]}.json")
         daten = {"schema": SCHEMA, "antworten": antworten}
         if stand is not None:
             daten["stand"] = stand
         ziel.write_text(json.dumps(daten, ensure_ascii=False), encoding="utf-8")
+        # Die Nachprüfung von Schritt 4c hängt am Offline-Schalter der
+        # Umgebung; ohne Angabe läuft sie wie in der CI offline.
+        umgebung = dict(os.environ)
+        if offline:
+            umgebung["SKILLSAFE_OFFLINE"] = "1"
+        else:
+            umgebung.pop("SKILLSAFE_OFFLINE", None)
         result = subprocess.run(
             [sys.executable, "-B", str(TOOL), "--vault",
              str(vault or self.root), "--antworten", str(ziel), *argumente],
             cwd=cwd or REPOSITORY, text=True, stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE, check=False, timeout=180,
+            stderr=subprocess.PIPE, check=False, timeout=180, env=umgebung,
         )
         return result
 
@@ -121,7 +152,8 @@ class AntwortCheckTests(unittest.TestCase):
                         "\n\n" + self.zeile_sichtung(fertig)},
             {"id": "N1", "art": "negativ", "frage": NEGATIV, "quittung": negativ,
              "antwort": "Nicht im Bestand. Der Tresor enthält keine Aussage "
-                        "zum Urlaubsanspruch.\n" + self.zeile_sichtung(leer)},
+                        "zum Urlaubsanspruch.\n" + EXTERN + "\n"
+                        + self.zeile_sichtung(leer)},
             {"id": "B1", "frage": BEGRIFF, "erwartet": ["C-0305"],
              "antwort": "Laut Bestand gibt es vier Stufen (C-0305)."},
         ]
@@ -388,14 +420,7 @@ class AntwortCheckTests(unittest.TestCase):
         Sonst würde ein Protokoll aus v0.15.0, dessen Agent sich an die damals
         gültige Regel hielt, heute als Verstoß gemeldet.
         """
-        spec = importlib.util.spec_from_file_location("antwort_check", TOOL)
-        tool = importlib.util.module_from_spec(spec)
-        vorher = sys.dont_write_bytecode
-        sys.dont_write_bytecode = True
-        try:
-            spec.loader.exec_module(tool)
-        finally:
-            sys.dont_write_bytecode = vorher
+        tool = _werkzeug("antwort_check")
 
         def abfrage(feld, offen=("9999",), teil=(), version="0.1.0"):
             """feld None: eine Engine vor v0.16.0, die das Feld nicht kennt."""
@@ -825,6 +850,11 @@ class AntwortCheckTests(unittest.TestCase):
             "id": "P5", "frage": BEGRIFF, "erwartet": ["C-0305"],
             "antwort": "Laut Bestand gibt es vier Stufen (C-0305). Gesichtet "
                        "habe ich 3 von 8 Claims der Kandidaten."})
+        # Schritt 4c ist jeweils ausgewiesen; geprüft werden hier nur die
+        # Angaben zur Sichtung.
+        for eintrag in antworten:
+            if eintrag.get("art") == "negativ":
+                eintrag["antwort"] += "\n" + EXTERN
         result = self.pruefe(antworten, argumente=["--json"])
         zeilen = {zeile["id"]: zeile
                   for zeile in json.loads(result.stdout)["zeilen"]}
@@ -956,7 +986,7 @@ class AntwortCheckTests(unittest.TestCase):
             {"id": "D1", "frage": "Was regelt C-9999 zur Mietminderung?",
              "erwartet": ["C-0401"], "quittung": quittung_frage,
              "antwort": kern + "Nicht im Bestand: Inhalt von C-9999\n"
-                        + self.zeile_sichtung(fertig_frage)},
+                        + EXTERN + "\n" + self.zeile_sichtung(fertig_frage)},
             # Kennungsfall: ein Vorschlag ist ein Zitat.
             {"id": "C1", "art": "negativ", "frage": "Was steht in C-9999?",
              "antwort": "Die Kennung C-9999 gibt es im Bestand nicht. "
@@ -1006,7 +1036,7 @@ class AntwortCheckTests(unittest.TestCase):
              "quittung": quittung_neg,
              "antwort": "Nicht im Bestand.\n" + zeile_neg + "\nHinweise: "
                         "Laut Sichtung stammen alle 10 Claims zu OKF v0.2 aus "
-                        "S-0004."},
+                        "S-0004.\n" + EXTERN},
             # Im Kennungsfall eine Zeile "Sichtung: entfällt".
             {"id": "E1", "art": "negativ", "frage": "Was steht in C-9999?",
              "antwort": "Die Kennung C-9999 gibt es im Bestand nicht.\n\n"
@@ -1122,6 +1152,1156 @@ class AntwortCheckTests(unittest.TestCase):
         self.assertIn("zitiert Claim-IDs, die es im Bestand nicht gibt: "
                       "C-9998", zeilen["D2"]["verstoesse"])
 
+    def test_step_4c_is_checked_where_the_contract_makes_it_mandatory(self):
+        """Seit v0.17.0 wird Schritt 4c nie still ausgelassen.
+
+        Bleibt die Frage nach der Vollsichtung ungedeckt und sind Quellen
+        aufgeführt, weist die Antwort aus, was extern gefunden oder nicht
+        gelesen wurde, oder dass der Schritt unterblieb. Das Werkzeug rechnet
+        die Abfrage mit --extern selbst nach, immer offline.
+        """
+        quittung, leer = self.sichtung(NEGATIV)
+        kern = "Nicht im Bestand.\n" + self.zeile_sichtung(leer) + "\n"
+
+        def zeile(antwort, frage=NEGATIV, eintraege=None, vorgabe=None,
+                  **weiter):
+            eintrag = {
+                "id": "N1", "art": "negativ", "frage": frage,
+                "quittung": quittung if eintraege is None else eintraege,
+                "antwort": antwort}
+            if vorgabe is not None:
+                eintrag["vorgabe"] = vorgabe
+            ergebnis = self.pruefe([eintrag], argumente=["--json"], **weiter)
+            daten = json.loads(ergebnis.stdout)
+            return daten["zeilen"][0], daten["zusammenfassung"]
+
+        still, summe = zeile(kern)
+        self.assertTrue(still["extern_pflicht"])
+        self.assertEqual(summe["pflicht_extern"], 1)
+        self.assertTrue(any(m.startswith("Schritt 4c fehlt")
+                            for m in still["verstoesse"]), still)
+        for name, antwort in {
+                "eigene Zeile": kern + EXTERN,
+                # Wie im Vertragsbeispiel: das Etikett mitten im Absatz.
+                "im Satz": "Nicht im Bestand: Der Bestand nennt keinen "
+                           "Urlaubsanspruch. " + EXTERN + ".\n"
+                           + self.zeile_sichtung(leer),
+                "Liste unter Etikett": kern + "**Extern nicht gelesen:**\n- "
+                                       "X-0001: nicht gebunden\n- X-0002: "
+                                       "SKILLSAFE_OFFLINE gesetzt\n\nHinweise: "
+                                       "keine",
+                "Überschrift ohne Doppelpunkt": kern + "### Extern nicht "
+                                                "gelesen\n- X-0001 (nicht "
+                                                "gebunden)\n- X-0002 (offline)",
+                "Etikett, Leerzeile, Liste": kern + "Extern nicht gelesen:\n\n"
+                                             "- X-0001 (nicht gebunden)\n"
+                                             "- X-0002 (offline)",
+        }.items():
+            with self.subTest(form=name):
+                sauber, _ = zeile(antwort)
+                self.assertEqual(sauber["verstoesse"], [])
+        halb, _ = zeile(kern + "Extern nicht gelesen: X-0001 (nicht gebunden) "
+                        "— kein Negativbefund")
+        self.assertTrue(any("fehlt für X-0002" in m
+                            for m in halb["verstoesse"]), halb)
+        # Unterbleibt der Schritt, nennt die Zeile jede aufgeführte Quelle.
+        # Entfallen darf er nur auf Wunsch des Nutzers oder nach einer
+        # Vorgabe der Umgebung; die hält das Protokoll fest.
+        bitte = "Bitte schlag dafür nicht in externen Quellen nach."
+        verzichtszeile = (kern + "Extern nicht gelesen: X-0001, X-0002 nicht "
+                          "nachgeschlagen (auf deinen Wunsch) — kein "
+                          "Negativbefund")
+        verzicht, verzicht_summe = zeile(verzichtszeile, vorgabe=bitte)
+        self.assertEqual(verzicht["verstoesse"], [])
+        self.assertTrue(verzicht["extern_verzicht"])
+        self.assertEqual(verzicht_summe["verzicht_extern"], 1)
+        eigenmaechtig, _ = zeile(verzichtszeile)
+        self.assertTrue(any(m.startswith("Verzicht auf Schritt 4c ohne Vorgabe")
+                            for m in eigenmaechtig["verstoesse"]), eigenmaechtig)
+        verteilt, _ = zeile(kern + "Extern nicht gelesen: X-0001 nicht "
+                            "nachgeschlagen (auf Wunsch).\nExtern nicht gelesen: "
+                            "X-0002 nicht nachgeschlagen (auf Wunsch).")
+        self.assertTrue(any(m.startswith("Verzicht auf Schritt 4c ohne Vorgabe")
+                            for m in verteilt["verstoesse"]), verteilt)
+        # Eine Frage danach weist keine Quelle aus.
+        nachfrage, _ = zeile(kern + "Extern nicht gelesen: X-0002 (offline) — "
+                             "kein Negativbefund\nSoll ich X-0001 auf diesem "
+                             "Host binden?")
+        self.assertTrue(any("fehlt für X-0001" in m
+                            for m in nachfrage["verstoesse"]), nachfrage)
+        verzicht_halb, _ = zeile(kern + "Extern nicht gelesen: X-0001 nicht "
+                                 "nachgeschlagen (Nutzerwunsch) — kein "
+                                 "Negativbefund", vorgabe=bitte)
+        self.assertTrue(any("X-0002 fehlt" in m
+                            for m in verzicht_halb["verstoesse"]), verzicht_halb)
+        # Ohne Vorgabe ist „nicht nachgeschlagen" für einen Teil der Quellen
+        # der Wortlaut einer Zeile nach dem Aufruf: normaler Weg.
+        nach_aufruf, _ = zeile(kern + "Extern nicht gelesen: X-0001 (nicht "
+                               "gebunden). Extern nicht gelesen: X-0002 nicht "
+                               "nachgeschlagen (SKILLSAFE_OFFLINE gesetzt) — "
+                               "kein Negativbefund")
+        self.assertEqual(nach_aufruf["verstoesse"], [])
+        nach_aufruf_halb, _ = zeile(kern + "Extern nicht gelesen: X-0001 nicht "
+                                    "nachgeschlagen (Nutzerwunsch) — kein "
+                                    "Negativbefund")
+        self.assertTrue(any("fehlt für X-0002" in m
+                            for m in nach_aufruf_halb["verstoesse"]),
+                        nach_aufruf_halb)
+        # Eine Trefferzeile nennt nur, was die Abfrage liefert. Hier liest
+        # sie nichts: X-0001 ist nicht gebunden, X-0002 hinter dem Schalter.
+        erfunden = (kern + EXTERN + "\nExtern (nicht im Bestand): X-0001 "
+                    "handbuch/miete.md, Satz 1\nExtern (nicht im Bestand): "
+                    "X-0002 README.md, Satz 4")
+        gebunden_bekannt, _ = zeile(erfunden, stand={
+            "extern": {"gebunden": [], "offline": True}})
+        self.assertTrue(any(
+            "ohne Treffer der Abfrage" in m and "X-0001 handbuch/miete.md" in m
+            and "X-0002 README.md" in m
+            for m in gebunden_bekannt["verstoesse"]), gebunden_bekannt)
+        # Ohne Angabe zur Bindung bleibt die lokale Quelle offen; die
+        # Netzquelle nicht, denn der Lauf war offline.
+        ohne_angabe, _ = zeile(erfunden)
+        self.assertTrue(any(
+            "ohne Treffer der Abfrage: X-0002 README.md" in m
+            for m in ohne_angabe["verstoesse"]), ohne_angabe)
+        self.assertTrue(any("X-0001 handbuch/miete.md" in h
+                            for h in ohne_angabe["hinweise"]), ohne_angabe)
+        # Eine Vorgabe ohne ausgewiesenen Verzicht ist ein Hinweis.
+        trotzdem, _ = zeile(kern + EXTERN, vorgabe=bitte)
+        self.assertEqual(trotzdem["verstoesse"], [])
+        self.assertTrue(any("Vorgabe gegen das Nachschlagen" in h
+                            for h in trotzdem["hinweise"]), trotzdem)
+        # Ohne Offline-Angabe zum Lauf bleibt offen, was die Netzquelle
+        # geliefert hätte: ein Hinweis, kein Verstoß.
+        online, _ = zeile(kern + "Extern nicht gelesen: X-0001 (nicht gebunden) "
+                          "— kein Negativbefund", offline=False)
+        self.assertEqual(online["verstoesse"], [])
+        self.assertTrue(any("Netzquelle nicht nachgeprüft (X-0002)" in h
+                            for h in online["hinweise"]), online)
+        # Die Angabe im Protokoll gilt vor der Umgebung des Werkzeugs.
+        protokoll_offline, _ = zeile(
+            kern + "Extern nicht gelesen: X-0001 (nicht gebunden) — kein "
+            "Negativbefund", offline=False,
+            stand={"extern": {"gebunden": [], "offline": True}})
+        self.assertTrue(any("fehlt für X-0002" in m
+                            for m in protokoll_offline["verstoesse"]),
+                        protokoll_offline)
+        # invalid_query liest nichts: Auch dann gehört die Zeile dazu.
+        frage_kurz = "Was ist das?"
+        kurz, kurz_fertig = self.sichtung(frage_kurz)
+        unbrauchbar, _ = zeile("Nicht im Bestand.\n"
+                               + self.zeile_sichtung(kurz_fertig),
+                               frage=frage_kurz, eintraege=kurz)
+        self.assertTrue(unbrauchbar["extern_pflicht"])
+        self.assertTrue(any(m.startswith("Schritt 4c fehlt")
+                            for m in unbrauchbar["verstoesse"]), unbrauchbar)
+
+    def test_the_contract_examples_for_step_4c_read_as_written(self):
+        """„Extern nicht gelesen" und „Teilweise gelesen": Die Beispiele im
+        Vertrag schreiben die Angaben in den Fließtext, mitten in den Absatz.
+        So liest sie das Werkzeug auch, Wort für Wort aus dem Vertrag."""
+        tool = _werkzeug("antwort_check_bsp")
+        vertrag = (SOURCE_SKILL / "references/antworten.md").read_text(
+            encoding="utf-8")
+
+        def beispiel(titel):
+            absatz = " ".join(
+                vertrag.split(f"**{titel}**", 1)[1].split("\n\n", 1)[0].split())
+            return re.search(r"(?:Antwort: |kommen deshalb: )„(.+?)[\"“], dazu",
+                             absatz).group(1)
+
+        treffer, ungelesen = tool._extern_angaben(beispiel("Extern nicht gelesen"))
+        self.assertEqual(treffer, [])
+        self.assertEqual(len(ungelesen), 1, ungelesen)
+        self.assertEqual(tool._kennungen(ungelesen[0]), {"X-0001", "X-0002"})
+        treffer, ungelesen = tool._extern_angaben(beispiel("Teilweise gelesen"))
+        self.assertEqual(len(treffer), 1, treffer)
+        self.assertEqual(tool._kennungen(treffer[0]), {"X-0001"})
+        self.assertTrue(tool._nennt_dokument(treffer[0],
+                                             "handbuch/mietminderung.md"))
+        self.assertEqual(len(ungelesen), 1, ungelesen)
+        self.assertEqual(tool._kennungen(ungelesen[0]), {"X-0002"})
+        # Formen, die die zweite Prüfung fand: Ein Dateiname behält seine
+        # Unterstriche; eine lockere Liste ergibt je Punkt eine Angabe; eine
+        # Etikettzeile mit Kennung gilt für die Punkte darunter; ein Etikett
+        # hinter einer schließenden Klammer beginnt einen neuen Satz; eine
+        # Frage setzt keine Angabe fort.
+        treffer, _ = tool._extern_angaben(
+            "Extern (nicht im Bestand): X-0001, handbuch/miet_recht.md, Satz 2")
+        self.assertTrue(tool._nennt_dokument(treffer[0], "handbuch/miet_recht.md"))
+        treffer, _ = tool._extern_angaben(
+            "**Extern (nicht im Bestand):**\n\n- X-0001, a.md, Satz 3\n\n"
+            "- X-0001, b.md, Satz 9\n\nHinweise: keine")
+        self.assertEqual(treffer, ["X-0001, a.md, Satz 3", "X-0001, b.md, Satz 9"])
+        treffer, _ = tool._extern_angaben(
+            "Extern (nicht im Bestand): X-0001\n- a.md, Satz 3\n- b.md, Satz 9")
+        self.assertEqual([tool._kennungen(t) for t in treffer],
+                         [{"X-0001"}, {"X-0001"}])
+        treffer, ungelesen = tool._extern_angaben(
+            "Nicht im Bestand: „Darf er das?“ Extern (nicht im Bestand): X-0001, "
+            "a.md (Satz 3, lokal gelesen.) Extern nicht gelesen: X-0002 (offline).")
+        self.assertEqual((len(treffer), len(ungelesen)), (1, 1))
+        _, ungelesen = tool._extern_angaben(
+            "Extern nicht gelesen: X-0002 (offline) — kein Negativbefund\n"
+            "Soll ich X-0001 auf diesem Host binden?")
+        self.assertEqual(tool._kennungen(" ".join(ungelesen)), {"X-0002"})
+
+    def test_step_4c_follows_the_contract_of_the_checked_vault(self):
+        """Ob 4c Pflicht ist, sagt der Vertrag des Tresors, nicht VERSION."""
+        tool = _werkzeug("antwort_check_4c")
+        # Ändert sich die Formulierung, muss das Werkzeug mitwachsen.
+        self.assertTrue(tool.vertrag_4c(SOURCE_SKILL))
+        self.assertIsNone(tool.vertrag_4c_hinweis(SOURCE_SKILL))
+        self.assertEqual(tool._version("0.17"), (0, 17, 0))
+        # Die Fassung von v0.15.0 stellt den Schritt frei; ein Zeilenumbruch
+        # in der Formel ändert nichts.
+        for fassung, pflicht in (
+                ("4c. **Externer Fallback.** Eine Option, keine Pflicht, und "
+                 "nie von selbst:", False),
+                ("4c. **Externer Fallback.** Der Schritt\n   ist **Pflicht**, "
+                 "sobald beide", True)):
+            with self.subTest(fassung=fassung[:40]):
+                alt_vault = self.basis / f"fassung-{int(pflicht)}"
+                (alt_vault / "references").mkdir(parents=True)
+                (alt_vault / "references/antworten.md").write_text(
+                    "# Antworten\n\n" + fassung + "\n", encoding="utf-8")
+                self.assertIs(tool.vertrag_4c(alt_vault), pflicht)
+                self.assertIsNone(tool.vertrag_4c_hinweis(alt_vault))
+        ohne = self.basis / "ohne-4c"
+        (ohne / "references").mkdir(parents=True)
+        (ohne / "references/antworten.md").write_text(
+            "# Antworten\n\nKein externer Schritt.\n", encoding="utf-8")
+        self.assertFalse(tool.vertrag_4c(ohne))
+        self.assertIn("nicht gefunden", tool.vertrag_4c_hinweis(ohne))
+        frei = self.basis / "frei" / "wissenstresor"
+        shutil.copytree(self.root, frei)
+        antworten_md = frei / "references/antworten.md"
+        text = antworten_md.read_text(encoding="utf-8")
+        self.assertEqual(text.count("Der Schritt ist **Pflicht**"), 1)
+        antworten_md.write_text(text.replace(
+            "Der Schritt ist **Pflicht**", "Der Schritt ist eine Option"),
+            encoding="utf-8")
+        gepinnt = _cli(frei, "checksum")
+        self.assertEqual(gepinnt.returncode, 0, gepinnt.stdout + gepinnt.stderr)
+        self.assertFalse(tool.vertrag_4c(frei))
+        quittung, leer = self.sichtung(NEGATIV, root=frei)
+        ergebnis = self.pruefe([{
+            "id": "N1", "art": "negativ", "frage": NEGATIV, "quittung": quittung,
+            "antwort": "Nicht im Bestand.\n" + self.zeile_sichtung(leer)}],
+            argumente=["--json"], vault=frei,
+            stand={"version": "1.4.0"})
+        daten = json.loads(ergebnis.stdout)
+        self.assertFalse(daten["zeilen"][0]["extern_pflicht"])
+        self.assertEqual(daten["zusammenfassung"]["verstoesse"], 0)
+        # Die Version im Protokoll passt nicht zum Tresor: ohne Manifest ein
+        # Hinweis, mit Manifest ein Abbruch.
+        self.assertTrue(any("nennt den Stand v1.4.0" in h
+                            for h in daten["hinweise"]), daten["hinweise"])
+        manifest = daten["stand"]["manifest_sha256"]
+        falsch = self.pruefe([{
+            "id": "N1", "art": "negativ", "frage": NEGATIV, "quittung": quittung,
+            "antwort": "Nicht im Bestand.\n" + self.zeile_sichtung(leer)}],
+            vault=frei, stand={"version": "0.15.0",
+                               "manifest_sha256": manifest})
+        self.assertEqual(falsch.returncode, 2, falsch.stdout)
+        self.assertIn("nennt den Stand v0.15.0", falsch.stdout)
+
+    def gebundene_kopie(self, name):
+        """Eine Kopie des Testtresors, X-0001 an beispiel-extern gebunden."""
+        gebunden = self.basis / name / "wissenstresor"
+        shutil.copytree(self.root, gebunden)
+        bindung = _cli(gebunden, "extern", "bind", "X-0001",
+                       str(REPOSITORY / "beispiel-extern"))
+        self.assertEqual(bindung.returncode, 0, bindung.stdout + bindung.stderr)
+        return gebunden
+
+    def test_step_4c_with_a_bound_source_needs_the_external_hits(self):
+        """Gebunden liest die Abfrage X-0001; ihre Treffer gehören in die Antwort."""
+        gebunden = self.gebundene_kopie("gebunden")
+        frage = "Welche Vektordatenbank empfiehlt der Bestand?"
+        quittung, leer = self.sichtung(frage, root=gebunden)
+        extern = _extern(gebunden, frage)
+        self.assertEqual(extern["state"], "external_candidates_found", extern)
+        self.assertGreaterEqual(len(extern["hits"]), 2, extern["hits"])
+        kern = "Nicht im Bestand.\n" + self.zeile_sichtung(leer) + "\n"
+        ungelesen = ("Extern nicht gelesen: X-0002 (SKILLSAFE_OFFLINE gesetzt) "
+                     "— kein Negativbefund")
+        zeilen = [f"Extern (nicht im Bestand): {stelle['source_id']} "
+                  f"{stelle['document']}, Satz {stelle['sentence_index']}"
+                  for stelle in extern["hits"]]
+
+        def ergebnis(antwort, vault=gebunden, stand=None):
+            lauf = self.pruefe([{
+                "id": "N1", "art": "negativ", "frage": frage,
+                "quittung": quittung, "antwort": antwort}],
+                argumente=["--json"], vault=vault, stand=stand)
+            return lauf
+
+        def zeile(antwort, **weiter):
+            return json.loads(ergebnis(antwort, **weiter).stdout)["zeilen"][0]
+
+        alles = kern + "\n".join(zeilen) + "\n" + ungelesen
+        self.assertEqual(zeile(alles)["verstoesse"], [])
+        # Fehlt ein Treffer, nennt das Werkzeug ihn mit Quelle und Dokument.
+        ohne_einen = zeile(kern + "\n".join(zeilen[1:]) + "\n" + ungelesen)
+        self.assertTrue(any("Treffer ohne Zeile" in m
+                            and extern["hits"][0]["document"] in m
+                            for m in ohne_einen["verstoesse"]), ohne_einen)
+        ohne_ungelesen = zeile(kern + "\n".join(zeilen))
+        self.assertTrue(any("fehlt für X-0002" in m
+                            for m in ohne_ungelesen["verstoesse"]), ohne_ungelesen)
+        # „nicht nachgeschlagen" für eine Quelle neben Treffern ist kein
+        # Verzicht auf den ganzen Schritt.
+        teilweise = zeile(kern + "\n".join(zeilen) + "\nExtern nicht gelesen: "
+                          "X-0002 nicht nachgeschlagen (SKILLSAFE_OFFLINE "
+                          "gesetzt) — kein Negativbefund")
+        self.assertEqual(teilweise["verstoesse"], [])
+        # Bindung im Protokoll: gleich, dann geprüft; abweichend, dann Abbruch.
+        lauf = {"extern": {"gebunden": ["X-0001"], "offline": True}}
+        mit_angabe = zeile(alles, stand=lauf)
+        self.assertEqual(mit_angabe["verstoesse"], [])
+        # Eine Trefferzeile nennt nur, was die Abfrage liefert; ein Dateiname
+        # im zitierten Treffersatz ist keine Fundstelle.
+        erfunden = zeile(alles + "\nExtern (nicht im Bestand): X-0001 "
+                         "handbuch/mietkaution.md, Satz 2", stand=lauf)
+        self.assertTrue(any(
+            "ohne Treffer der Abfrage: X-0001 handbuch/mietkaution.md" in m
+            for m in erfunden["verstoesse"]), erfunden)
+        zitiert = zeile(kern + zeilen[0] + ": „Mehr steht in anhang/weiteres.md.“\n"
+                        + "\n".join(zeilen[1:]) + "\n" + ungelesen, stand=lauf)
+        self.assertEqual(zitiert["verstoesse"], [])
+        # Dokument vor der Kennung, eine Erläuterung mit einer Bestandsseite
+        # und eine lockere Liste: alles sauber.
+        umgestellt = "\n".join(
+            f"Extern (nicht im Bestand): {stelle['document']} aus "
+            f"{stelle['source_id']} (Satz {stelle['sentence_index']}). Auch "
+            f"knowledge/demo-okf/okf.md sagt dazu nichts."
+            for stelle in extern["hits"])
+        self.assertEqual(zeile(kern + umgestellt + "\n" + ungelesen,
+                               stand=lauf)["verstoesse"], [])
+        locker = ("**Extern (nicht im Bestand):**\n\n"
+                  + "\n\n".join("- " + z.split(": ", 1)[1] for z in zeilen)
+                  + "\n\n" + ungelesen)
+        self.assertEqual(zeile(kern + locker, stand=lauf)["verstoesse"], [])
+        # Eine Angabe ohne geliefertes Dokument ist erfunden, auch ohne Pfad.
+        ohne_pfad = zeile(alles + "\nExtern (nicht im Bestand): X-0001, "
+                          "Abschnitt Kaution, Satzposition 2", stand=lauf)
+        self.assertTrue(any("ohne Treffer der Abfrage: X-0001, Abschnitt Kaution"
+                            in m for m in ohne_pfad["verstoesse"]), ohne_pfad)
+        # Als ungelesen ausgewiesen, obwohl gelesen, und ein fremder Zustand:
+        # Hinweise.
+        vorlage = zeile(kern + "\n".join(zeilen) + "\nExtern nicht gelesen: "
+                        "X-0001 (nicht gebunden), X-0002 (SKILLSAFE_OFFLINE "
+                        "gesetzt), Zustand unreachable — kein Negativbefund",
+                        stand=lauf)
+        self.assertTrue(any("aber gelesen: X-0001" in h
+                            for h in vorlage["hinweise"]), vorlage)
+        self.assertTrue(any("Zustand unreachable genannt" in h
+                            for h in vorlage["hinweise"]), vorlage)
+        abweichend = ergebnis(alles, stand={"extern": {"gebunden": [],
+                                                       "offline": True}})
+        self.assertEqual(abweichend.returncode, 2, abweichend.stdout)
+        self.assertIn("dieser Host bindet X-0001", abweichend.stdout)
+        # Ohne Angabe im Protokoll: Nennt die Antwort Treffer aus einer
+        # Quelle, die die Nachrechnung nicht lesen kann, ist das ein Hinweis.
+        ungebunden = zeile(alles, vault=self.root)
+        self.assertFalse(any("fehlt für X-0001" in m
+                             for m in ungebunden["verstoesse"]), ungebunden)
+        self.assertTrue(any("Bindung weicht vermutlich ab" in h
+                            for h in ungebunden["hinweise"]), ungebunden)
+
+    def test_step_4c_answer_forms_read_as_meant(self):
+        """Antwortformen aus der dritten bis fünften Prüfung, je Bindung ein Lauf.
+
+        Sauber: Hervorhebung, Anführungszeichen und Klammern am Satzende, eine
+        Erläuterung als Listenpunkt, eine Rückfrage in einer Angabe, ein
+        nacktes Etikett mit Absatz, ein Kopf mit Liste nach einer Leerzeile,
+        „keine Treffer". Verstoß: ein erfundenes Dokument unter einem Kopf,
+        in derselben Zeile, in einem anderen Verzeichnis oder mit längerem
+        Namen; ein Verzicht ohne Vorgabe; eine Kennung nur in einer
+        Rückfrage, auch umbrochen oder in Klammern. Hinweis: ein Zustand, den
+        die Abfrage nicht meldet, und eine gelesene Quelle als ungelesen. Die
+        erste Frage des Protokolls hat keinen suchbaren Begriff; die
+        Bindungsprobe nimmt dann die nächste. Aus der fünften Prüfung:
+        Dokumente in Anführungszeichen oder mit „./“, Einleitungssätze und
+        Teilsätze mit Rückfrage, ein Nachsatz mit Quellkennung und
+        „keine Treffer“ in mehreren Wortlauten sind sauber; eine Tresordatei
+        oder ein endungsloser Pfad als Fundstelle, eine Seitenangabe und
+        Inhalt neben „keine Treffer“ sind Verstöße, ebenso eine Rückfrage
+        hinter dem Etikett, die als einzige eine Quelle nennt.
+        """
+        gebunden = self.gebundene_kopie("formen")
+        mit = "Welche Vektordatenbank empfiehlt der Bestand?"
+        ohne = "Wie hoch darf die Mietkaution höchstens sein?"
+        leer = "Was ist das?"
+        treffer = _extern(gebunden, mit)
+        self.assertEqual(treffer["state"], "external_candidates_found", treffer)
+        self.assertGreaterEqual(len(treffer["hits"]), 2, treffer["hits"])
+        self.assertEqual(_extern(gebunden, ohne)["state"],
+                         "no_external_candidates")
+        self.assertEqual(_extern(gebunden, leer)["state"], "invalid_query")
+        self.assertEqual(_extern(self.root, ohne)["state"], "unreachable")
+        alle = [f"{stelle['source_id']}, {stelle['document']}, Satzposition "
+                f"{stelle['sentence_index']}" for stelle in treffer["hits"]]
+        erstes = treffer["hits"][0]["document"]
+        # Die erste Zeile unter einem Etikett ohne Doppelpunkt beginnt klein:
+        # Sie setzt das Etikett trotzdem nicht fort.
+        klein_zuerst = sorted(treffer["hits"],
+                              key=lambda stelle: stelle["document"][:1].isupper())
+        self.assertTrue(klein_zuerst[0]["document"][:1].islower(), klein_zuerst)
+        verzeichnis, _, name = erstes.rpartition("/")
+        laenger = (verzeichnis + "/" if verzeichnis else "") + "keine-" + name
+        ung = ("Extern nicht gelesen: X-0002 (SKILLSAFE_OFFLINE gesetzt) — "
+               "kein Negativbefund")
+
+        def sichtung(frage, root):
+            quittung, fertig = self.sichtung(frage, root=root)
+            return quittung, self.zeile_sichtung(fertig)
+
+        q_mit, s_mit = sichtung(mit, gebunden)
+        q_ohne, s_ohne = sichtung(ohne, gebunden)
+        q_leer, s_leer = sichtung(leer, gebunden)
+        kern = "Nicht im Bestand.\n\n" + s_mit + "\n"
+        zeilen = "\n".join("Extern (nicht im Bestand): " + z for z in alle)
+        liste = "\n".join("- " + z for z in alle)
+        zeilen_text = kern + zeilen
+        antworten = {
+            # Zuerst die Frage ohne suchbaren Begriff (invalid_query).
+            "L-ohne-begriff": (leer, "Nicht im Bestand. Die Frage nennt "
+                               "keinen Gegenstand.\n\n" + s_leer + "\nExtern "
+                               "nicht gelesen: X-0001, X-0002 — Zustand "
+                               "invalid_query, die Frage enthält keinen "
+                               "suchbaren Begriff — kein Negativbefund"),
+            "T-erlaeuterung": (mit, kern + "**Extern (nicht im Bestand):**\n"
+                               + liste + "\n- Das ist nur ein Zeiger, der über "
+                               "ein Wort der Frage nahe liegt; zur Frage sagt "
+                               "er nichts.\n\n" + ung),
+            "T-unterpunkt": (mit, kern + "Extern (nicht im Bestand):\n"
+                             + "\n".join(f"- {z}\n  - nur lexikalisch nah"
+                                         for z in alle) + "\n" + ung),
+            "T-rueckfrage": (mit, kern + "**Extern (nicht im Bestand):**\n- "
+                             + alle[0] + " — beantwortet das die Frage?\n"
+                             + "\n".join("- " + z for z in alle[1:])
+                             + "\n\n" + ung),
+            "T-kopf-leerzeile": (mit, kern + "**Extern (nicht im Bestand): "
+                                 "X-0001**\n\n" + "\n".join(
+                                     f"- {stelle['document']}, Satzposition "
+                                     f"{stelle['sentence_index']}"
+                                     for stelle in treffer["hits"])
+                                 + "\n\n" + ung),
+            "T-kopf-erfunden": (mit, kern + "Extern (nicht im Bestand): "
+                                + alle[0] + "\n- weiterer Treffer: "
+                                "handbuch/erfunden.md, Satzposition 2\n"
+                                + "\n".join("Extern (nicht im Bestand): " + z
+                                            for z in alle[1:])
+                                + "\n" + ung),
+            "T-eine-zeile": (mit, kern + zeilen + "; X-0001, "
+                             "handbuch/erfunden.md, Satzposition 2\n" + ung),
+            "T-verzeichnis": (mit, kern + zeilen.replace(
+                erstes, "archiv/" + name, 1) + "\n" + ung),
+            "T-laengerer-name": (mit, kern + zeilen + "\nExtern (nicht im "
+                                 f"Bestand): X-0001, {laenger}, Satzposition "
+                                 "2\n" + ung),
+            "O-fett": (ohne, "Nicht im Bestand. Der Tresor enthält **keine "
+                       "Aussage zur Mietkaution.** " + ung + "\n\n" + s_ohne),
+            "O-kursiv": (ohne, "*Nicht im Bestand.* " + ung + "\n\n" + s_ohne),
+            "O-fett-ganz": (ohne, "**Nicht im Bestand.** " + ung + "\n\n"
+                            + s_ohne),
+            "O-guillemets": (ohne, f"Nicht im Bestand: »{ohne}« " + ung
+                             + "\n\n" + s_ohne),
+            "O-anfuehrung": (ohne, f"Nicht im Bestand: „{ohne}“ " + ung
+                             + "\n\n" + s_ohne),
+            "O-keine-treffer": (ohne, "Nicht im Bestand.\n\n" + s_ohne
+                                + "\nExtern (nicht im Bestand): keine Treffer "
+                                "in X-0001 (bei dieser Abfrage lokal "
+                                "gelesen)\n" + ung),
+            "O-nichts": (ohne, "Nicht im Bestand.\n\n" + s_ohne + "\nExtern "
+                         "(nicht im Bestand): nichts gefunden\n" + ung),
+            "O-rueckfrage": (ohne, "Nicht im Bestand.\n\n" + s_ohne
+                             + "\nExtern nicht gelesen:\n- X-0002: "
+                             "SKILLSAFE_OFFLINE gesetzt — soll ich es abrufen, "
+                             "sobald Netz da ist?\n- kein Negativbefund"),
+            "O-etikett-absatz": (ohne, "Nicht im Bestand.\n\n" + s_ohne
+                                 + "\n\n**Extern nicht gelesen:**\n\nX-0002 "
+                                 "(SKILLSAFE_OFFLINE gesetzt) — kein "
+                                 "Negativbefund"),
+            "O-ueberschrift": (ohne, "Nicht im Bestand.\n\n" + s_ohne
+                               + "\n\n### Extern nicht gelesen\n\nX-0002 "
+                               "(SKILLSAFE_OFFLINE gesetzt) — kein "
+                               "Negativbefund"),
+            "O-zustand": (ohne, "Nicht im Bestand.\n\n" + s_ohne + "\nExtern "
+                          "nicht gelesen: X-0002 (SKILLSAFE_OFFLINE gesetzt), "
+                          "Zustand not_bound — kein Negativbefund"),
+            "O-zustand-code": (ohne, "Nicht im Bestand.\n\n" + s_ohne
+                               + "\nExtern nicht gelesen: X-0002 "
+                               "(SKILLSAFE_OFFLINE gesetzt), Zustand "
+                               "`budget_exceeded` — kein Negativbefund"),
+            "O-verzicht-nachsatz": (ohne, "Nicht im Bestand.\n\n" + s_ohne
+                                    + "\nExtern nicht gelesen:\n- X-0001\n- "
+                                    "X-0002\nBeide nicht nachgeschlagen, weil "
+                                    "die Frage klar außerhalb des Bestands "
+                                    "liegt — kein Negativbefund."),
+            # Auch kleingeschrieben gilt ein Nachsatz ohne Einrückung für
+            # jeden Punkt der Liste.
+            "O-verzicht-nachsatz-klein": (ohne, "Nicht im Bestand.\n\n"
+                                          + s_ohne + "\nExtern nicht "
+                                          "gelesen:\n- X-0001\n- X-0002\n"
+                                          "beide nicht nachgeschlagen, weil "
+                                          "die Frage klar außerhalb des "
+                                          "Bestands liegt — kein "
+                                          "Negativbefund."),
+            "O-verzicht-zeile": (ohne, "Nicht im Bestand.\n\n" + s_ohne
+                                 + "\nExtern nicht gelesen: X-0001, X-0002 "
+                                 "nicht nachgeschlagen, weil die Frage klar "
+                                 "außerhalb des Bestands liegt — kein "
+                                 "Negativbefund."),
+            "O-gelesen": (ohne, "Nicht im Bestand.\n\n" + s_ohne + "\n" + ung
+                          + "; X-0001 wurde bei dieser Abfrage lokal gelesen, "
+                          "ohne Treffer."),
+            # Aus der vierten Prüfung: Eine Trefferangabe ohne geliefertes
+            # Dokument ist erfunden, auch ohne .md-Pfad; nur ein
+            # ausdrückliches „keine Treffer" behauptet nichts.
+            "T-erfunden-kapitel": (mit, kern + zeilen + "\nExtern (nicht im "
+                                   "Bestand): X-0001, Kapitel Kaution des "
+                                   "Beispielhandbuchs: höchstens drei "
+                                   "Monatsmieten\n" + ung),
+            "T-erfunden-pdf": (mit, kern + zeilen + "\nExtern (nicht im "
+                               "Bestand): X-0001, handbuch/mietkaution.pdf, "
+                               "Absatz 2\n" + ung),
+            "T-erfunden-ohne-endung": (mit, kern + zeilen + "\nExtern (nicht "
+                                       "im Bestand): X-0001, "
+                                       "handbuch/mietkaution, sentence_index "
+                                       "4\n" + ung),
+            "T-kennung-dahinter": (mit, kern + zeilen + "; außerdem "
+                                   "handbuch/mietkaution.md (X-0002), "
+                                   "Satzposition 2\n" + ung),
+            "T-punkt-schraegstrich": (mit, kern + zeilen + "; X-0001, "
+                                      "./handbuch/erfunden.md, Satzposition "
+                                      "2\n" + ung),
+            "T-unterstrich-erfunden": (mit, kern + zeilen + "; X-0001, "
+                                       "_handbuch/erfunden.md_, Satzposition "
+                                       "2\n" + ung),
+            # Eine Liste nach einer Rückfrage gehört zur Frage.
+            "T-rueckfrage-liste": (mit, kern + zeilen + "\nSoll ich zusätzlich "
+                                   "diese Dokumente der Quelle prüfen lassen?"
+                                   "\n- handbuch/anhang-a.md\n- "
+                                   "handbuch/anhang-b.md\n" + ung),
+            # Ein Etikett als Überschrift ohne Doppelpunkt; die Zeile danach
+            # setzt es nicht fort, auch kleingeschrieben.
+            "T-ueberschrift-ohne-doppelpunkt": (
+                mit, kern + "### Extern (nicht im Bestand)\n" + "\n".join(
+                    f"{stelle['document']} ({stelle['source_id']}), "
+                    f"Satzposition {stelle['sentence_index']}"
+                    for stelle in klein_zuerst) + "\n\n" + ung),
+            "T-fett-ohne-doppelpunkt": (
+                mit, kern + "**Extern (nicht im Bestand)**\n" + "\n".join(
+                    f"{stelle['document']} ({stelle['source_id']}), "
+                    f"Satzposition {stelle['sentence_index']}"
+                    for stelle in klein_zuerst) + "\n\n" + ung),
+            # Ein geliefertes Dokument in Hervorhebung, mit absolutem Pfad
+            # oder unter der Kennung als Ordner ist genannt; ein Verweis auf
+            # eine Datei des eigenen Tresors ist kein Treffer.
+            "T-hervorhebung": (mit, kern + "\n".join(
+                f"Extern (nicht im Bestand): X-0001, _{stelle['document']}_, "
+                f"Satzposition {stelle['sentence_index']}"
+                for stelle in treffer["hits"]) + "\n" + ung),
+            "T-absolut": (mit, kern + "\n".join(
+                f"Extern (nicht im Bestand): X-0001, "
+                f"{REPOSITORY / 'beispiel-extern' / stelle['document']}, "
+                f"Satzposition {stelle['sentence_index']}"
+                for stelle in treffer["hits"]) + "\n" + ung),
+            "T-quelle-als-ordner": (mit, kern + "\n".join(
+                f"Extern (nicht im Bestand): X-0001/{stelle['document']}, "
+                f"Satzposition {stelle['sentence_index']}"
+                for stelle in treffer["hits"]) + "\n" + ung),
+            "T-eigene-dateien": (mit, kern + "\n".join(
+                f"Extern (nicht im Bestand): X-0001 (aufgeführt in "
+                f"sources/EXTERN.md), {stelle['document']}, Satzposition "
+                f"{stelle['sentence_index']} — nach Schritt 4c aus "
+                f"references/antworten.md, kein Beleg"
+                for stelle in treffer["hits"]) + "\n" + ung),
+            "O-zustand-kursiv": (ohne, "Nicht im Bestand.\n\n" + s_ohne
+                                 + "\nExtern nicht gelesen: X-0002 "
+                                 "(SKILLSAFE_OFFLINE gesetzt), Zustand "
+                                 "_unreachable_ — kein Negativbefund"),
+            "O-keine-treffer-bestandsseite": (
+                ohne, "Nicht im Bestand.\n\n" + s_ohne + "\nExtern (nicht im "
+                "Bestand): keine Treffer in X-0001 (bei dieser Abfrage lokal "
+                "gelesen; im Bestand steht nur "
+                "knowledge/demo-extern/mietminderung.md)\n" + ung),
+            # Eine Kennung im Klammerzusatz des Etiketts gehört zur Angabe.
+            "O-klammer-kennung": (ohne, "Nicht im Bestand.\n\n" + s_ohne
+                                  + "\nExtern nicht gelesen (X-0002, "
+                                  "SKILLSAFE_OFFLINE gesetzt — kein "
+                                  "Negativbefund)"),
+            "O-klammer-kennung-liste": (ohne, "Nicht im Bestand.\n\n" + s_ohne
+                                        + "\n**Extern nicht gelesen** "
+                                        "(X-0002):\n- SKILLSAFE_OFFLINE "
+                                        "gesetzt — kein Negativbefund"),
+            "O-klammer-zustand": (ohne, "Nicht im Bestand.\n\n" + s_ohne
+                                  + "\nExtern nicht gelesen (Zustand nur "
+                                  "für X-0002): SKILLSAFE_OFFLINE gesetzt — "
+                                  "kein Negativbefund"),
+            # Aus der fünften Prüfung: Formen, die ein Agent so schreibt.
+            "T-anfuehrungszeichen": (mit, kern + "\n".join(
+                f"Extern (nicht im Bestand): X-0001, Dokument "
+                f"„{stelle['document']}“, Satzposition {stelle['sentence_index']}"
+                for stelle in treffer["hits"]) + "\n" + ung),
+            "T-punkt-schraegstrich-geliefert": (mit, kern + "\n".join(
+                f"Extern (nicht im Bestand): X-0001, ./{stelle['document']}, "
+                f"Satzposition {stelle['sentence_index']}"
+                for stelle in treffer["hits"]) + "\n" + ung),
+            "T-einleitung-mit-rueckfrage": (
+                mit, kern + "**Extern (nicht im Bestand):**\nIch habe drei "
+                "Zeiger gefunden — soll ich sie genauer ansehen?\n" + liste
+                + "\n\n" + ung),
+            "T-einleitung-satz": (mit, kern + "**Extern (nicht im Bestand):**\n"
+                                  "Ich habe drei Zeiger gefunden.\n" + liste
+                                  + "\n\n" + ung),
+            "T-bindestrich-rueckfrage": (mit, kern + "\n".join(
+                f"Extern (nicht im Bestand): X-0001 - {stelle['document']}, "
+                f"Satzposition {stelle['sentence_index']} - passt das?"
+                for stelle in treffer["hits"]) + "\n" + ung),
+            "T-teilsatz-rueckfrage": (mit, kern + "\n".join(
+                f"Extern (nicht im Bestand): X-0001 — {stelle['document']}, "
+                f"Satzposition {stelle['sentence_index']}, nur lexikalisch "
+                f"nah: hilft das?" for stelle in treffer["hits"]) + "\n" + ung),
+            "T-code-rueckfrage": (mit, kern + "**Extern (nicht im Bestand):**\n"
+                                  + "\n".join(
+                f"- `X-0001`, `{stelle['document']}`, Satzposition "
+                f"{stelle['sentence_index']} — beantwortet das die Frage?"
+                for stelle in treffer["hits"]) + "\n\n" + ung),
+            "T-nachsatz-mit-quelle": (mit, kern + "Extern (nicht im Bestand):\n"
+                                      + "\n".join(
+                f"- {stelle['document']}, Satzposition {stelle['sentence_index']}"
+                for stelle in treffer["hits"]) + "\nAlle aus X-0001, bei dieser "
+                "Abfrage lokal gelesen.\n\n" + ung),
+            "T-zitierte-frage": (mit, kern + "\n".join(
+                f"Extern (nicht im Bestand): X-0001 – {stelle['document']}, "
+                f"Satzposition {stelle['sentence_index']}, nur lexikalisch "
+                f"nah an „{mit}“" for stelle in treffer["hits"]) + "\n" + ung),
+            "T-zusatz-und-absatz": (
+                mit, kern + "**Extern (nicht im Bestand)** (X-0001, bei dieser "
+                "Abfrage lokal gelesen):\n\n" + "\n".join(
+                    f"{stelle['document']}, Satzposition "
+                    f"{stelle['sentence_index']} — nur lexikalisch nah."
+                    for stelle in treffer["hits"]) + "\n\n" + ung),
+            "T-erfunden-hinter-zitierter-frage": (
+                mit, kern + zeilen + " – außerdem handbuch/erfunden.md, "
+                "Satzposition 2: „Welche Vektordatenbank ist gemeint?“\n" + ung),
+            "T-tresordatei-zugeschrieben": (mit, kern + zeilen + "; X-0001, "
+                                            "INDEX.md, Satzposition 2\n" + ung),
+            "T-endungslos-daneben": (mit, kern + zeilen + "; außerdem "
+                                     "handbuch/eigenbedarf, Satzposition 2\n"
+                                     + ung),
+            "O-kein-zeiger": (ohne, "Nicht im Bestand.\n\n" + s_ohne
+                              + "\nExtern (nicht im Bestand): kein Zeiger.\n"
+                              + ung),
+            "O-keine-passenden": (ohne, "Nicht im Bestand.\n\n" + s_ohne
+                                  + "\nExtern (nicht im Bestand): keine "
+                                  "passenden Treffer in X-0001\n" + ung),
+            "O-treffer-keine": (ohne, "Nicht im Bestand.\n\n" + s_ohne
+                                + "\nExtern (nicht im Bestand): X-0001 – "
+                                "Treffer: keine\n" + ung),
+            "O-kein-dokument-enthaelt": (ohne, "Nicht im Bestand.\n\n" + s_ohne
+                                         + "\nExtern (nicht im Bestand): Kein "
+                                         "Dokument von X-0001 enthält die "
+                                         "Anfragebegriffe\n" + ung),
+            "O-schraegstrich-und-abschnitt": (
+                ohne, "Nicht im Bestand.\n\n" + s_ohne + "\nExtern (nicht im "
+                "Bestand): keine Treffer zu Mietkaution/Kaution in X-0001 – das "
+                "Beispielhandbuch hat keinen Abschnitt dazu\n" + ung),
+            "O-nur-keine": (ohne, "Nicht im Bestand.\n\n" + s_ohne
+                            + "\nExtern (nicht im Bestand): keine\n" + ung),
+            "O-inhalt-sonst-keine": (ohne, "Nicht im Bestand.\n\n" + s_ohne
+                                     + "\nExtern (nicht im Bestand): X-0001 – "
+                                     "die Kaution beträgt höchstens drei "
+                                     "Monatsmieten; sonst keine Treffer\n"
+                                     + ung),
+            "O-seite": (ohne, "Nicht im Bestand.\n\n" + s_ohne + "\nExtern "
+                        "(nicht im Bestand): keine Treffer in X-0001; Seite 4 "
+                        "des Beispielhandbuchs regelt nur die Minderung\n"
+                        + ung),
+            "O-ohne-fundstelle": (ohne, "Nicht im Bestand.\n\n" + s_ohne
+                                  + "\nExtern (nicht im Bestand): X-0001 – das "
+                                  "Beispielhandbuch begrenzt die Kaution auf "
+                                  "höchstens drei Monatsmieten (ohne "
+                                  "Fundstelle)\n" + ung),
+            "O-seite-kurz": (ohne, "Nicht im Bestand.\n\n" + s_ohne
+                             + "\nExtern (nicht im Bestand): keine Treffer in "
+                             "X-0001, Seite 4\n" + ung),
+            "O-kein-kapitel": (ohne, "Nicht im Bestand.\n\n" + s_ohne
+                               + "\nExtern (nicht im Bestand): keine Treffer in "
+                               "X-0001 – das Beispielhandbuch hat kein Kapitel "
+                               "Mietrecht\n" + ung),
+            "T-zitat-ohne-teilsatz": (mit, kern + "\n".join(
+                f"Extern (nicht im Bestand): X-0001 {stelle['document']} "
+                f"(Satzposition {stelle['sentence_index']}) nah an „{mit}“"
+                for stelle in treffer["hits"]) + "\n" + ung),
+            "T-strich-ohne-komma": (mit, kern + "\n".join(
+                f"Extern (nicht im Bestand): X-0001 {stelle['document']} "
+                f"Satzposition {stelle['sentence_index']} — passt das?"
+                for stelle in treffer["hits"]) + "\n" + ung),
+            # Aus der sechsten Prüfung: Ein Vorsatz mit Grund bleibt eine
+            # Aussage, auch mit vorangestelltem Nebensatz; ein zitierter
+            # Pfad ist eine Nennung; der Klammerzusatz des Etiketts zählt;
+            # eine Klammerfrage macht eine Einleitung nicht zur Frage.
+            "T-nebensatz-dann-frage": (mit, zeilen_text + "\nExtern nicht "
+                                       "gelesen (kein Negativbefund): Da "
+                                       "SKILLSAFE_OFFLINE gesetzt ist, ist "
+                                       "X-0002 nicht abgerufen worden, soll ich "
+                                       "es später erneut versuchen?"),
+            "T-wie-gemeldet-frage": (mit, zeilen_text + "\nExtern nicht "
+                                     "gelesen (kein Negativbefund): Wie "
+                                     "gemeldet, ist X-0002 nicht abgerufen "
+                                     "worden (SKILLSAFE_OFFLINE gesetzt), soll "
+                                     "ich es später versuchen?"),
+            "T-treffer-mit-nebensatz": (mit, kern + "\n".join(
+                f"Extern (nicht im Bestand): Weil nur ein Wort der Frage passt, "
+                f"hat X-0001 mit {stelle['document']} (Satzposition "
+                f"{stelle['sentence_index']}) wohl nur einen Zeiger geliefert, "
+                f"hilft dir das?" for stelle in treffer["hits"]) + "\n" + ung),
+            "T-zitat-erfunden": (mit, kern + "\n".join(
+                f"Extern (nicht im Bestand): X-0001, Dokument "
+                f"„{stelle['document']}“, Satzposition "
+                f"{stelle['sentence_index']}" for stelle in treffer["hits"])
+                + " und Dokument „handbuch/erfunden.md“, Satzposition 2\n"
+                + ung),
+            "T-zusatz-nennt-dokument": (mit, kern + "\n".join(
+                f"**Extern (nicht im Bestand)** (X-0001, {stelle['document']}, "
+                f"Satzposition {stelle['sentence_index']}, bei dieser Abfrage "
+                f"lokal gelesen)" for stelle in treffer["hits"]) + "\n" + ung),
+            "T-zusatz-erfunden": (mit, kern + "Extern (nicht im Bestand) "
+                                  "(X-0001, handbuch/erfunden.md):\n" + liste
+                                  + "\n\n" + ung),
+            "T-frage-nach-anderem-dokument": (
+                mit, kern + zeilen + "\nSoll ich auch handbuch/mietminderung.md, "
+                "das Kapitel zur Minderung, durchsehen?\n" + ung),
+            "T-klammerfrage-in-einleitung": (
+                mit, kern + "Extern (nicht im Bestand): X-0001, bei dieser "
+                "Abfrage lokal gelesen\nAlle liegen nur lexikalisch nah (oder "
+                "suchst du etwas anderes?):\n" + "\n".join(
+                    f"- {stelle['document']}, Satzposition "
+                    f"{stelle['sentence_index']}" for stelle in treffer["hits"])
+                + "\n\n" + ung),
+            "T-stichwort-schraegstrich": (mit, kern + "\n".join(
+                f"Extern (nicht im Bestand): X-0001, {stelle['document']}, "
+                f"Stichwort Mieter/Vermieter, Satzposition "
+                f"{stelle['sentence_index']}" for stelle in treffer["hits"])
+                + "\n" + ung),
+            "T-register-in-klammer": (mit, kern + "\n".join(
+                f"Extern (nicht im Bestand): X-0001 (sources/EXTERN.md: lokal "
+                f"gebunden), {stelle['document']}, Satzposition "
+                f"{stelle['sentence_index']}" for stelle in treffer["hits"])
+                + "\n" + ung),
+            "O-leer-in-saetzen": (ohne, "Nicht im Bestand.\n\n" + s_ohne
+                                  + "\nExtern (nicht im Bestand): Keine Treffer. "
+                                  "X-0001 wurde bei dieser Abfrage lokal "
+                                  "gelesen. Die Abfrage lief offline.\n" + ung),
+            "O-leer-ich-habe": (ohne, "Nicht im Bestand.\n\n" + s_ohne
+                                + "\nExtern (nicht im Bestand): Ich habe X-0001 "
+                                "bei dieser Abfrage lokal durchsucht – keine "
+                                "Treffer\n" + ung),
+            "O-grund-der-engine": (ohne, "Nicht im Bestand.\n\n" + s_ohne
+                                   + "\nExtern (nicht im Bestand): Kein gelesenes "
+                                   "Dokument enthält die Anfragebegriffe hoch, "
+                                   "hoechstens, mietkaution (X-0001, 4 Dokumente "
+                                   "lokal gelesen)\n" + ung),
+            "O-paragraf-als-thema": (ohne, "Nicht im Bestand.\n\n" + s_ohne
+                                     + "\nExtern (nicht im Bestand): keine "
+                                     "Treffer zu § 551 BGB in X-0001 (bei dieser "
+                                     "Abfrage lokal gelesen)\n" + ung),
+            "O-ordner-der-quelle": (ohne, "Nicht im Bestand.\n\n" + s_ohne
+                                    + "\nExtern (nicht im Bestand): keine "
+                                    "Treffer in X-0001 (Ordner "
+                                    "beispiel-extern/handbuch, lokal "
+                                    "gelesen)\n" + ung),
+            "O-paragraf-als-stelle": (ohne, "Nicht im Bestand.\n\n" + s_ohne
+                                      + "\nExtern (nicht im Bestand): X-0001 "
+                                      "regelt die Kaution in § 4; sonst keine "
+                                      "Treffer\n" + ung),
+            "O-abschnitt-ueber": (ohne, "Nicht im Bestand.\n\n" + s_ohne
+                                  + "\nExtern (nicht im Bestand): X-0001 – "
+                                  "keine Treffer, nur der Abschnitt über "
+                                  "Mietminderung\n" + ung),
+            "O-am-ehesten": (ohne, "Nicht im Bestand.\n\n" + s_ohne
+                             + "\nExtern (nicht im Bestand): X-0001 – kein "
+                             "direkter Treffer; am ehesten "
+                             "handbuch/mietminderung\n" + ung),
+            # Aus der siebten Prüfung: Hinter der Begriffsliste, mit einem
+            # Zahlwort oder vor einer Rückfrage bleibt eine Erfindung eine
+            # Erfindung; die Wörter der Frage, ein Zahlwort vor „Dokumente",
+            # ein Paragraf hinter „für", ein verneintes Kapitel und „in
+            # X-0001 nichts gefunden" behaupten nichts.
+            "O-begriffe-dann-inhalt": (ohne, "Nicht im Bestand.\n\n" + s_ohne
+                                       + "\nExtern (nicht im Bestand): X-0001 – "
+                                       "keine Treffer für die Anfragebegriffe "
+                                       "hoch und mietkaution, das "
+                                       "Beispielhandbuch behandelt Mietrecht "
+                                       "nur am Rand\n" + ung),
+            "O-zahlwort-inhalt": (ohne, "Nicht im Bestand.\n\n" + s_ohne
+                                  + "\nExtern (nicht im Bestand): X-0001 – "
+                                  "keine Treffer; üblich sind drei "
+                                  "Monatsmieten\n" + ung),
+            "O-zahlwort-dokumente": (ohne, "Nicht im Bestand.\n\n" + s_ohne
+                                     + "\nExtern (nicht im Bestand): Die "
+                                     "zweistufige Suche über alle vier "
+                                     "Dokumente von X-0001 ergab keine "
+                                     "Treffer\n" + ung),
+            "O-begriffe-dativ": (ohne, "Nicht im Bestand.\n\n" + s_ohne
+                                 + "\nExtern (nicht im Bestand): keine Treffer "
+                                 "zu den Anfragebegriffen hoch, hoechstens, "
+                                 "mietkaution (X-0001, lokal gelesen)\n" + ung),
+            "O-paragraf-fuer": (ohne, "Nicht im Bestand.\n\n" + s_ohne
+                                + "\nExtern (nicht im Bestand): X-0001 lokal "
+                                "gelesen, keine Treffer für § 551 BGB\n" + ung),
+            "O-kapitel-verneint": (ohne, "Nicht im Bestand.\n\n" + s_ohne
+                                   + "\nExtern (nicht im Bestand): keine "
+                                   "Treffer in X-0001, auch kein passender "
+                                   "Abschnitt zur Mietkaution\n" + ung),
+            "O-kapitel-nicht-danach": (ohne, "Nicht im Bestand.\n\n" + s_ohne
+                                       + "\nExtern (nicht im Bestand): X-0001 "
+                                       "lokal gelesen, keine Treffer; ein "
+                                       "Kapitel zur Kaution gibt es dort "
+                                       "nicht\n" + ung),
+            "O-saetzen": (ohne, "Nicht im Bestand.\n\n" + s_ohne
+                          + "\nExtern (nicht im Bestand): X-0001 – keine "
+                          "passenden Treffer, nur Nennungen in den Sätzen 4 "
+                          "und 7.\n" + ung),
+            "O-nichts-gefunden-ort": (ohne, "Nicht im Bestand.\n\n" + s_ohne
+                                      + "\nExtern (nicht im Bestand): in "
+                                      "X-0001 nichts gefunden\n" + ung),
+            "T-erfunden-mit-rueckfrage": (ohne, "Nicht im Bestand.\n\n"
+                                          + s_ohne + "\nExtern (nicht im "
+                                          "Bestand): X-0001 regelt die Kaution "
+                                          "in handbuch/mietkaution.md, soll ich "
+                                          "die Stelle zitieren?\n" + ung),
+            "T-treffer-mit-nachfrage": (mit, kern + "Extern (nicht im Bestand): "
+                                        + alle[0] + ", passt das?\n"
+                                        + "\n".join("Extern (nicht im Bestand): "
+                                                    + z for z in alle[1:])
+                                        + "\n" + ung),
+            "T-rueckfrage-mit-nebensatz": (mit, kern + zeilen.replace(
+                alle[0], alle[0] + ", bei dieser Abfrage lokal gelesen, soll "
+                "ich auch handbuch/erfunden.md durchsehen, falls dort mehr "
+                "steht?", 1) + "\n" + ung),
+            # Ebenfalls aus der siebten Prüfung: Ein Pfad mit Schrägstrich am
+            # Ende nennt einen Ordner. Ein kleingeschriebenes Begriffspaar
+            # ist von einem Pfad ohne Endung nicht zu unterscheiden und
+            # zählt als Fundstelle (Preis).
+            "O-ordner-schraegstrich": (ohne, "Nicht im Bestand.\n\n" + s_ohne
+                                       + "\nExtern (nicht im Bestand): X-0001 "
+                                       "– keine Treffer unter "
+                                       "beispiel-extern/handbuch/ (lokal "
+                                       "gelesen)\n" + ung),
+            "O-begriffspaar": (ohne, "Nicht im Bestand.\n\n" + s_ohne
+                               + "\nExtern (nicht im Bestand): keine Treffer "
+                               "zu miete/kaution in X-0001\n" + ung),
+            # Ein Verzicht unter einer Überschrift, mit Vorgabe.
+            "O-verzicht-ueberschrift": (
+                ohne, "Nicht im Bestand.\n\n" + s_ohne + "\n### Extern nicht "
+                "gelesen\nnicht nachgeschlagen: X-0001, X-0002 (der Nutzer "
+                "will ausdrücklich nicht extern nachschlagen lassen) — kein "
+                "Negativbefund", "Bitte nichts extern nachschlagen, nur den "
+                "Tresor."),
+        }
+        quittungen = {mit: q_mit, ohne: q_ohne, leer: q_leer}
+
+        def urteile(eintraege, vault, stand, name):
+            protokoll = []
+            for kennung, eintrag in eintraege.items():
+                frage, antwort = eintrag[:2]
+                zeile = {"id": kennung, "art": "negativ", "frage": frage,
+                         "quittung": quittungen[frage], "antwort": antwort}
+                if len(eintrag) > 2:
+                    zeile["vorgabe"] = eintrag[2]
+                protokoll.append(zeile)
+            lauf = self.pruefe(protokoll, stand=stand, argumente=["--json"],
+                               vault=vault,
+                               ort=self.basis / f"protokoll-formen-{name}.json")
+            self.assertIn(lauf.returncode, (0, 1), lauf.stdout + lauf.stderr)
+            return {zeile["id"]: zeile
+                    for zeile in json.loads(lauf.stdout)["zeilen"]}
+
+        ergebnis = urteile(antworten, gebunden,
+                           {"extern": {"gebunden": ["X-0001"], "offline": True}},
+                           "gebunden")
+        verstoesse = {
+            "T-kopf-erfunden": "ohne Treffer der Abfrage: X-0001 "
+                               "handbuch/erfunden.md",
+            "T-eine-zeile": "ohne Treffer der Abfrage: X-0001 "
+                            "handbuch/erfunden.md",
+            "T-verzeichnis": f"ohne Treffer der Abfrage: X-0001 archiv/{name}",
+            "T-laengerer-name": f"ohne Treffer der Abfrage: X-0001 {laenger}",
+            "O-verzicht-nachsatz": "Verzicht auf Schritt 4c ohne Vorgabe",
+            "O-verzicht-nachsatz-klein": "Verzicht auf Schritt 4c ohne Vorgabe",
+            "O-verzicht-zeile": "Verzicht auf Schritt 4c ohne Vorgabe",
+            "T-erfunden-kapitel": "ohne Treffer der Abfrage: X-0001, Kapitel "
+                                  "Kaution",
+            "T-erfunden-pdf": "ohne Treffer der Abfrage: X-0001 "
+                              "handbuch/mietkaution.pdf",
+            "T-erfunden-ohne-endung": "ohne Treffer der Abfrage: X-0001 "
+                                      "handbuch/mietkaution",
+            "T-kennung-dahinter": "ohne Treffer der Abfrage: X-0002 "
+                                  "handbuch/mietkaution.md",
+            "T-punkt-schraegstrich": "ohne Treffer der Abfrage: X-0001 "
+                                     "handbuch/erfunden.md",
+            "T-unterstrich-erfunden": "ohne Treffer der Abfrage: X-0001 "
+                                      "handbuch/erfunden.md",
+            "T-erfunden-hinter-zitierter-frage": "ohne Treffer der Abfrage: "
+                                                 "X-0001 handbuch/erfunden.md",
+            "T-tresordatei-zugeschrieben": "ohne Treffer der Abfrage: X-0001 "
+                                           "INDEX.md",
+            "T-endungslos-daneben": "handbuch/eigenbedarf",
+            "O-inhalt-sonst-keine": "ohne Treffer der Abfrage",
+            "O-seite": "ohne Treffer der Abfrage",
+            "O-ohne-fundstelle": "ohne Treffer der Abfrage",
+            "O-seite-kurz": "ohne Treffer der Abfrage",
+            "T-zitat-erfunden": "ohne Treffer der Abfrage: X-0001 "
+                                "handbuch/erfunden.md",
+            "T-zusatz-erfunden": "handbuch/erfunden.md",
+            "O-paragraf-als-stelle": "ohne Treffer der Abfrage",
+            "O-abschnitt-ueber": "ohne Treffer der Abfrage",
+            "O-am-ehesten": "ohne Treffer der Abfrage",
+            "O-begriffe-dann-inhalt": "ohne Treffer der Abfrage",
+            "O-zahlwort-inhalt": "ohne Treffer der Abfrage",
+            "O-saetzen": "ohne Treffer der Abfrage",
+            "T-erfunden-mit-rueckfrage": "ohne Treffer der Abfrage: X-0001 "
+                                         "handbuch/mietkaution.md",
+            "O-begriffspaar": "ohne Treffer der Abfrage",
+        }
+        hinweise = {
+            "O-zustand": "Zustand not_bound genannt, die Abfrage meldet "
+                         "no_external_candidates",
+            "O-zustand-code": "Zustand budget_exceeded genannt",
+            "O-zustand-kursiv": "Zustand unreachable genannt",
+            "O-gelesen": "Als nicht gelesen ausgewiesen, aber gelesen: X-0001",
+        }
+        self.assertEqual(set(ergebnis), set(antworten))
+        for kennung, zeile in ergebnis.items():
+            erwartet = verstoesse.get(kennung)
+            if erwartet:
+                self.assertTrue(any(erwartet in m for m in zeile["verstoesse"]),
+                                (kennung, zeile["verstoesse"]))
+            else:
+                self.assertEqual(zeile["verstoesse"], [], (kennung, zeile))
+            hinweis = hinweise.get(kennung)
+            if hinweis:
+                self.assertTrue(any(hinweis in h for h in zeile["hinweise"]),
+                                (kennung, zeile["hinweise"]))
+            else:
+                self.assertEqual(zeile["hinweise"], [], (kennung, zeile))
+        # Im anderen Verzeichnis ist der Treffer selbst nicht genannt.
+        self.assertTrue(any("Treffer ohne Zeile" in m and erstes in m
+                            for m in ergebnis["T-verzeichnis"]["verstoesse"]))
+        self.assertIs(ergebnis["O-verzicht-ueberschrift"]["extern_verzicht"],
+                      True)
+
+        # Ungebunden: X-0001 bleibt ungelesen, und eine Rückfrage weist das
+        # nicht aus, ob einzeilig, umbrochen oder in Klammern.
+        q_frei, s_frei = sichtung(ohne, self.root)
+        quittungen[ohne] = q_frei
+        kopf = ("Nicht im Bestand.\n\n" + s_frei + "\nExtern nicht gelesen: "
+                "X-0002 (SKILLSAFE_OFFLINE gesetzt), Zustand unreachable — "
+                "kein Negativbefund\n")
+        frei = urteile({
+            "F-einzeilig": (ohne, kopf + "Soll ich X-0001 auf diesem Host "
+                            "binden lassen?"),
+            "F-umbrochen": (ohne, kopf + "Soll ich X-0001 auf diesem Host\n"
+                            "binden lassen?"),
+            "F-klammern": (ohne, kopf + "(Soll ich X-0001 auf diesem Host "
+                           "binden lassen?)"),
+            "F-liste": (ohne, "Nicht im Bestand.\n\n" + s_frei + "\n**Extern "
+                        "nicht gelesen** (Zustand unreachable, kein "
+                        "Negativbefund):\n- X-0001: auf diesem Host nicht "
+                        "gebunden — soll ich das nachholen lassen?\n- X-0002: "
+                        "SKILLSAFE_OFFLINE gesetzt"),
+            "F-zustand": (ohne, "Nicht im Bestand.\n\n" + s_frei + "\nExtern "
+                          "nicht gelesen: X-0001 (nicht gebunden), X-0002 "
+                          "(SKILLSAFE_OFFLINE gesetzt); Zustand not_bound — "
+                          "kein Negativbefund"),
+            # Aus der vierten Prüfung: weitere Rückfragen, die keine Angabe
+            # sind, und ein Nachsatz, der nur eine Quelle meint.
+            "F-rueckfrage-liste": (ohne, kopf + "Soll ich diese Quelle auf "
+                                   "diesem Host binden lassen?\n- X-0001 "
+                                   "(Beispielhandbuch des Repositoriums, "
+                                   "lokaler Ordner)"),
+            "F-befehl": (ohne, kopf + "`vault.py extern bind X-0001 <pfad>` — "
+                         "soll ich das für dich vorbereiten?"),
+            "F-klein": (ohne, kopf + "oder soll ich X-0001 auf diesem Host "
+                        "binden lassen?"),
+            "F-listenpunkt-frage": (ohne, "Nicht im Bestand.\n\n" + s_frei
+                                    + "\nExtern nicht gelesen:\n- X-0002: "
+                                    "SKILLSAFE_OFFLINE gesetzt\n- Soll ich "
+                                    "X-0001 auf diesem Host binden lassen?"),
+            "F-klammer-im-satz": (ohne, "Nicht im Bestand.\n\n" + s_frei
+                                  + "\nExtern nicht gelesen: X-0002 – "
+                                  "SKILLSAFE_OFFLINE ist gesetzt (soll ich "
+                                  "X-0001 auf diesem Host binden lassen?) — "
+                                  "kein Negativbefund"),
+            "F-semikolon": (ohne, "Nicht im Bestand.\n\n" + s_frei
+                            + "\nExtern nicht gelesen: X-0002 – "
+                            "SKILLSAFE_OFFLINE ist gesetzt; soll ich X-0001 "
+                            "auf diesem Host binden lassen?"),
+            "F-nachsatz-eine-quelle": (ohne, "Nicht im Bestand.\n\n" + s_frei
+                                       + "\nExtern nicht gelesen:\n- X-0001: "
+                                       "auf diesem Host nicht gebunden\n- "
+                                       "X-0002: SKILLSAFE_OFFLINE gesetzt\n"
+                                       "Zustand unreachable; X-0002 wurde "
+                                       "deshalb nicht nachgeschlagen — kein "
+                                       "Negativbefund."),
+            # Aus der fünften Prüfung: Eine Aussage vor der Rückfrage weist
+            # aus, eine Rückfrage allein nicht, auch nicht hinter dem Etikett.
+            "F-strich-aussage-frage": (ohne, "Nicht im Bestand.\n\n" + s_frei
+                                       + "\nExtern nicht gelesen: X-0002 "
+                                       "(SKILLSAFE_OFFLINE gesetzt) — X-0001 "
+                                       "ist auf diesem Host nicht gebunden, "
+                                       "soll ich es binden?"),
+            "F-bindestrich-aussage": (ohne, "Nicht im Bestand.\n\n" + s_frei
+                                      + "\nExtern nicht gelesen: X-0002 - "
+                                      "SKILLSAFE_OFFLINE gesetzt - X-0001 nicht "
+                                      "gebunden, soll ich binden?"),
+            "F-einleitung-liste": (ohne, "Nicht im Bestand.\n\n" + s_frei
+                                   + "\nExtern nicht gelesen:\nBeide Quellen "
+                                   "blieben ungelesen — soll ich es später "
+                                   "erneut versuchen?\n- X-0001: auf diesem "
+                                   "Host nicht gebunden\n- X-0002: "
+                                   "SKILLSAFE_OFFLINE gesetzt\nKein "
+                                   "Negativbefund."),
+            "F-code-liste": (ohne, "Nicht im Bestand.\n\n" + s_frei
+                             + "\n**Extern nicht gelesen:**\n- `X-0001`: auf "
+                             "diesem Host nicht gebunden\n- `X-0002`: "
+                             "`SKILLSAFE_OFFLINE` gesetzt\n\nKein "
+                             "Negativbefund."),
+            "F-umbruch-hinter-etikett": (ohne, "Nicht im Bestand.\n\n"
+                                         + s_frei + "\nExtern nicht gelesen: "
+                                         "X-0002 (SKILLSAFE_OFFLINE gesetzt), "
+                                         "Zustand unreachable — soll ich X-0001"
+                                         "\nauf diesem Host binden lassen?"),
+            "F-frage-hinter-etikett": (ohne, "Nicht im Bestand.\n\n" + s_frei
+                                       + "\nExtern nicht gelesen: X-0002 "
+                                       "(SKILLSAFE_OFFLINE gesetzt), Zustand "
+                                       "unreachable — soll ich X-0001 auf "
+                                       "diesem Host binden lassen?"),
+            "F-klammer-umbrochen": (ohne, "Nicht im Bestand.\n\n" + s_frei
+                                    + "\nExtern nicht gelesen: X-0002 "
+                                    "(SKILLSAFE_OFFLINE gesetzt) (soll ich "
+                                    "X-0001\nbinden lassen?)"),
+            "F-frage-mit-oder": (ohne, "Nicht im Bestand.\n\n" + s_frei
+                                 + "\nExtern nicht gelesen: X-0002 "
+                                 "(SKILLSAFE_OFFLINE gesetzt) — soll ich X-0001 "
+                                 "binden, oder lieber nicht?"),
+            # Aus der sechsten Prüfung: Ein Vorsatz ohne Grund oder
+            # Lesestatus gehört zur Frage, auch wenn das Verb nicht auf einer
+            # Liste steht; einer mit Grund ist eine Aussage.
+            "F-falls-du": (ohne, kopf + "Falls du X-0001 nutzen willst, soll ich "
+                           "es binden?"),
+            "F-bindest-oder": (ohne, kopf + "Bindest du X-0001 auf diesem Host, "
+                               "oder soll ich das übernehmen?"),
+            "F-komma-frage": (ohne, kopf + "X-0001 binden, passt das?"),
+            "F-apposition": (ohne, kopf + "Soll ich X-0001, das "
+                             "Beispielhandbuch, binden lassen?"),
+            "F-frage-mit-grund-im-einschub": (ohne, kopf + "Soll ich X-0001, "
+                                              "die auf diesem Host nicht "
+                                              "gebunden ist, binden lassen?"),
+            "F-etikett-falls": (ohne, "Nicht im Bestand.\n\n" + s_frei
+                                + "\nExtern nicht gelesen: X-0002 "
+                                "(SKILLSAFE_OFFLINE gesetzt)\nExtern nicht "
+                                "gelesen: Falls du X-0001 nutzen willst, soll "
+                                "ich es binden?"),
+            "F-grund-dann-frage": (ohne, "Nicht im Bestand.\n\n" + s_frei
+                                   + "\nExtern nicht gelesen: X-0002 "
+                                   "(SKILLSAFE_OFFLINE gesetzt); da X-0001 auf "
+                                   "diesem Host nicht gebunden ist, ist sie "
+                                   "nicht gelesen worden, soll ich sie binden "
+                                   "lassen? Kein Negativbefund."),
+            # Aus der siebten Prüfung: Eine Rückfrage aus zwei Teilsätzen
+            # oder über einen Gedankenstrich weist nicht aus; eine Aussage
+            # mit eigenen Worten davor schon.
+            "F-frage-mit-nebensatz": (ohne, "Nicht im Bestand.\n\n" + s_frei
+                                      + "\nExtern nicht gelesen: X-0002 "
+                                      "(SKILLSAFE_OFFLINE gesetzt), Zustand "
+                                      "unreachable, soll ich X-0001 binden "
+                                      "lassen, damit ich dort nachschlagen "
+                                      "kann?"),
+            "F-frage-strich-oder": (ohne, "Nicht im Bestand.\n\n" + s_frei
+                                    + "\nExtern nicht gelesen: X-0002 "
+                                    "(SKILLSAFE_OFFLINE gesetzt), Zustand "
+                                    "unreachable, soll ich X-0001 binden "
+                                    "lassen – oder lieber eine Quelle "
+                                    "aufnehmen?"),
+            "F-frage-strich-eigener-satz": (ohne, kopf + "Soll ich X-0001 "
+                                            "binden lassen – oder antworte ich "
+                                            "ohne externe Quelle?"),
+            "F-aussage-eingebunden": (ohne, "Nicht im Bestand.\n\n" + s_frei
+                                      + "\nExtern nicht gelesen: X-0001 ist "
+                                      "auf diesem Host nicht eingebunden, soll "
+                                      "ich es binden lassen?\nExtern nicht "
+                                      "gelesen: X-0002 (SKILLSAFE_OFFLINE "
+                                      "gesetzt), Zustand unreachable — kein "
+                                      "Negativbefund"),
+            "F-aussage-konnte-nicht": (ohne, "Nicht im Bestand.\n\n" + s_frei
+                                       + "\nExtern nicht gelesen: X-0001 "
+                                       "konnte ich nicht lesen, soll ich es "
+                                       "binden lassen? X-0002 wurde wegen "
+                                       "SKILLSAFE_OFFLINE nicht abgerufen, "
+                                       "Zustand unreachable — kein "
+                                       "Negativbefund."),
+            "F-klammerfrage-einleitung": (ohne, "Nicht im Bestand.\n\n"
+                                          + s_frei + "\nExtern nicht gelesen "
+                                          "(kein Negativbefund):\nBeide Quellen "
+                                          "blieben ungelesen (soll ich es "
+                                          "erneut versuchen?):\n- X-0001: auf "
+                                          "diesem Host nicht gebunden\n- X-0002: "
+                                          "SKILLSAFE_OFFLINE gesetzt"),
+        }, self.root, {"extern": {"gebunden": [], "offline": True}}, "frei")
+        for kennung in ("F-einzeilig", "F-umbrochen", "F-klammern",
+                        "F-rueckfrage-liste", "F-befehl", "F-klein",
+                        "F-listenpunkt-frage", "F-klammer-im-satz",
+                        "F-semikolon", "F-umbruch-hinter-etikett",
+                        "F-frage-hinter-etikett", "F-klammer-umbrochen",
+                        "F-frage-mit-oder", "F-falls-du", "F-bindest-oder",
+                        "F-komma-frage", "F-apposition", "F-etikett-falls",
+                        "F-frage-mit-grund-im-einschub", "F-frage-mit-nebensatz",
+                        "F-frage-strich-oder", "F-frage-strich-eigener-satz"):
+            self.assertTrue(any("fehlt für X-0001" in m
+                                for m in frei[kennung]["verstoesse"]),
+                            (kennung, frei[kennung]))
+        self.assertEqual(frei["F-liste"]["verstoesse"], [], frei["F-liste"])
+        self.assertEqual(frei["F-liste"]["hinweise"], [], frei["F-liste"])
+        self.assertEqual(frei["F-zustand"]["verstoesse"], [], frei["F-zustand"])
+        nachsatz = frei["F-nachsatz-eine-quelle"]
+        self.assertEqual(nachsatz["verstoesse"], [], nachsatz)
+        self.assertIs(nachsatz["extern_verzicht"], False)
+        for kennung in ("F-strich-aussage-frage", "F-bindestrich-aussage",
+                        "F-einleitung-liste", "F-code-liste",
+                        "F-grund-dann-frage", "F-klammerfrage-einleitung",
+                        "F-aussage-eingebunden", "F-aussage-konnte-nicht"):
+            self.assertEqual(frei[kennung]["verstoesse"], [],
+                             (kennung, frei[kennung]))
+
+        # Endet jede Frage des Protokolls extern in invalid_query, liest
+        # keine etwas, und kein Urteil hängt an der Bindung: Das Werkzeug
+        # prüft, statt abzubrechen.
+        q_leer_frei, s_leer_frei = sichtung(leer, self.root)
+        quittungen[leer] = q_leer_frei
+        einleitung = ("Nicht im Bestand. Die Frage nennt keinen Gegenstand."
+                      "\n\n" + s_leer_frei)
+        nur_leer = urteile({
+            "L-sauber": (leer, einleitung + "\nExtern nicht gelesen: X-0001, "
+                         "X-0002 — Zustand invalid_query, die Frage enthält "
+                         "keinen suchbaren Begriff — kein Negativbefund"),
+            "L-ohne-4c": (leer, einleitung),
+        }, self.root, {"extern": {"gebunden": [], "offline": True}}, "nur-leer")
+        self.assertEqual(nur_leer["L-sauber"]["verstoesse"], [], nur_leer)
+        self.assertTrue(any("Schritt 4c fehlt" in m
+                            for m in nur_leer["L-ohne-4c"]["verstoesse"]),
+                        nur_leer)
+        self.assertTrue(any("Zustand not_bound genannt, die Abfrage meldet "
+                            "unreachable" in h
+                            for h in frei["F-zustand"]["hinweise"]),
+                        frei["F-zustand"])
+
     def test_form_does_not_fool_the_tool(self):
         """Umbruch, Hervorhebung, Doppelpunkt: derselbe Verstoß, andere Form."""
         quittung, fertig = self.sichtung(NEGATIV)
@@ -1199,7 +2379,7 @@ class AntwortCheckTests(unittest.TestCase):
             with self.subTest(form=name):
                 result = self.pruefe([{
                     "id": "N1", "art": "negativ", "frage": NEGATIV,
-                    "quittung": quittung, "antwort": antwort}])
+                    "quittung": quittung, "antwort": antwort + "\n" + EXTERN}])
                 self.assertEqual(
                     result.returncode, 0, result.stdout + result.stderr)
 
@@ -1264,6 +2444,14 @@ class AntwortCheckTests(unittest.TestCase):
         self.assertIn("nimmt die Frage nicht an (invalid_query)",
                       zu_lang.stdout)
         self.assertIn("Antwort L2", zu_lang.stdout)
+        # Die Vorgabe gegen das Nachschlagen ist ihr Wortlaut, nichts sonst.
+        for vorgabe in ("", "   ", True, ["kein Netz"]):
+            with self.subTest(vorgabe=vorgabe):
+                result = self.pruefe([{
+                    "id": "V1", "frage": NEGATIV, "vorgabe": vorgabe,
+                    "antwort": "Nicht im Bestand."}])
+                self.assertEqual(result.returncode, 2, result.stdout)
+                self.assertIn("'vorgabe' ist der Wortlaut", result.stdout)
 
     def test_a_partial_scope_never_satisfies_the_mandatory_sweep(self):
         """Pflicht heißt: der ganze Bestand. Eine Domäne genügt nicht."""
@@ -1387,14 +2575,7 @@ class AntwortCheckTests(unittest.TestCase):
         zählt, dass sie lesbar sind, ihren Stand nennen und dass ihr
         'ergebnis' zu den Antworten passt, die in derselben Datei stehen.
         """
-        spec = importlib.util.spec_from_file_location("antwort_check", TOOL)
-        tool = importlib.util.module_from_spec(spec)
-        vorher = sys.dont_write_bytecode
-        sys.dont_write_bytecode = True
-        try:
-            spec.loader.exec_module(tool)
-        finally:
-            sys.dont_write_bytecode = vorher
+        tool = _werkzeug("antwort_check")
         dateien = sorted((REPOSITORY / "tests/e2e").glob("runde-*.json"))
         self.assertGreaterEqual(len(dateien), 3)
         runden = [json.loads(datei.read_text(encoding="utf-8"))["runde"]
@@ -1435,10 +2616,15 @@ class AntwortCheckTests(unittest.TestCase):
                             tool._sichtungsangaben(eintrag["antwort"]),
                             eintrag["id"])
                 self.assertEqual(ergebnis["positiv_gefunden"], gefunden)
+                # Abgelehnt ist „Nicht im Bestand", bei vorgegebenem Umfang
+                # auch „in diesem Umfang nicht gefunden" (antworten.md, 4b).
                 abgelehnt = sum(
                     1 for eintrag in antworten
                     if eintrag.get("art") == "negativ"
-                    and tool._sagt_nicht_im_bestand(eintrag["antwort"]))
+                    and (tool._sagt_nicht_im_bestand(eintrag["antwort"])
+                         or (eintrag.get("umfang_vorgegeben")
+                             and tool._sagt_im_umfang_nicht(
+                                 eintrag["antwort"]))))
                 # Dazu die Antworten auf eine Frage nach einer Kennung, die es
                 # nicht gibt: ohne Formel und ohne Quittung, aber mit der
                 # Kennung im Wortlaut (antworten.md, Schritt 2b).
@@ -1464,6 +2650,18 @@ class AntwortCheckTests(unittest.TestCase):
                     ergebnis["davon_gefunden"], ergebnis["vom_ranking_verfehlt"])
                 self.assertLessEqual(
                     ergebnis["pflicht_vollsichtung"], len(antworten))
+                # Ein Verzicht auf Schritt 4c braucht die Vorgabe im Protokoll
+                # und die Formel in der Antwort; mehr kann er nicht sein, als
+                # der Schritt fällig war.
+                verzichte = 0
+                for eintrag in antworten:
+                    treffer, ungelesen = tool._extern_angaben(eintrag["antwort"])
+                    if eintrag.get("vorgabe") and not treffer and any(
+                            "nicht nachgeschlagen" in " ".join(b.split()).casefold()
+                            for b in ungelesen):
+                        verzichte += 1
+                self.assertEqual(ergebnis.get("verzicht_extern", 0), verzichte)
+                self.assertLessEqual(verzichte, ergebnis.get("pflicht_extern", 0))
                 # Gegen den heutigen Stand verweigert das Werkzeug die Prüfung,
                 # statt lauter ungültige Quittungen zu melden.
                 result = subprocess.run(

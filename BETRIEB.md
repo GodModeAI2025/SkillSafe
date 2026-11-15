@@ -149,6 +149,7 @@ abgeräumt — exakt 15:02 nach dem Start, also vom eigenen `timeout-minutes: 15
 dieses Workflows. Der Pages-Lauf auf `e659a2d` baute erfolgreich und scheiterte
 danach im Deploy mit `Timeout reached, aborting!`.
 
+
 **Eine Ursache steht damit nicht fest.** Die naheliegende Erklärung — Merges
 mit einem App-Token lösen bewusst keine Läufe aus, damit sich Automatisierung
 nicht rekursiv auslöst — deckt Zeile zwei und scheitert an Zeile drei: die hat
@@ -159,6 +160,12 @@ Genau das ist der Eintrag, der bleiben muss. Der Tresor verlangt für jede
 Behauptung eine Fundstelle; für Betriebsbefunde gilt dasselbe. An diesem Tag
 wurde die Ursache zweimal benannt, bevor sie belegt war. **Eine unbelegte
 Ursache ist schlimmer als keine, weil sie das Suchen beendet.**
+
+Ein späterer Befund, mit belegter Ursache: Am 14. November 2026 wurden die
+beiden Läufe zu `0f2bae9` nach 15:15 als `cancelled` abgeräumt, ubuntu/3.9
+in beiden, ubuntu/3.13 und macOS/3.13 im zweiten. Die Kette selbst brauchte
+inzwischen rund 15 Minuten; der 3.9-Job zu `670f2dc` brauchte 20½ Minuten. Auch ein so
+abgeräumter Lauf ist kein grüner. Seitdem steht `timeout-minutes` auf 30.
 
 **Was unabhängig von der Ursache trägt — und das Verfahren ist:**
 
@@ -325,28 +332,69 @@ vollständige Quittung, eine ausgelassene Pflicht-Vollsichtung, eine ungültige
 Quittung, eine Zeile „Sichtung:" mit anderen Zahlen oder einer fremden
 Kennung, eine Angabe „Sichtung:" ohne eingereichte Quittung, eine
 erfundene Claim-ID und, wenn das Protokoll `erwartet` führt, ein
-übersehener Claim. Ob Schritt 4c lief oder sichtbar ausgelassen wurde, prüft
-das Werkzeug nicht. Exit 1 bei einem Verstoß, 2 bei unbrauchbarem
-Protokoll oder falschem Stand.
+übersehener Claim. Seit v0.18.0 auch ein still ausgelassener Schritt 4c:
+Bleibt die Frage nach der Vollsichtung ungedeckt und sind Quellen aufgeführt,
+verlangt das Werkzeug externe Treffer, Ungelesenes oder den ausgewiesenen
+Verzicht mit allen Kennungen. Seit v0.18.1 verlangt es die Angabe „Extern
+(nicht im Bestand):" mit Quelle und Dokument für jeden Treffer, den die
+Abfrage mit `--extern` liefert, und „Extern nicht gelesen:" für jede
+ungelesene Quelle; eine Angabe zu einem Treffer, die kein geliefertes
+Dokument nennt oder einen Pfad, den die Abfrage nicht geliefert hat, ist bei
+bekannter Bindung (lokale Quelle) und bei einem Lauf ohne Netz (Netzquelle)
+ebenfalls ein Verstoß, sonst ein Hinweis. Ausgenommen sind zitierte Sätze
+(ein zitierter Dokumentpfad zählt wie ohne Anführungszeichen), Dateien des
+geprüften Tresors unter `knowledge/` und andere, solange die Angabe sie
+keiner Quelle zuschreibt, und eine Leermeldung („keine Treffer", „kein
+Zeiger"), die neben Kennung, Zustand, Lesestatus und den Wörtern der Frage
+höchstens zwei Inhaltswörter nennt (ein Zahlwort zählt mit, außer vor
+„Dokumente", „Quellen" oder „Treffer") und nichts, was nach einer
+Fundstelle aussieht. Eine Rückfrage zählt nicht als Angabe, ob als eigener
+Satz, in Klammern, als Teilsatz oder direkt hinter dem Etikett. Die
+Rückfrage wächst vom letzten Teilsatz rückwärts über jeden Teil, der wie
+eine Frage beginnt (Frageverb, „oder", Fragewort, „falls", „wenn",
+„damit" …, Verb vor der Anrede) und keinen Lesestatus, Zustand oder
+Treffer nennt, vor einer Nachfrage wie „passt das?" auch über einen Teil,
+der nichts aussagt; ein Segment zwischen Semikolon, Doppelpunkt oder
+Gedankenstrich, das so beginnt, gehört ganz dazu. Was davor steht, bleibt
+Angabe, auch mit eigenen Worten („X-0001 ist hier nicht eingebunden, soll
+ich …?"). Eine zitierte Frage ist keine Rückfrage. Einen Verzicht nimmt es
+nur an, wenn das Protokoll den Wunsch des Nutzers oder die Vorgabe der
+Umgebung im Feld `vorgabe` festhält.
+Ob der Schritt Pflicht ist, liest es aus dem Vertrag des geprüften Tresors
+(`references/antworten.md`); ein Stand, dessen Vertrag ihn freistellte, wird
+ohne die Regel geprüft. Die Abfrage rechnet es selbst nach, immer offline.
+Was eine Netzquelle geliefert hätte, prüft es nur, wenn auch der Lauf
+offline war: Das sagt `stand.extern.offline` im Protokoll, sonst
+`SKILLSAFE_OFFLINE` in seiner Umgebung. Hält das Protokoll unter
+`stand.extern.gebunden` fest, welche Quellen der Lauf gebunden hatte, und
+bindet der prüfende Host andere, bricht es ab, außer jede Frage des
+Protokolls endet extern in `invalid_query`: Dann liest keine Quelle etwas,
+und kein Urteil hängt an der Bindung. Exit 1 bei einem Verstoß, 2
+bei unbrauchbarem Protokoll, falschem Stand oder abweichender Bindung.
 
 **Siegel gelten für ihren Stand.** Nach jedem Release sind alte Quittungen
 ungültig. Ein Protokoll, das aufgehoben werden soll, braucht deshalb den Block
 `stand` mit dem Manifest-Digest; nachgerechnet wird gegen den Tresor dieses
-Commits (`git archive <commit> wissenstresor`). Die vier Messläufe vom 12. und
-13. November 2026 liegen so unter `tests/e2e/`. Ihre Zahlen stehen in
+Commits (`git archive <commit> wissenstresor`). Hing die Antwort an einer
+gebundenen externen Quelle, gehört auch die Bindung dazu: Runde 5 lief mit
+gebundener X-0001 und ohne Netz und wird genauso nachgerechnet, mit
+`beispiel-extern/` aus demselben Commit (Rezept in `tests/e2e/LIESMICH.md`).
+Die fünf Messläufe vom 12. bis 14. November 2026 liegen so unter
+`tests/e2e/`. Ihre Zahlen stehen in
 `README.md`, `index.html` und `wissenstresor/KONZEPT.md`, und
 `check_docs.py` bindet sie an die Protokolle: die Tabellenzeilen an den Block `ergebnis`, die Summen im
 Fließtext (Zahl der Agenten, „alle N …", Sichtungen über mehrere Stapel) an
 dieselben Protokolle samt ihren Quittungen.
 
-**Die Anmerkungen sind die halbe Messung.** Die Agenten der vier Läufe
+**Die Anmerkungen sind die halbe Messung.** Die Agenten der fünf Läufe
 sollten zusätzlich in einem Satz sagen, was am Vertrag unklar war. Daraus
-kamen die Korrekturen in v0.13.0 bis v0.16.0, darunter ein falscher
+kamen die Korrekturen in v0.13.0 bis v0.18.0, darunter ein falscher
 Satz, den erst ein Agent bemerkte. Wer den Vertrag ändert, lässt ihn danach
 lesen.
 
-**Was diese Messung nicht sagt.** 68 Fragen, ein Bestand mit einem Stapel,
-Agenten aus derselben Modellfamilie. Sie zeigt, dass das Verfahren befolgbar
+**Was diese Messung nicht sagt.** 80 Fragen, ein Demo-Bestand mit 28
+Claims (in der Standardgröße ein Stapel), Agenten aus derselben
+Modellfamilie. Sie zeigt, dass das Verfahren befolgbar
 ist, nicht wie sorgfältig ein Modell 189 Stapel liest.
 
 ## Störfälle
@@ -537,13 +585,13 @@ Der ausgelieferte Bestand dokumentiert SkillSafe selbst (`knowledge/demo-okf/`)
 und zeigt an einer Seite, wie ein extern belegter Claim aussieht
 (`knowledge/demo-extern/`, dazu X-0001 und X-0002 in `sources/EXTERN.md`). Für
 den praktischen Einsatz gehört er ersetzt. Das Rezept steht in
-`wissenstresor/references/mehrere-tresore.md`, Abschnitt 4. Nachgefahren wurde
-es mit v0.10.0, vor den externen Quellen; seit v0.11.0 reicht es allein nicht.
-Bleibt `knowledge/demo-extern/` stehen, bricht `release major` ab („Domäne
-'demo-extern' hat keinen Abschnitt"). Bleibt X-0002 aufgeführt, schlägt der
-neue Tresor bei jeder Antwort, die nach der Vollsichtung etwas offenlässt, im
-SkillSafe-Repositorium nach (Schritt 4c). Mit den Ergänzungen unten endet das
-Rezept grün: `release major` ergibt v1.0.0, `doctor` meldet nichts.
+`wissenstresor/references/mehrere-tresore.md`, Abschnitt 4. Von v0.11.0 bis
+v0.17.0 ließ es `knowledge/demo-extern/` und die Demo-Quellen stehen: Dann
+brach `release major` ab („Domäne 'demo-extern' hat keinen Abschnitt"), und
+mit X-0002 schlüge der neue Tresor bei jeder Antwort, die nach der
+Vollsichtung etwas offenlässt, im SkillSafe-Repositorium nach (Schritt 4c).
+Seit v0.18.0 nennt Schritt 3 beides; ein Test spielt das Rezept nach und
+verlangt `release major` mit v1.0.0 und ein grünes `doctor`.
 
 Zwei Dinge, die dort noch nicht stehen:
 

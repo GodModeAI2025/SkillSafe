@@ -8,8 +8,9 @@ und ist damit gegen Veraenderung gepinnt.
 Eine aufgefuehrte Bezugsquelle ist deshalb **keine Internetrecherche**: keine
 Suche, kein Suchendpunkt, kein Folgen von Links aus Inhalten. Eine
 aufgefuehrte Netzquelle wird behandelt wie eine interne Quelle — auch dann,
-wenn im Umfeld ausdruecklich keine Internetrecherche erlaubt ist. Jeder Abruf
-steht mit URL, Pruefsumme und Zeitpunkt in `log.md`.
+wenn im Umfeld ausdruecklich keine Internetrecherche erlaubt ist. Jedes abgerufene
+Dokument steht mit URL, Pruefsumme und Datum in `log.md`; ein gescheiterter
+Versuch steht nur in der Ausgabe des Aufrufs.
 
 Spalten:
 

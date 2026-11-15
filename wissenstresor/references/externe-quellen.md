@@ -36,8 +36,9 @@ namentlich aufgeführten, gepinnten Quelle des eigenen Bestands.
 Damit das überprüfbar bleibt statt behauptet: nur `GET` unter dem
 registrierten Präfix, geprüft an Pfadgrenzen; einer Weiterleitung folgt die
 HTTP-Schicht nie selbst, ihr Ziel wird geprüft, bevor die nächste Anfrage
-hinausgeht; höchstens 20 Abrufe je Abfrage; und jeder Abruf steht mit URL,
-Prüfsumme, Bytezahl und Zeitpunkt in `log.md`. Kann `log.md` nicht geschrieben
+hinausgeht; höchstens 20 Abrufe je Abfrage; und jedes abgerufene Dokument steht
+mit URL, Prüfsumme, Bytezahl und Datum in `log.md`, ein gescheiterter
+Versuch nur in der Ausgabe des Aufrufs. Kann `log.md` nicht geschrieben
 werden, findet der Abruf nicht statt.
 
 ## Zwei Allowlists, zwei Fragen
@@ -120,7 +121,7 @@ fällig ist, regelt allein `references/antworten.md`, Schritt 4c: Dort ist er
 Pflicht, sobald die Vollsichtung die Frage nicht deckt und Quellen aufgeführt
 sind.
 
-Das Ranking `extern-zweistufig/v2` arbeitet in zwei Stufen:
+Das Ranking `extern-zweistufig/v3` arbeitet in zwei Stufen:
 
 * **Stufe 1, Katalogtext** — ein schwaches Signal. Bei einer **Netzquelle**
   entscheidet es, welche Dokumente überhaupt abgerufen werden (die besten 24).
@@ -143,7 +144,27 @@ Katalogtext ist ein schwaches Signal, der Bestand dahinter das starke.
 
 Abgeglichen wird ausschließlich an Tokengrenzen. „himmel" findet deshalb kein
 „schimmel" — der Fehler ist strukturell ausgeschlossen, nicht per Konvention
-vermieden. Stoppwörter wie „für" zählen nicht, auch nicht als „fuer".
+vermieden. Stoppwörter wie „für" zählen nicht, auch nicht als „fuer". Seit
+`extern-zweistufig/v3` gilt das auch für die Funktionswörter des lokalen
+Rankings (Artikel, Pronomen, Präpositionen, Hilfs- und Modalverben,
+Partikeln): In der Frage sind sie kein Anfragebegriff. Ein Kürzel in
+Großbuchstaben wie „IT" bleibt einer (die Pronomen der Anrede wie „SIE"
+nicht), ebenso ein Wort einer kurzen, geschlossenen Liste von Homographen
+(„Waren", „Soll", „Haben", „Würde" …), wenn es mitten im Satz
+großgeschrieben steht: Dann ist es ein Substantiv („Was sind Waren?"). Am
+Satzanfang, auch nach Doppelpunkt, Gedankenstrich oder „1)", zählt es nur
+für sich stehend („Begriffsfrage: Waren – …"), nicht vor einem Wort, wo
+es meist Verb oder Präposition ist („Frage: Muss ich …", „Soll oder muss
+…", „Laut des Mietvertrags …"), und in Versalien oder Titelschreibung nie
+(Titelschreibung: alle Wörter groß und nach dem ersten ein Funktionswort,
+das nicht auf der Liste steht, wie „Der"; eine Stichwortfrage wie
+„Zollgebühren Waren China" ist keine). Sonst
+macht Großschreibung kein Funktionswort zum Begriff, auch nicht bei der
+Anrede („Können Sie …"). Eine Frage nur aus Homographen („Würde") sucht mit
+ihnen; besteht sie sonst nur aus Funktionswörtern, ergibt sie
+`invalid_query` (siehe unten). Die Dokumente tokenisiert die
+Suche unverändert. In v2 trafen „sie", „nur" oder „ohne" beliebige Sätze,
+und jeder externe Treffer verlangt in der Antwort eine eigene Zeile.
 
 ## Ehrlich scheitern
 
@@ -192,8 +213,8 @@ Katalogeinträge, und bei einem Katalogtext, der auf die Anfrage nicht passt,
 sind das schlicht die alphabetisch ersten. Fehlt der Zusatz, wurde jedes
 katalogisierte Dokument jeder berücksichtigten Quelle gelesen.
 
-Eine Frage aus lauter Stoppwörtern ergibt `invalid_query`: Ohne suchbaren
-Begriff kann nichts gefunden werden, und ein „nichts gefunden" wäre ein
+Eine Frage aus lauter Stopp- und Funktionswörtern ergibt `invalid_query`:
+Ohne suchbaren Begriff kann nichts gefunden werden, und ein „nichts gefunden" wäre ein
 Befund über eine Frage, die keine ist. Dasselbe gilt, wenn die lokale Abfrage
 gar nicht auswertbar war (`ambiguous`, unbekannte Begriffswelt): Dann wird
 extern nichts durchsucht.
@@ -209,7 +230,11 @@ Claim darf sich nicht erst aus dem Kontext ergeben müssen. Zusätzlich sichtbar
 Stufeneffekt ablesbar bleibt und nicht in einer Summe verschwindet.
 
 Ein Satz mit Instruktionssignatur wird mit `text: null` und dem Signal
-`suspicious_instruction` zurückgegeben — gemeldet, nie ausgeliefert.
+`suspicious_instruction` zurückgegeben — gemeldet, nie ausgeliefert. Ein
+Dokumentpfad mit Signatur bleibt als Kennung des Treffers stehen; der
+Treffer trägt dann dasselbe Signal, und `validate` warnt schon am Katalog.
+Mit Bindestrichen oder Unterstrichen zwischen den Wörtern zählt dabei nur
+„ignore … instructions"; die Zweiwortformeln sind als Dateiname üblich.
 
 ## Drift
 

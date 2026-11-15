@@ -173,8 +173,12 @@ BINDING_SCHEMA = "skillsafe.bindung/v1"
 # normalisiert — in v1 wirkte „für" nie als Stoppwort, weil das rohe Wort mit
 # dem Token „fuer" verglichen wurde. Dazu liest v2 lokale Quellen vollständig,
 # filtert über den Katalog nur noch bei Netzquellen und zählt Abrufe je Abfrage.
+# extern-zweistufig/v3: Die Funktionswörter der Frage (FUNKTIONSWOERTER, wie
+# lokal; ein Kürzel in Großbuchstaben bleibt) sind kein Anfragebegriff mehr.
+# In v2 trafen „sie", „nur" oder „ohne" beliebige Sätze, und jeder Treffer
+# verlangt in der Antwort eine eigene Zeile.
 RETRIEVAL_PROFILE = "hybrid-local/v4"
-EXTERN_RETRIEVAL_PROFILE = "extern-zweistufig/v2"
+EXTERN_RETRIEVAL_PROFILE = "extern-zweistufig/v3"
 SEGMENTATION_PROFILE = "satzsegmentierung/v1"
 # Wortform ist kein Bedeutungsmodell: nur Flexion, Umlaut-Plural, -ung und
 # Kompositumteile, alles nachrechenbar. Bedeutung liest das Modell in der
@@ -318,11 +322,360 @@ ENGINE_SCRIPT = "scripts/vault.py"
 RESERVIERTE_DATEINAMEN = {"index.md", "log.md"}
 REGION_KINDS = {"text", "diagram", "table", "photo", "chart", "other"}
 EXTRACTOR_KINDS = {"human", "model", "ocr", "hybrid"}
+# Die lange Formel steht einmal: Der Stolperdraht über Absätze hinweg und die
+# Pfadregel prüfen nur sie (IGNORE_SIGNATUR_RE), jedes Textfeld alle Formeln.
+IGNORE_FORMEL = (
+    r"ignore\s+(?:(?:all|any)\s+)?(?:(?:previous|prior)\s+)?instructions")
 PROMPT_INJECTION_RE = re.compile(
-    r"(?:ignore\s+(?:(?:all|any)\s+)?(?:(?:previous|prior)\s+)?instructions|"
+    r"(?:" + IGNORE_FORMEL + r"|"
     r"system\s+prompt|developer\s+message|<\s*system\s*>)",
     re.IGNORECASE,
 )
+
+
+def _hat_signatur(wert):
+    """Trägt ein Textfeld eine offensichtliche Instruktionssignatur?"""
+    return isinstance(wert, str) and bool(PROMPT_INJECTION_RE.search(wert))
+
+
+def _ohne_signatur(eintrag, felder):
+    """Kuratierte Textfelder so, wie query und sweep sie ausgeben.
+
+    Claim und Fundstelle mit Instruktionssignatur sind nie freigabefähig.
+    Titel, Tags und Registerangaben sind kuratierter Text daneben: validate
+    meldet eine Signatur dort als Warnung, und die Ausgabe lässt das Feld weg
+    (None; aus einer Liste nur den betroffenen Eintrag). Der Eintrag trägt
+    dann ``suspicious_instruction: true``. Ohne Treffer bleibt er, wie er ist,
+    auch ohne das Feld."""
+    markiert = False
+    for feld in felder:
+        wert = eintrag.get(feld)
+        if isinstance(wert, list):
+            sauber = [teil for teil in wert if not _hat_signatur(teil)]
+            if len(sauber) != len(wert):
+                eintrag[feld] = sauber
+                markiert = True
+        elif _hat_signatur(wert):
+            eintrag[feld] = None
+            markiert = True
+    if markiert:
+        eintrag["suspicious_instruction"] = True
+    return eintrag
+
+
+# Was im Rumpf einen eigenen Block beginnt: Überschrift, Listenpunkt,
+# Tabellenzeile (_blockstart). Code-Zäune und HTML-Kommentare führt
+# _freitext_laeufe eigens. Leerraum ist hier nur Leerzeichen und Tabulator:
+# Ein geschütztes Leerzeichen ist Inhalt (CommonMark).
+FREITEXT_UEBERSCHRIFT_RE = re.compile(r"^[ \t]{0,3}#{1,6}(?:[ \t]|$)")
+FREITEXT_LISTENPUNKT_RE = re.compile(
+    r"^[ \t]{0,3}(?:[-*+]|\d{1,3}[.)])(?:[ \t]+|$)")
+FREITEXT_TABELLE_RE = re.compile(r"^[ \t]{0,3}\|")
+# "# Text" nach beliebigem Leerraum: sieht aus wie eine Überschrift.
+FREITEXT_RAUTE_ALS_TITEL_RE = re.compile(r"^\s*#{1,6}(?:\s|$)")
+# Ein Code-Zaun, auch eingerückt in einem Listenpunkt: Zeichen, Länge und
+# der Info-String dahinter. Ein Backtick-Zaun hat keinen Backtick im
+# Info-String, sonst ist die Zeile Inline-Code.
+FREITEXT_ZAUN_RE = re.compile(r"^[ \t]*(`{3,}|~{3,})(.*)$")
+FREITEXT_ZITAT_RE = re.compile(r"^[ \t]{0,3}(?:>[ \t]?)+")
+# Vor "#" und "<!--" zählt jeder Leerraum, wie im Frontmatter-Parser (eine
+# Zeile mit geschütztem Leerzeichen vor "#" überspringt er als Kommentar);
+# danach nur Leerzeichen und Tabulator, denn was folgt, ist Inhalt.
+FREITEXT_HTML_KOMMENTAR_RE = re.compile(r"^\s*<!--[ \t]?|[ \t]?-->\s*$")
+# Nur die lange Formel verbindet der Stolperdraht auch über Absätze hinweg:
+# "ignore … instructions" entsteht über eine Überschrift kaum zufällig, die
+# Zweiwortformeln ("System" vor einem Absatz, der mit "Prompt" beginnt) schon.
+IGNORE_SIGNATUR_RE = re.compile(IGNORE_FORMEL, re.IGNORECASE)
+
+
+def _leer(text):
+    """Leerzeile nach CommonMark: nur Leerzeichen und Tabulator. Ein
+    geschütztes Leerzeichen ist Inhalt und trennt keinen Absatz."""
+    return not text.strip(" \t\r")
+
+
+def _ohne_kommentarzeichen(zeile):
+    """Eine Kommentarzeile ohne ihr "#" (Frontmatter, Code-Zaun). Davor fällt
+    jeder Leerraum weg, wie im Frontmatter-Parser; ob die Zeile leer ist,
+    entscheidet _leer am Rest, und dort ist ein geschütztes Leerzeichen
+    Inhalt."""
+    return zeile.lstrip().lstrip("#")
+
+
+def _ist_kommentarzeile(zeile):
+    """Was der Frontmatter-Parser als Kommentar überspringt: "#" nach
+    beliebigem Leerraum. Er und der Stolperdraht teilen diese Regel, damit
+    keine übersprungene Zeile ungeprüft bleibt."""
+    return zeile.lstrip().startswith("#")
+
+
+def _einzug(zeile):
+    return len(zeile.expandtabs(4)) - len(zeile.expandtabs(4).lstrip(" "))
+
+
+def _blockstart(zeile):
+    """Beginnt die Zeile einen eigenen Block: Überschrift, Listenpunkt oder
+    Tabellenzeile?"""
+    return bool(FREITEXT_UEBERSCHRIFT_RE.match(zeile)
+                or FREITEXT_LISTENPUNKT_RE.match(zeile)
+                or FREITEXT_TABELLE_RE.match(zeile))
+
+
+def _freitext_laeufe(datei_zeilen, offset, rumpf_zeilen):
+    """Der Freitext einer Seite in Läufen, wie ein Leser ihn zusammenliest.
+
+    Zitatzeichen fallen zuerst weg; was danach bleibt, entscheidet. Eine
+    Leerzeile beendet den Lauf, ein neuer Block (Überschrift, Listenpunkt,
+    Tabellenzeile) beginnt einen neuen, und eine Überschrift steht für sich,
+    auch in einem HTML-Kommentar. Kommentare bilden eigene Läufe und werden
+    nie mit Text oder Code verbunden: "#"-Zeilen im Frontmatter, in einem
+    Code-Zaun und in einem eingerückten Codeblock außerhalb eines
+    Listenpunkts (ohne das "#"; eine leere Kommentarzeile trennt) und
+    HTML-Kommentare, auch über mehrere Zeilen; Text hinter einem Kommentar,
+    der in derselben Zeile schließt, gehört zum Absatz. Als Kommentarzeile
+    gilt, was der Frontmatter-Parser überspringt (_ist_kommentarzeile); eine
+    Codezeile bleibt ganz, auch mit "#" darin. Ein Listenpunkt bleibt offen,
+    bis nach einer Leerzeile eine Zeile ohne Einzug folgt, auch ein Zaun
+    oder ein HTML-Kommentar. Ein Code-Zaun gilt nach CommonMark: Er öffnet
+    mit höchstens drei Leerzeichen Einzug, in einem Listenpunkt auch tiefer
+    und direkt auf der Listenmarke; er schließt nur mit demselben Zeichen in
+    mindestens derselben Länge, ohne Text dahinter, außerhalb eines
+    Listenpunkts mit höchstens drei Leerzeichen Einzug, in einem Listenpunkt
+    höchstens drei tiefer als die Öffnung. Sein Info-String ist ein eigener
+    Lauf, und die Codezeilen darin bilden Läufe wie Absätze. Eine
+    Claim-Zeile beginnt einen Lauf wie ein Listenpunkt; ihre Fortsetzung
+    gehört dazu. Zurück kommen Läufe aus (Zeilennummer, Text, ist_claim).
+    Abschnittsweise liest _freitext_abschnitte."""
+    laeufe, lauf = [], []
+    art = None
+
+    def schliessen():
+        nonlocal art
+        if lauf:
+            laeufe.append(list(lauf))
+            lauf.clear()
+        art = None
+
+    def anhaengen(nummer, text, neue_art):
+        # Eine andere Art beginnt einen neuen Lauf; nur die Fortsetzung
+        # einer Claim-Zeile bleibt bei ihr.
+        nonlocal art
+        if art != neue_art and not (art == "claim" and neue_art == "text"):
+            schliessen()
+            art = neue_art
+        lauf.append((nummer, text, neue_art == "claim"))
+
+    def kommentar_anhaengen(nummer, zeile):
+        # Eine "#"-Zeile ohne ihr "#"; eine leere trennt.
+        text = _ohne_kommentarzeichen(zeile)
+        if _leer(text):
+            schliessen()
+        else:
+            anhaengen(nummer, text.strip(" \t"), "kommentar")
+
+    def code_anhaengen(nummer, zeile):
+        # Einen Code-Kommentar liest das Modell mit. Eine Codezeile bleibt
+        # ganz, auch mit "#" darin: Ob es ein Kommentar ist oder ein String,
+        # sagt erst die Sprache.
+        if _ist_kommentarzeile(zeile):
+            kommentar_anhaengen(nummer, zeile)
+        elif _leer(zeile):
+            schliessen()
+        else:
+            anhaengen(nummer, zeile, "code")
+
+    for nummer, zeile in enumerate(datei_zeilen[:offset], 1):
+        if 1 < nummer < offset and _ist_kommentarzeile(zeile):
+            kommentar_anhaengen(nummer, zeile)
+        else:
+            schliessen()
+    schliessen()
+    zaun = None
+    im_html = in_liste = code_block = False
+    nach_leer = True
+    for bn, zeile in enumerate(rumpf_zeilen, 1):
+        nummer = offset + bn
+        if zeile.startswith(CLAIM_START) and zaun is None and not im_html:
+            schliessen()
+            anhaengen(nummer, zeile, "claim")
+            in_liste, nach_leer, code_block = True, False, False
+            continue
+        rest = FREITEXT_ZITAT_RE.sub("", zeile)
+        if zaun is not None:
+            zeichen, laenge, grenze = zaun
+            schluss = FREITEXT_ZAUN_RE.match(rest)
+            if (schluss and schluss.group(1)[0] == zeichen
+                    and len(schluss.group(1)) >= laenge
+                    and _leer(schluss.group(2))
+                    and _einzug(rest) <= grenze):
+                schliessen()
+                zaun = None
+                nach_leer = False
+            else:
+                code_anhaengen(nummer, rest)
+            continue
+        breit = rest.expandtabs(4)
+        einzug = len(breit) - len(breit.lstrip(" "))
+        # Ein Zaun öffnet am Zeilenanfang, auch direkt hinter einer
+        # Listenmarke ("- ```bash"); außerhalb eines Listenpunkts mit
+        # höchstens drei Leerzeichen Einzug.
+        punkt = FREITEXT_LISTENPUNKT_RE.match(breit)
+        kandidat = breit[punkt.end():] if punkt else breit
+        oeffnung = FREITEXT_ZAUN_RE.match(kandidat)
+        if (oeffnung and not (oeffnung.group(1)[0] == "`"
+                              and "`" in oeffnung.group(2))
+                and (punkt or einzug <= 3 or in_liste)):
+            schliessen()
+            if nach_leer and not punkt and not rest[:1].isspace():
+                # Nach einer Leerzeile beendet ein Zaun ohne Einzug die
+                # Liste wie eine Textzeile.
+                in_liste = False
+            if punkt:
+                in_liste = True
+                grenze = punkt.end() + 3
+            elif in_liste:
+                grenze = einzug + 3
+            else:
+                grenze = 3
+            zaun = (oeffnung.group(1)[0], len(oeffnung.group(1)), grenze)
+            if not _leer(oeffnung.group(2)):
+                # Der Info-String steht sichtbar da: ein eigener Lauf.
+                anhaengen(nummer, oeffnung.group(2).strip(" \t"), "info")
+                schliessen()
+            nach_leer = code_block = False
+            continue
+        if im_html or rest.lstrip().startswith("<!--"):
+            if not im_html and nach_leer and not rest[:1].isspace():
+                # Ebenso ein HTML-Kommentar ohne Einzug.
+                in_liste = False
+            oeffnet, schliesst = rest.rfind("<!--"), rest.rfind("-->")
+            # Ohne "<!--" in der Zeile war der Kommentar schon offen.
+            im_html = oeffnet > schliesst if oeffnet >= 0 else schliesst < 0
+            danach = ""
+            if not im_html and schliesst >= 0:
+                # Was hinter "-->" steht, ist sichtbarer Text des Absatzes.
+                danach = rest[schliesst + 3:]
+                rest = rest[:schliesst + 3]
+            kommentar = FREITEXT_HTML_KOMMENTAR_RE.sub("", rest)
+            if _leer(kommentar):
+                schliessen()
+            else:
+                if _blockstart(kommentar):
+                    schliessen()
+                anhaengen(nummer, kommentar, "html")
+                if FREITEXT_UEBERSCHRIFT_RE.match(kommentar):
+                    schliessen()
+            if not _leer(danach):
+                anhaengen(nummer, danach, "text")
+            nach_leer = code_block = False
+            continue
+        if _leer(rest):
+            schliessen()
+            nach_leer = True
+            continue
+        # Ein eingerückter Codeblock: nach einer Leerzeile vier Spalten tief
+        # (ein Tabulator zählt vier), außerhalb eines Listenpunkts. Seine
+        # Kommentarzeilen werden verbunden wie im Zaun, nie mit dem Code.
+        code_block = (einzug >= 4 and not in_liste
+                      and (nach_leer or code_block))
+        nach_leer_vorher, nach_leer = nach_leer, False
+        if code_block:
+            code_anhaengen(nummer, rest)
+            continue
+        ueberschrift = bool(FREITEXT_UEBERSCHRIFT_RE.match(breit))
+        if ueberschrift or punkt or FREITEXT_TABELLE_RE.match(breit):
+            schliessen()
+            in_liste = bool(punkt)
+        elif nach_leer_vorher and not rest[:1].isspace():
+            # Nach einer Leerzeile beendet eine Zeile ohne Einzug die Liste;
+            # direkt hinter dem Text eines Punkts setzt sie ihn fort.
+            in_liste = False
+        if not ueberschrift and FREITEXT_RAUTE_ALS_TITEL_RE.match(rest):
+            # "# Text" hinter einem geschützten Leerzeichen oder tiefer
+            # eingerückt ist keine Überschrift, sieht aber so aus; geprüft
+            # wird der Text dahinter, mit dem Absatz. Ein Hashtag ("#ki")
+            # bleibt, wie er ist.
+            rest = _ohne_kommentarzeichen(rest)
+        anhaengen(nummer, rest, "text")
+        if ueberschrift:
+            schliessen()
+    schliessen()
+    return laeufe
+
+
+def _freitext_abschnitte(datei_zeilen, offset, rumpf_zeilen):
+    """Der Freitext einer Seite in Abschnitten, für die lange Formel über
+    Absätze hinweg (IGNORE_SIGNATUR_RE): Nur Claim-Zeilen und die übrigen
+    Frontmatter-Zeilen trennen. Eine Claim-Zeile beginnt einen Abschnitt;
+    Zitat-, HTML-Kommentar- und Kommentarzeichen fallen weg. Zurück kommen
+    Läufe wie bei _freitext_laeufe."""
+    laeufe, lauf = [], []
+
+    def schliessen():
+        if lauf:
+            laeufe.append(list(lauf))
+            lauf.clear()
+
+    for nummer, zeile in enumerate(datei_zeilen[:offset], 1):
+        if 1 < nummer < offset and _ist_kommentarzeile(zeile):
+            lauf.append(
+                (nummer, _ohne_kommentarzeichen(zeile).strip(" \t"), False))
+        else:
+            schliessen()
+    schliessen()
+    for bn, zeile in enumerate(rumpf_zeilen, 1):
+        nummer = offset + bn
+        if zeile.startswith(CLAIM_START):
+            schliessen()
+            lauf.append((nummer, zeile, True))
+            continue
+        rest = FREITEXT_HTML_KOMMENTAR_RE.sub(
+            "", FREITEXT_ZITAT_RE.sub("", zeile))
+        if _ist_kommentarzeile(rest):
+            rest = _ohne_kommentarzeichen(rest).strip(" \t")
+        lauf.append((nummer, rest, False))
+    schliessen()
+    return laeufe
+
+
+def _freitext_signaturen(laeufe, muster=PROMPT_INJECTION_RE):
+    """Dateizeilen, an denen im Freitext eine Instruktionssignatur liegt.
+
+    Jeder Lauf wird als ein Text geprüft: Die Signatur verlangt Leerraum
+    zwischen den Wörtern, und ein Zeilenumbruch ist Leerraum. Gemeldet wird
+    die erste Zeile des Fundes außerhalb einer Claim-Zeile; ein Fund ganz in
+    einer Claim-Zeile ist dort schon ein Fehler. Je Zeile höchstens ein
+    Treffer."""
+    treffer = set()
+    for lauf in laeufe:
+        text = "\n".join(teil for _, teil, _ in lauf)
+        for fund in muster.finditer(text):
+            erste = text.count("\n", 0, fund.start())
+            letzte = text.count("\n", 0, max(fund.end() - 1, fund.start()))
+            ausserhalb = [lauf[i][0] for i in range(erste, letzte + 1)
+                          if not lauf[i][2]]
+            if ausserhalb:
+                treffer.add(ausserhalb[0])
+    return sorted(treffer)
+
+
+PFAD_WORTTRENNER_RE = re.compile(r"[-_.]+|%20")
+
+
+def _pfad_mit_signatur(pfad):
+    """Trägt ein Pfad eine Instruktionssignatur?
+
+    Mit Leerzeichen zählt jede Formel. Mit Bindestrich, Unterstrich, Punkt
+    oder %20 zwischen den Wörtern zählt nur die lange Formel "ignore …
+    instructions": Die Zweiwortformeln sind als Dateiname üblich
+    ("system-prompt-grundlagen.md", "developer-message-format.md") und
+    bleiben dort, wie ein Titel in dieser Schreibung, ohne Befund."""
+    if not isinstance(pfad, str):
+        return False
+    return _hat_signatur(pfad) or bool(IGNORE_SIGNATUR_RE.search(
+        PFAD_WORTTRENNER_RE.sub(" ", pfad)))
+
+
 # Zugangsdaten im ausgelieferten Wissen. Bewusst wenige, präzise Formen statt
 # einer Entropie-Heuristik: ein Fehlalarm blockiert validate und damit jeden
 # Release, also zählt jede Form nur, wenn sie praktisch nie zufällig in Prosa
@@ -374,10 +727,12 @@ RETRIEVAL_STOPWORDS = {
 
 # Funktionswörter des lokalen Rankings (seit hybrid-local/v2), in der normalisierten
 # Schreibung von _retrieval_norm (ae/oe/ue/ss). Bewusst eine ZWEITE Liste und
-# keine Erweiterung von RETRIEVAL_STOPWORDS: die alte Liste formt auch
-# 'extern-zweistufig/v2' und die nachrechenbaren Katalogzahlen (token_count,
-# top_tokens). Sie bleibt unberührt, damit sich dort kein Wert verschiebt; seit
-# extern-zweistufig/v2 wird sie nur noch normalisiert (RETRIEVAL_STOPWORDS_NORM).
+# keine Erweiterung von RETRIEVAL_STOPWORDS: die alte Liste formt auch die
+# nachrechenbaren Katalogzahlen (token_count, top_tokens). Sie bleibt
+# unberührt, damit sich dort kein Wert verschiebt; seit extern-zweistufig/v2
+# wird sie nur noch normalisiert (RETRIEVAL_STOPWORDS_NORM). Seit
+# extern-zweistufig/v3 nimmt auch die externe Suche diese Liste aus den
+# Anfragebegriffen, aber nur auf der Seite der Frage (_anfragebegriffe).
 #
 # Aufgenommen sind nur geschlossene Wortklassen (Artikel, Pronomen,
 # Präpositionen, Konjunktionen, Hilfs- und Modalverben, Partikeln) plus die
@@ -1060,7 +1415,7 @@ def parse_frontmatter(text, quelle):
         if line.rstrip("\r") == "---":
             ende = i
             break
-        if not line.strip() or line.lstrip().startswith("#"):
+        if not line.strip() or _ist_kommentarzeile(line):
             i += 1
             continue
         if line != line.lstrip() and not line.startswith("  - "):
@@ -1257,6 +1612,117 @@ def _lokale_tokens(value):
         token for token in _retrieval_norm(value).split()
         if token not in RETRIEVAL_STOPWORDS and (len(token) >= 2 or token.isdigit())
     )
+
+
+# Funktionswörter, die großgeschrieben ein Substantiv sind ("die Waren",
+# "Soll und Haben", "die Würde"). Bewusst eine geschlossene Liste: Eine
+# allgemeine Regel "groß mitten im Satz" machte jede Titelschreibung, jede
+# ganz groß geschriebene Frage und jeden nicht erkannten Satzanfang zum
+# Begriff, also gerade die Rauschtreffer, die v3 abschafft.
+HOMOGRAPHE_SUBSTANTIVE = frozenset(
+    "waren soll haben macht mal wuerde sein bitte halt laut tun muss nichts "
+    "wohl".split())
+# Nach diesen Zeichen beginnt ein Satz (auch nach Doppelpunkt, Semikolon
+# und Gedankenstrich), ebenso nach einer Aufzählungsmarke ("1)", "a)", "-").
+SATZZEICHEN_VOR_SATZANFANG = ".!?…:;–—"
+AUFZAEHLUNG_VOR_SATZANFANG_RE = re.compile(
+    r"(?:^|\s)(?:\d{1,3}[.)]|[A-Za-z][)]|[-*•–—])$")
+# Ein Homograph am Satzanfang ist nur dann ein Substantiv, wenn er für
+# sich steht ("Begriffsfrage: Waren – was …", "Waren?"). Folgt ein Wort,
+# ist er dort meist das Verb eines Satzes ("Frage: Muss ich …", "Muss bei
+# Auszug …", "Soll oder muss …"); eine Wortgruppe wie "Würde des Menschen"
+# geht dabei verloren (notes/dead-ends.md).
+SATZZEICHEN_NACH_ALLEINSTEHEND = "–—-,;:.!?…"
+# Die Pronomen der Anrede sind in Großbuchstaben kein Kürzel ("Können SIE
+# das?"), anders als "IT". Nur für die externe Suche; das lokale Ranking
+# bleibt bytegleich.
+ANREDE_PRONOMEN = frozenset(
+    "sie ihnen ihre ihrem ihren ihrer ihres du dich dir dein deine deinem "
+    "deinen deiner deines euch euer eure eurem euren eurer eures".split())
+
+
+def _versalien(text):
+    """Ist ein Text aus mehreren Wörtern ganz groß geschrieben? Ein "ß"
+    zählt dabei als groß ("STRAßE"), denn es hat keine Großform in str."""
+    gross = text.replace("ß", "SS")
+    return len(WORT_RE.findall(text)) > 1 and gross == gross.upper()
+
+
+def _titelschreibung(text):
+    """Steht ein Text aus mindestens drei Wörtern in Titelschreibung?
+
+    Jedes Wort beginnt groß, und mitten im Text auch ein Funktionswort, das
+    kein Homograph der Liste ist ("Wann Muss Der Mieter …"). Eine Folge
+    großgeschriebener Substantive ist im Deutschen keine Titelschreibung,
+    sondern eine Stichwortfrage ("Zollgebühren Waren China")."""
+    woerter = [wort for wort in WORT_RE.findall(text) if wort[:1].isalpha()]
+    if len(woerter) < 3 or not all(wort[:1].isupper() for wort in woerter):
+        return False
+    return any(token in FUNKTIONSWOERTER
+               and token not in HOMOGRAPHE_SUBSTANTIVE
+               for wort in woerter[1:]
+               for token in _retrieval_norm(wort).split())
+
+
+def _sachwoerter_gross(text):
+    """Homographe, die großgeschrieben mitten im Satz stehen.
+
+    Im Deutschen ist ein solches Wort ein Substantiv und damit ein Sachwort
+    ("Was sind Waren?"). Am Satzanfang sagt die Großschreibung nichts, außer
+    das Wort steht für sich; in einer Frage in Versalien oder in
+    Titelschreibung sagt sie nie etwas. Der Text wird vorher normalisiert,
+    damit eine zerlegte Schreibung (NFD) das Wort nicht teilt."""
+    text = unicodedata.normalize("NFKC", text)
+    if _versalien(text) or _titelschreibung(text):
+        return set()
+    gross = set()
+    for fund in WORT_RE.finditer(text):
+        wort = fund.group(0)
+        if not wort[:1].isupper():
+            continue
+        treffer = {token for token in _retrieval_norm(wort).split()
+                   if token in HOMOGRAPHE_SUBSTANTIVE}
+        if not treffer:
+            continue
+        # Leerraum, Anführungszeichen und Klammern in einem Schritt: auch
+        # 'Frage. „Muss ich …“' beginnt einen Satz, und eine Aufzählungsmarke
+        # vor einem Anführungszeichen ('1) „Muss ich …“') zählt ebenso.
+        roh = text[:fund.start()].rstrip(" \t\r\n\"'„“”‚‘’»«")
+        davor = roh.rstrip(" \t\r\n\"'„“”‚‘’»«()[]")
+        if (not davor or davor[-1] in SATZZEICHEN_VOR_SATZANFANG
+                or AUFZAEHLUNG_VOR_SATZANFANG_RE.search(roh)):
+            danach = text[fund.end():].lstrip(" \t\"'“”‚‘’»«)]")
+            if danach and danach[0] not in SATZZEICHEN_NACH_ALLEINSTEHEND:
+                continue
+        gross.update(treffer)
+    return gross
+
+
+def _anfragebegriffe(query):
+    """Anfragebegriffe der externen Suche (seit extern-zweistufig/v3).
+
+    Die Tokens der Frage wie bisher (_retrieval_tokens), ohne die
+    Funktionswörter des lokalen Rankings. Es bleiben ein Kürzel in
+    Großbuchstaben ("IT", nicht aber die Pronomen der Anrede) und ein
+    Homograph, der großgeschrieben mitten im Satz steht ("Was sind Waren?").
+    Besteht die Frage nur aus Homographen ("Würde"), bleiben sie. Bleibt
+    nichts übrig, sucht die Frage nicht (invalid_query, kein
+    Negativbefund). Die Dokumentseite tokenisiert unverändert:
+    Katalogzahlen, Satzbestand und Fingerprint-Rezept hängen nicht an
+    dieser Liste. Normalisiert wird vorab (NFKC), damit eine zerlegte
+    Schreibung kein Wort teilt; _kuerzel_tokens selbst bleibt unverändert,
+    denn das lokale Ranking hängt daran."""
+    text = unicodedata.normalize("NFKC", str(query))
+    behalten = ((_kuerzel_tokens(text.replace("ß", "SS")) - ANREDE_PRONOMEN)
+                | _sachwoerter_gross(text))
+    tokens = _retrieval_tokens(text)
+    begriffe = tuple(token for token in tokens
+                     if token not in FUNKTIONSWOERTER or token in behalten)
+    if not begriffe and all(wort in HOMOGRAPHE_SUBSTANTIVE
+                            for wort in _retrieval_norm(text).split()):
+        # Nur Homographe ("Würde"): Jedes Token ist einer von ihnen.
+        begriffe = tokens
+    return begriffe
 
 
 def _inhaltstokens(value):
@@ -1819,6 +2285,10 @@ def _https_praefix(roh):
         return None, "führende oder abschließende Leerzeichen sind verboten"
     if any(ord(z) < 32 or ord(z) == 127 for z in wert):
         return None, "Steuerzeichen sind verboten"
+    if any(z.isspace() for z in wert):
+        # Ein Abruf verwirft jede URL mit Leerraum (_unter_praefix); ein
+        # solches Präfix wäre nie erreichbar.
+        return None, "Leerraum ist in einem Präfix verboten"
     if not wert.startswith("https://"):
         return None, "nur https:// ist erlaubt"
     rest = wert[len("https://"):]
@@ -2429,7 +2899,8 @@ def lade_seiten(register, typen, reltypen, concepts=None, media=None,
         if not _resolved_within(p, KNOWLEDGE):
             fehler.append(f"{rp}: Datei oder Symlink zeigt aus knowledge/ hinaus")
             continue
-        fm, body, fm_fehler, offset = parse_frontmatter(read(p), rp)
+        seitentext = read(p)
+        fm, body, fm_fehler, offset = parse_frontmatter(seitentext, rp)
         fehler.extend(fm_fehler)
 
         unbekannt = sorted(
@@ -2543,16 +3014,58 @@ def lade_seiten(register, typen, reltypen, concepts=None, media=None,
                     f"{rp}: externe Quelle {xid} steht nicht in "
                     f"{rel(EXTERN_REGISTER)}"
                 )
+        # Freitext der Seite: die Kommentarzeilen des Frontmatters, die der
+        # Parser überspringt, und der Rumpf außerhalb der Claims (Kurzfassung,
+        # Kontext, Grenzen). Die Engine gibt beides nicht aus, der
+        # Antworten-Workflow liest die Seite aber ganz. Geprüft wird je
+        # Absatz, damit ein Zeilenumbruch eine Signatur nicht teilt
+        # (_freitext_laeufe), die lange Formel je Abschnitt
+        # (_freitext_abschnitte).
+        datei_zeilen, rumpf_zeilen = seitentext.split("\n"), body.split("\n")
+        freitext_treffer = sorted(
+            set(_freitext_signaturen(_freitext_laeufe(
+                datei_zeilen, offset, rumpf_zeilen)))
+            | set(_freitext_signaturen(_freitext_abschnitte(
+                datei_zeilen, offset, rumpf_zeilen), IGNORE_SIGNATUR_RE)))
+        if _pfad_mit_signatur(rp):
+            teile = rp.split("/")
+            ort = ("knowledge/" + teile[1] if len(teile) > 2
+                   and not _pfad_mit_signatur(teile[1]) else "knowledge")
+            warnungen.append(
+                f"{ort}: Der Pfad einer Seite enthält eine offensichtliche "
+                f"Instruktionssignatur — query und sweep markieren die Seite")
+        for nummer in freitext_treffer:
+            if nummer <= offset:
+                warnungen.append(
+                    f"{rp}:{nummer}: Instruktionssignatur in einer "
+                    f"Kommentarzeile des Frontmatters — das Modell liest "
+                    f"sie mit der Seite")
+            else:
+                warnungen.append(
+                    f"{rp}:{nummer}: Instruktionssignatur im Text der Seite "
+                    f"außerhalb der Claims — das Modell liest ihn mit")
+        if _hat_signatur(fm.get("title")):
+            warnungen.append(
+                f"{rp}: Titel enthält eine offensichtliche "
+                f"Instruktionssignatur — query und sweep geben ihn nicht aus")
         tags = fm.get("tags", [])
         if isinstance(tags, list):
-            for tag in tags:
+            for nummer, tag in enumerate(tags, 1):
                 if not isinstance(tag, str) or not _retrieval_norm(tag):
                     fehler.append(f"{rp}: ungültiger oder leerer Tag {tag!r}")
-                elif any(zeichen in tag for zeichen in ",[]"):
+                    continue
+                if any(zeichen in tag for zeichen in ",[]"):
                     fehler.append(
-                        f"{rp}: Tag {tag!r} enthält ',' '[' oder ']'; in der "
-                        f"Inline-Listenform ist das nicht darstellbar und "
-                        f"zerlegt den Wert")
+                        f"{rp}: Tag Nr. {nummer} enthält ',' '[' oder ']'; "
+                        f"in der Inline-Listenform ist das nicht darstellbar "
+                        f"und zerlegt den Wert")
+                if _hat_signatur(tag):
+                    # Ohne Wortlaut: query und sweep geben die Warnungen mit
+                    # aus, und dort darf die Signatur nicht stehen.
+                    warnungen.append(
+                        f"{rp}: Tag Nr. {nummer} enthält eine offensichtliche "
+                        f"Instruktionssignatur — query und sweep geben ihn "
+                        f"nicht aus")
         concept_ids = fm.get("concepts", [])
         if not isinstance(concept_ids, list):
             concept_ids = []
@@ -2568,9 +3081,10 @@ def lade_seiten(register, typen, reltypen, concepts=None, media=None,
 
         # Claims (Grammatik siehe schema/profil.md)
         claims = []
-        for bn, line in enumerate(body.split("\n"), 1):
+        for bn, line in enumerate(rumpf_zeilen, 1):
             n = offset + bn
             if not line.startswith(CLAIM_START):
+                # Freitext; den prüft der Stolperdraht oben.
                 continue
             m = CLAIM_RE.match(line)
             if not m:
@@ -2742,7 +3256,8 @@ def lade_seiten(register, typen, reltypen, concepts=None, media=None,
 
         seiten[rp] = {
             "fm": fm, "claims": claims, "relationen": relationen, "pfad": p,
-            "zeilen": len(body.split("\n")), "body": body,
+            "zeilen": len(rumpf_zeilen), "body": body,
+            "freitext_signatur": bool(freitext_treffer),
         }
 
     for rp, seite in sorted(seiten.items()):
@@ -2877,6 +3392,35 @@ def cmd_validate(still=False):
     except (OSError, UnicodeError) as exc:
         seiten, claims, warnungen = {}, {}, []
         fehler.append(f"knowledge: Seiten können nicht vollständig gelesen werden — {exc}")
+    # Titel, Stand und Rechte einer Quelle gibt query an jedem Beleg aus. Eine
+    # Instruktionssignatur dort ist eine Warnung; ausgegeben wird das Feld dann
+    # nicht (_ohne_signatur).
+    for name, reg in ((rel(REGISTER), register), (rel(EXTERN_REGISTER), extern)):
+        for kennung, zeile in sorted(reg.items()):
+            for feld, schluessel in (("Titel", "titel"),
+                                     ("Stand/Version", "stand"),
+                                     ("Rechte", "rechte"),
+                                     ("Ziel", "ziel")):
+                if _hat_signatur(zeile.get(schluessel)):
+                    warnungen.append(
+                        f"{name}: {kennung} {feld} enthält eine offensichtliche "
+                        f"Instruktionssignatur — query gibt das Feld nicht aus")
+    # Dokumentpfade aus einem Katalog oder einer Ankerdatei nennt query
+    # --extern als Kennung eines Treffers; eine Signatur darin ist eine
+    # Warnung, und der Treffer trägt das Signal suspicious_instruction.
+    for kennung, katalog in sorted(orchestrators.items()):
+        for nummer, dok in enumerate(katalog["documents"], 1):
+            if _pfad_mit_signatur(dok.get("path")):
+                warnungen.append(
+                    f"Katalog {kennung}: Dokument Nr. {nummer} hat einen Pfad "
+                    f"mit offensichtlicher Instruktionssignatur — query --extern "
+                    f"markiert seine Treffer")
+    for kennung, eintrag in sorted(anchors.items()):
+        for aid, anker in sorted(eintrag["anchors"].items()):
+            if _pfad_mit_signatur(anker.get("document")):
+                warnungen.append(
+                    f"Anker {aid} ({kennung}): Dokumentpfad mit offensichtlicher "
+                    f"Instruktionssignatur")
 
     for concept_id, concept in sorted(concepts.items()):
         claim_id = concept.get("definition_claim")
@@ -3153,6 +3697,7 @@ def _query_base(query, state, *, manifest_digest=None, version=None,
             # Antwort-Workflow genau dann entscheiden muss, ob Schritt 4c
             # existiert. '…_used' ist das ERGEBNIS (wurde live gelesen?).
             "external_lookup_available": False,
+            "external_source_ids": [],
             "external_live_lookup_used": False,
             "external_reason": None,
             "external_document_paths": [],
@@ -3181,7 +3726,89 @@ def _query_base(query, state, *, manifest_digest=None, version=None,
     }
 
 
+MELDUNG_MIT_SIGNATUR = ("Meldung enthält eine offensichtliche "
+                        "Instruktionssignatur — Wortlaut nur in validate")
+MELDUNG_EXTERN_MIT_SIGNATUR = ("Meldung enthält eine offensichtliche "
+                               "Instruktionssignatur — Wortlaut nicht "
+                               "ausgegeben")
+MELDUNG_ORT_RE = re.compile(r"[\w./-]+(?::\d+)?")
+# Ein Pfad in einer Meldung, auch in Bindestrichform: ein Token mit "/" oder
+# mit einer Dateiendung. Gesucht wird tokenweise, linear auch bei langen
+# Zeilen ohne Leerraum. Getrennt wird auch an ":" und "#", denn dahinter
+# steht eine Zeilennummer oder ein Anker ("datei.md:3", "datei.md#L3").
+MELDUNG_TRENNER_RE = re.compile(r"[\s'\"„“”‚‘’»«()\[\]{},;:#`<>!?|]+")
+MELDUNG_DATEI_RE = re.compile(r"\.(?:md|markdown|txt|json)$", re.IGNORECASE)
+MELDUNG_KENNUNG_RE = re.compile(r"[A-Z]-\d{4}(?![\w-])")
+# So zitiert repr() nicht druckbaren Leerraum: \t, \xa0, \u2009 …
+MELDUNG_ESCAPE_RE = re.compile(
+    r"\\(?:[tnrfv]|x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8})")
+
+
+# Grob getrennt bleibt ein Anker oder eine Query am Pfad
+# ("a/b.md#ignore-all-previous-instructions", "…/suche?q=…"): Fein getrennt
+# hätte das abgetrennte Stück weder "/" noch eine Endung.
+MELDUNG_TRENNER_GROB_RE = re.compile(r"[\s'\"„“”‚‘’»«()\[\],;]+")
+
+
+def _meldung_pfade(text):
+    """Die Pfade einer Meldung: fein getrennt, auch an ":" und "#"
+    ("datei.md:3"), und grob, mit Anker und Query am Pfad."""
+    for token in MELDUNG_TRENNER_RE.split(text):
+        token = token.strip(".")
+        if "/" in token or MELDUNG_DATEI_RE.search(token):
+            yield token
+    for token in MELDUNG_TRENNER_GROB_RE.split(text):
+        token = token.rstrip(":.")
+        if "/" in token or MELDUNG_DATEI_RE.search(token):
+            yield token
+
+
+def _meldung_ohne_signatur(text, ersatz=MELDUNG_MIT_SIGNATUR):
+    """Eine Meldung so, wie query und sweep sie ausgeben.
+
+    Fehler und Warnungen zitieren mitunter kuratierten Text (eine
+    Frontmatter-Zeile, eine Registerspalte). Trägt eine Meldung eine
+    Instruktionssignatur, ersetzt die Ausgabe sie ganz: Nur die Phrase zu
+    schwärzen ließe den Rest des zitierten Werts stehen, und das ist gerade
+    die Anweisung. Geprüft wird auch die Form, in der repr() nicht
+    druckbaren Leerraum zitiert ('ignore\\xa0all …'), und jeder Pfad nach der
+    Pfadregel (_pfad_mit_signatur). Stehen bleibt nur der Ort (Pfad,
+    optional mit Zeile), wenn die Meldung mit einem beginnt und er selbst
+    keine Signatur trägt, sonst eine führende Kennung (X-0001). validate behält den Wortlaut der Fehler
+    und Warnungen, damit die Stelle zu finden ist."""
+    if not isinstance(text, str) or not (
+            _hat_signatur(text)
+            or _hat_signatur(MELDUNG_ESCAPE_RE.sub(" ", text))
+            or any(_pfad_mit_signatur(pfad) for pfad in _meldung_pfade(text))):
+        return text
+    ort, trenner, _ = text.partition(": ")
+    if (trenner and MELDUNG_ORT_RE.fullmatch(ort)
+            and not _pfad_mit_signatur(ort)):
+        return f"{ort}: {ersatz}"
+    kennung = MELDUNG_KENNUNG_RE.match(text)
+    if kennung:
+        return f"{kennung.group(0)}: {ersatz}"
+    return ersatz
+
+
 def _emit_query_json(result):
+    # Gilt für jede Ausgabe von query und sweep, auch im fail-closed-Pfad.
+    for feld in ("errors", "warnings"):
+        if isinstance(result.get(feld), list):
+            result[feld] = [_meldung_ohne_signatur(m) for m in result[feld]]
+    extern = result.get("external")
+    if isinstance(extern, dict):
+        if isinstance(extern.get("notes"), list):
+            extern["notes"] = [
+                _meldung_ohne_signatur(m, MELDUNG_EXTERN_MIT_SIGNATUR)
+                for m in extern["notes"]]
+        if "reason" in extern:
+            extern["reason"] = _meldung_ohne_signatur(
+                extern["reason"], MELDUNG_EXTERN_MIT_SIGNATUR)
+    rueckfall = result.get("fallback")
+    if isinstance(rueckfall, dict) and "external_reason" in rueckfall:
+        rueckfall["external_reason"] = _meldung_ohne_signatur(
+            rueckfall["external_reason"], MELDUNG_EXTERN_MIT_SIGNATUR)
     print(json.dumps(
         result, ensure_ascii=False, indent=2, sort_keys=True
     ))
@@ -3490,7 +4117,7 @@ def _evidence_item(snapshot, path, claim, score, reasons,
         "reasons": sorted(set(reasons)),
         "kind": claim["art"],
         "text": claim["text"],
-        "source": {
+        "source": _ohne_signatur({
             "id": claim["quelle"],
             "kind": source.get("kind"),
             "title": source.get("titel"),
@@ -3498,7 +4125,7 @@ def _evidence_item(snapshot, path, claim, score, reasons,
             "trust": source.get("trust"),
             "rights": source.get("rechte"),
             "locator": claim["fundstelle"],
-        },
+        }, ("title", "stand", "rights")),
         "signals": [],
         "media": None,
         "anchor": None,
@@ -3527,6 +4154,9 @@ def _evidence_item(snapshot, path, claim, score, reasons,
             "region_kind": region.get("kind"),
             "confidence": region.get("confidence"),
         }
+    # Der Seitenpfad steht im Beleg; trägt er eine Signatur, trägt der Beleg
+    # das Signal (unten, zusammen mit dem Ankerpfad).
+    verdaechtig = _pfad_mit_signatur(path)
     # Satzanker: wie bei Medienregionen wird nur die geprüfte
     # Fundstelle ausgegeben, nie der externe Satz selbst. Der Wortlaut
     # bleibt untrusted Quelldatum in der Ankerdatei.
@@ -3542,6 +4172,12 @@ def _evidence_item(snapshot, path, claim, score, reasons,
             "text_sha256": anker.get("text_sha256"),
         }
         item["signals"].append("external_source")
+        # Der Pfad ist die Kennung der Fundstelle und bleibt stehen; trägt er
+        # eine Signatur, sagt das Signal es.
+        verdaechtig = verdaechtig or _pfad_mit_signatur(anker.get("document"))
+    # Das Signal steht einmal, auch wenn Seiten- und Ankerpfad es tragen.
+    if verdaechtig:
+        item["signals"].append("suspicious_instruction")
     return item
 
 
@@ -3557,13 +4193,23 @@ def _seiten_relationen(pages):
     auf Rang oder Fingerabdruck.
     """
     kanten = {path: {"outgoing": [], "incoming": []} for path in pages}
+    # Eine Nachbarseite, die Schritt 4 zu lesen verlangt, kann außerhalb von
+    # pages[] liegen; ihre Kante trägt deshalb ihre Markierung.
+    markiert = {path: _seite_mit_signatur(path, page)
+                for path, page in pages.items()}
+
+    def kante(typ, seite):
+        eintrag = {"type": typ, "page": seite}
+        if markiert.get(seite):
+            eintrag["suspicious_instruction"] = True
+        return eintrag
+
     for path, page in sorted(pages.items()):
         for relation in page["relationen"]:
-            kanten[path]["outgoing"].append(
-                {"type": relation["typ"], "page": relation["ziel"]})
+            kanten[path]["outgoing"].append(kante(relation["typ"], relation["ziel"]))
             if relation["ziel"] in kanten:
                 kanten[relation["ziel"]]["incoming"].append(
-                    {"type": relation["typ"], "page": path})
+                    kante(relation["typ"], path))
     for eintrag in kanten.values():
         for richtung in ("outgoing", "incoming"):
             eintrag[richtung].sort(
@@ -3571,9 +4217,34 @@ def _seiten_relationen(pages):
     return kanten
 
 
+def _seite_mit_signatur(pfad, seite):
+    """Trägt eine Seite irgendwo eine Instruktionssignatur: im Titel, in einem
+    Tag, im Freitext oder im Pfad? Geprüft wird beim Ausgeben an den Feldern
+    selbst, damit auch eine Seite, die nicht aus lade_seiten kommt, ihre
+    Markierung trägt."""
+    fm = seite["fm"]
+    tags = fm.get("tags", [])
+    return bool(seite.get("freitext_signatur") or _hat_signatur(fm.get("title"))
+                or (isinstance(tags, list)
+                    and any(_hat_signatur(tag) for tag in tags))
+                or _pfad_mit_signatur(pfad))
+
+
+def _seite_markieren(eintrag, seite):
+    """Markiert eine Seite, deren Signatur in keinem ausgegebenen Feld steht.
+
+    Den Freitext gibt die Engine nie aus, die Tags nicht in ``pages[]``, und
+    den Pfad braucht sie als Kennung. Die Seite liest der Agent aber ganz
+    (antworten.md, Schritt 4); also trägt sie die Markierung, wo immer sie
+    erscheint, auch als Ziel einer Kante (_seiten_relationen)."""
+    if _seite_mit_signatur(eintrag.get("path"), seite):
+        eintrag["suspicious_instruction"] = True
+    return eintrag
+
+
 def _page_summary(snapshot, path, score, reasons, kanten):
     fm = snapshot["pages"][path]["fm"]
-    return {
+    return _seite_markieren(_ohne_signatur({
         "path": path,
         "title": fm.get("title"),
         "domain": fm.get("domain"),
@@ -3587,7 +4258,7 @@ def _page_summary(snapshot, path, score, reasons, kanten):
         "reasons": sorted(set(reasons)),
         "concepts": sorted(fm.get("concepts", [])),
         "relations": kanten[path],
-    }
+    }, ("title",)), snapshot["pages"][path])
 
 
 def _wortform_varianten(terms, tokenmengen):
@@ -4144,6 +4815,10 @@ def build_query_result(snapshot, world=None, limit=8):
         if definitionen.get(k["claim"]["id"]) in unvertretene}
     sichtbare_seiten = _sichtbare_seiten(
         omitted_pages, definitionsseiten, MAX_OMITTED_PAGES)
+    # Schritt 4 liest auch diese Seiten; also tragen sie ihre Markierung.
+    for eintrag in sichtbare_seiten:
+        if eintrag["path"] in pages:
+            _seite_markieren(eintrag, pages[eintrag["path"]])
     alle_seiten = sorted(
         (path, [claim["id"] for claim in page["claims"]])
         for path, page in pages.items() if page["claims"]
@@ -4272,6 +4947,9 @@ def build_query_result(snapshot, world=None, limit=8):
             },
             "external_lookup_available": bool(
                 snapshot["extern"]["register"]),
+            # Welche Quellen aufgeführt sind, auch ohne --extern: Unterbleibt
+            # Schritt 4c, nennt die Antwort genau diese Kennungen.
+            "external_source_ids": sorted(snapshot["extern"]["register"]),
             "external_live_lookup_used": False,
             "external_reason": None,
             "external_document_paths": [],
@@ -4573,8 +5251,11 @@ def build_sweep_result(snapshot, batch=None, receipt=None,
         result = _sweep_basis(query, "batch", snapshot, warnings=warnings)
         result.update(kopf)
         result["batch"] = batch
+        # Jeder Stapel wird ganz gelesen: Titel und Tags mit
+        # Instruktionssignatur stehen deshalb nicht darin (_ohne_signatur),
+        # und eine Signatur im Freitext markiert die Seite (_seite_markieren).
         result["pages"] = [
-            {
+            _seite_markieren(_ohne_signatur({
                 "path": pfad,
                 "title": snapshot["pages"][pfad]["fm"].get("title"),
                 "domain": snapshot["pages"][pfad]["fm"].get("domain"),
@@ -4590,7 +5271,7 @@ def build_sweep_result(snapshot, batch=None, receipt=None,
                     }
                     for claim in claims
                 ],
-            }
+            }, ("title", "tags")), snapshot["pages"][pfad])
             for pfad, claims in gruppe
         ]
         result["seal"] = siegel[batch - 1]
@@ -5664,7 +6345,7 @@ def build_external_result(snapshot, query, quellen_filter=None):
     geöffnet wurde, ist derselbe Fehltreffer wie eine vertippte Quellen-ID —
     und genauso teuer, weil er nicht als Fehler auffällt.
 
-    ``extern-zweistufig/v2``: Eine lokale Quelle wird vollständig gelesen,
+    Seit ``extern-zweistufig/v2``: Eine lokale Quelle wird vollständig gelesen,
     eine Netzquelle nur in den besten ``MAX_EXTERN_STUFE1`` Katalogeinträgen
     und innerhalb von ``EXTERN_NETZ_MAX_ABRUFE`` Abrufen je Abfrage. Alles,
     was dabei ungelesen bleibt, nennt der Grund.
@@ -5673,7 +6354,7 @@ def build_external_result(snapshot, query, quellen_filter=None):
     register = snapshot["extern"]["register"]
     kataloge = snapshot["extern"]["orchestrators"]
     query_norm = _retrieval_norm(query)
-    tokens = _retrieval_tokens(query)
+    tokens = _anfragebegriffe(query)
 
     block = {
         # Die Vorbelegung ist bewusst KEIN Ergebniszustand: verlässt ein Pfad
@@ -5719,8 +6400,9 @@ def build_external_result(snapshot, query, quellen_filter=None):
     if not tokens:
         block["state"] = "invalid_query"
         block["reason"] = (
-            f"Die Frage enthält keinen suchbaren Begriff (nur Stoppwörter oder "
-            f"Einzelzeichen). Es wurde nichts durchsucht — {EXTERN_KEIN_BEFUND}."
+            f"Die Frage enthält keinen suchbaren Begriff (nur Stopp- und "
+            f"Funktionswörter oder Einzelzeichen). Es wurde nichts durchsucht "
+            f"— {EXTERN_KEIN_BEFUND}."
         )
         return block
 
@@ -5756,13 +6438,13 @@ def build_external_result(snapshot, query, quellen_filter=None):
         if quellen_filter and xid not in quellen_filter:
             continue
         status = _extern_quelle_status(xid, zeile, bindung)
-        eintrag = {
+        eintrag = _ohne_signatur({
             "id": xid, "title": zeile["titel"], "kind": zeile["art"],
             "scope": zeile["scope"], "trust": zeile["trust"],
             "rights": zeile["rechte"], "target": zeile["ziel"],
             "bound": status["modus"] != "unbound",
             "mode": status["modus"],
-        }
+        }, ("title", "rights", "target"))
         block["sources"].append(eintrag)
         if status["modus"] == "unbound":
             nicht_gelesen("not_bound", status["grund"])
@@ -6013,6 +6695,9 @@ def _extern_treffer(xid, relpfad, bestand, katalog_score, zeile):
     """Einen externen Treffer bauen — immer als Zeiger, nie als Evidenz."""
     index, art, satz = bestand["satz"]
     verdaechtig = bool(PROMPT_INJECTION_RE.search(satz))
+    # Ein Dokumentpfad mit Signatur wird ausgegeben, denn er ist die Kennung
+    # des Treffers; der Treffer trägt dann das Signal.
+    pfad_verdaechtig = _pfad_mit_signatur(relpfad)
     return {
         "source_id": xid,
         # Redundant an JEDEM Treffer: der Unterschied zu einem Claim darf
@@ -6030,7 +6715,8 @@ def _extern_treffer(xid, relpfad, bestand, katalog_score, zeile):
         "score_inventory": int(bestand["score"]),
         "coverage_percent": int(bestand["coverage"]),
         "trust": zeile["trust"],
-        "signals": ["suspicious_instruction"] if verdaechtig else [],
+        "signals": (["suspicious_instruction"]
+                    if verdaechtig or pfad_verdaechtig else []),
     }
 
 

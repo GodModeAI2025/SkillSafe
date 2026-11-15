@@ -364,12 +364,17 @@ nicht als Negativbefund. Diese Asymmetrie ist eine Entscheidung.
 
 **Entscheidung:** Für einen externen Markdown-Baum entsteht ein Katalog als
 `.json` (`skillsafe.orchestrator/v1`), den die Engine liest. Das Ranking
-`extern-zweistufig/v2` rechnet Stufe 2 immer gegen den jetzt gelesenen Text.
+`extern-zweistufig/v3` rechnet Stufe 2 immer gegen den jetzt gelesenen Text.
 Den Katalog nutzt es bei einer Netzquelle als Prefilter, weil dort jedes
 geöffnete Dokument ein Abruf ist; eine lokale Quelle wird vollständig gelesen,
 der Katalog ordnet sie nur. Ein Dokument ohne einen einzigen Anfragebegriff
 fällt heraus, unabhängig vom Katalog-Score. Bleibt nichts übrig, kommt nichts
-zurück.
+zurück. Funktionswörter der Frage sind seit v3 kein Anfragebegriff: Ein Satz,
+den nur ein „sie" oder ein „ohne" trifft, ist kein Fund. Ein Wort einer
+geschlossenen Liste von Homographen ist großgeschrieben mitten im Satz ein
+Substantiv und zählt („Waren"), am Satzanfang nur für sich stehend; eine
+Frage aus lauter Funktionswörtern sucht gar nicht
+(`invalid_query`).
 
 **Begründung:** Der Katalogtext ist ein schwaches Signal, der Bestand dahinter
 das starke. Im Demo-Bestand liefert „Minderung Mangel Wohnung" in Stufe 1 das
@@ -419,9 +424,10 @@ abgerufen werden.
 ### AD-13 · Netz nur im Fallback, Cache außerhalb des Artefakts
 
 **Entscheidung:** Eine aufgeführte Bezugsquelle darf ein festes
-https-Präfix sein. Abgerufen wird nur unter diesem Präfix, nur bei
-ausdrücklichem `--extern`, mit Zertifikatsprüfung, Zeit-, Byte-, Redirect- und
-Abrufgrenzen (höchstens 20 je Abfrage), und jeder Abruf steht in `log.md`.
+https-Präfix sein. Abgerufen wird nur unter diesem Präfix, nur mit
+`query --extern` oder beim Pflegen mit `anchor-template`, mit Zertifikatsprüfung,
+Zeit-, Byte-, Redirect- und Abrufgrenzen (höchstens 20 je Abfrage), und jedes
+abgerufene Dokument steht in `log.md`.
 Einer Weiterleitung folgt nie die HTTP-Schicht selbst: das Ziel wird
 aufgelöst und an Pfadgrenzen gegen das Präfix geprüft, bevor die nächste
 Anfrage hinausgeht. Kann `log.md` nicht geschrieben werden, findet der Abruf
@@ -590,7 +596,7 @@ Die Probe ist selbst gebaut. Sie zeigt, dass die bekannten Lücken geschlossen
 sind, nicht dass es keine weiteren gibt.
 
 **Ende zu Ende gemessen.** Ob ein Modell dem Vertrag tatsächlich folgt, zeigt
-weder das Gold noch ein Review, sondern nur ein Lauf. Zwanzig frische Agenten
+weder das Gold noch ein Review, sondern nur ein Lauf. Vierundzwanzig frische Agenten
 bekamen je einen entpackten Skill-Ordner und Nutzerfragen, sonst nichts: keine
 Erklärung des Verfahrens, kein Hinweis auf die Messung. Ausgewertet hat
 `tools/antwort_check.py`, das dem Agenten nichts glaubt: Aus dem Protokoll
@@ -603,12 +609,14 @@ erneut gegen die Engine.
 | 2, vier Agenten | v0.13.0 | 12 | 8 | 8 | 8 | 8 | 4 | 4 | 0 |
 | 3, vier Agenten | v0.14.0 | 12 | 7 | 7 | 5 | 5 | 5 | 5 | 0 |
 | 4, vier Agenten | v0.15.0 | 12 | 7 | 7 | 4 | 4 | 5 | 5 | 0 |
+| 5, vier Agenten | v0.17.0 | 12 | 5 | 5 | 2 | 2 | 6 | 6 | 0 |
 
 In den ersten drei Runden reichte jeder Agent zu jeder Frage eine gültige,
-vollständige Quittung ein, in Runde 4 zu zehn von zwölf Fragen; die beiden
-übrigen brauchten keine (eine Kennung, die es nicht gibt, und eine Frage,
-die die gelesenen Seiten ganz beantworteten). Jede eingereichte Quittung war
-gültig; in Runde 2 bis 4 liefen je sechs davon über drei Stapel. Kein „Nicht im
+vollständige Quittung ein, in Runde 4 zu zehn von zwölf Fragen, in Runde 5 zu
+elf von zwölf; die drei übrigen brauchten keine (zwei Kennungen, die es nicht
+gibt, und eine Frage, die die gelesenen Seiten ganz beantworteten). Jede
+eingereichte Quittung war gültig; in Runde 2 bis 5 liefen je sechs davon über
+drei Stapel. Kein „Nicht im
 Bestand" stand ohne Quittung da, keine Negativfrage wurde beantwortet, kein
 Agent veränderte seine Kopie. Die Protokolle liegen unter `tests/e2e/`; ihre
 Siegel gelten nur für den Stand, an den sie gebunden sind.
@@ -641,9 +649,20 @@ lassen (seit v0.16.0 `fallback.unknown_ids_only: true`), die Grenze
 zwischen Lesart und ungedecktem Zusatz und wie viel eine Antwort über die
 Dateien des Werkzeugs selbst sagen darf.
 
-Grenzen dieser Messung, ausdrücklich: 68 Fragen, ein Demo-Bestand, in dem die
+Runde 5 lief am Stand v0.17.0 mit gebundenem X-0001 und ohne Netz und galt
+der Pflicht zu Schritt 4c: Bei sieben Antworten war er fällig, sechs schlugen
+extern nach, eine nannte den Verzicht, um den der Nutzer gebeten hatte. Ihre
+Agenten fanden, dass für diesen Verzicht die Kennungen der Quellen fehlten
+(seit v0.18.0 `fallback.external_source_ids`), dass `live: true` ohne
+Netzabruf irritiert, und wo die Grenze zwischen Lesart und Zusatz bei einem
+verneinenden Claim und bei einem engeren Begriff liegt. Die Gegenprüfung von
+v0.18.0 fand dazu, dass vier der sieben externen Trefferzeilen nur über
+Funktionswörter wie „sie" oder „ohne" zustande kamen; seit v0.18.1
+(`extern-zweistufig/v3`) zählen sie extern nicht mehr als Anfragebegriff.
+
+Grenzen dieser Messung, ausdrücklich: 80 Fragen, ein Demo-Bestand, in dem die
 Vollsichtung ein einziger Stapel ist, Agenten aus derselben Modellfamilie,
-und die Fragen stammen bis auf sieben aus dem Gold: Die mit erwartetem Claim
+und die Fragen stammen bis auf fünfzehn aus dem Gold: Die mit erwartetem Claim
 sind also Fragen, die zu einem Claim gehören.
 Das zeigt, dass das Verfahren befolgbar ist und befolgt wurde. Es zeigt
 nicht, wie sorgfältig ein Modell 189 Stapel liest.
@@ -861,7 +880,21 @@ auf einem gewachsenen Fremdbestand schlägt.
 Alias-Kollision und `broader`-Zyklus → Abbruch · fehlende Medienrepräsentation,
 unbekannte oder als Injection markierte Region → Abbruch · OCR-Injection-
 Canary erscheint nie in Query-Evidenz · Instruktionssignatur in Claim-Text
-oder Fundstelle → Abbruch · verschachteltes Frontmatter in jeder Form
+oder Fundstelle → Abbruch · Instruktionssignatur in Titel, Tag, Seitentext
+oder Registerangabe → Warnung, und `query` und `sweep` geben das Feld nicht
+aus und markieren Seite oder Quelle (seit v0.18.0 Titel, Tag im Stapel
+sowie Titel, Stand und Rechte einer Quelle; seit v0.18.1 Seitentext und
+Kommentarzeilen, Tag auch in `pages[]`, das Ziel einer Netzquelle, und eine
+Fehlermeldung, die sie zitiert, nur mit ihrem Ort; seit v0.18.2 je Absatz,
+an Kanten und in Pfaden; seit v0.18.3 auch unter `coverage.omitted_pages`
+und am Beleg mit Signatur im Ankerpfad, seit v0.18.4 im Seitenpfad und in
+Code-Zäunen nach CommonMark; mit Bindestrich im Pfad nur „ignore …
+instructions"; seit v0.18.5 auch hinter Unicode-Leerraum vor `#` oder
+`<!--`; seit v0.18.6 auch in Text- und String-Zeilen mit `#`, in
+eingerückten Codeblöcken, hinter einem einzeiligen HTML-Kommentar und in
+Zäunen auf einer Listenmarke oder nach einer Lazy-Fortsetzung; gegen
+gezielte Verschleierung schützt Regel 6, nicht der Stolperdraht) ·
+verschachteltes Frontmatter in jeder Form
 (Blockform, Map-Liste, Tabulator) → Abbruch, und Unterschlüssel gelangen
 nie ins Frontmatter-Dictionary · fremde Dateiart, zweites Script oder
 gesetztes Ausführungsbit im Tresorbaum → Abbruch in `validate` und im
@@ -913,11 +946,12 @@ Bestand mit 1.506 Seiten und 7.528 Claims: `query` rund 3,5 Sekunden, davon
 knapp 3 für das unveränderte Validierungs-Gate; eine Frage mit 105 Begriffen
 (990 Zeichen) 4,7 Sekunden; die Ausgabe einer Abfrage rund 15.000 Zeichen.
 
-**Ende zu Ende (Messläufe vom 2026-11-12 und 2026-11-13, Stände v0.12.1 bis v0.15.0, nachgerechnet mit `tools/antwort_check.py` gegen den jeweils gebundenen Stand):**
-Zwanzig frische Agenten, 68 Fragen, 0 Verstöße · bei 46 von 46 Fragen mit
-erwartetem Claim wurde er gefunden, 36 davon nach verfehltem Ranking · 22 von
-22 Negativfragen korrekt abgelehnt, 21 mit gültiger Quittung und eine Frage
-nach einer Kennung, die es nicht gibt, mit dem Befund des Scripts.
+**Ende zu Ende (Messläufe vom 2026-11-12 bis 2026-11-14, Stände v0.12.1 bis v0.17.0, nachgerechnet mit `tools/antwort_check.py` gegen den jeweils gebundenen Stand):**
+Vierundzwanzig frische Agenten, 80 Fragen, 0 Verstöße · bei 51 von 51 Fragen
+mit erwartetem Claim wurde er gefunden, 38 davon nach verfehltem Ranking · 28 von
+28 Negativfragen korrekt abgelehnt, 26 mit gültiger Quittung und zwei Fragen nach
+einer Kennung, die es nicht gibt, mit dem Befund des Scripts · Schritt 4c bei
+sieben Antworten fällig, jedes Mal ausgewiesen (Runde 5).
 
 **Funktional:** Der Antworten-Workflow nutzt den stabilen JSON-Vertrag und
 formuliert weiterhin ein Answer Envelope mit Claim-Belegen, Stand und

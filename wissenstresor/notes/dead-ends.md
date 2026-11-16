@@ -86,7 +86,10 @@ Liste steht 'für' in Umlautschreibung, geprueft wird gegen das normalisierte
 neu. Details: KONZEPT.md AD-14. Nachtrag: Seit v0.17.0 behoben, aus der
 parallelen Linie (extern-zweistufig/v2, Katalog X-0001 neu gerechnet); das
 lokale Ranking filtert weiter mit der alten Form, damit hybrid-local/v4
-bytegleich bleibt.
+bytegleich bleibt. Seit v0.18.9 ist der Fehler auch in der Liste selbst
+behoben: dort steht 'fuer', ein Test prueft jeden Eintrag gegen
+_retrieval_norm, der Katalog von X-0002 ist nachgerechnet, und lokal filtert
+LOKALE_STOPWORDS weiter ohne 'fuer'.
 
 ## [2026-11-12] Kompositum nur bei vollstaendiger Zerlegung gegen das Bestandsvokabular — verworfen
 Die strengere Regel (beide Teile muessen als eigenes Wort im Bestand stehen)
@@ -290,6 +293,12 @@ sha256: null, ihr Katalog also ohnehin ein Schnappschuss, der mit dem
 Hauptzweig driftet. Auf das Ranking wirkt der Eintrag nicht: Eine Anfrage
 enthaelt das Token nicht mehr. Ein von Hand nachgebauter Katalog waere
 Modellarbeit an einer Datei, die das Script nachrechnen koennen soll.
+Nachtrag v0.18.9: nicht von Hand, sondern mit orchestrator-template
+nachgerechnet, ueber README.md und BETRIEB.md aus dcac4f4, aus denen der
+Katalog entstand (der alte Fingerprint ededa0cd... kommt genau heraus, die
+alte Filterung ergibt die alten Werte). Neu sind nur token_count (1043 statt
+1051, 948 statt 954) und top_tokens ohne "fuer"; der Katalog bleibt ein
+Schnappschuss jenes Stands.
 
 ## [2026-11-14] Externe Funktionswoerter erst in einem eigenen Release angleichen — verworfen
 Abnahmerunde 5 fiel auf, dass der externe Grund "darf" und "sein" als

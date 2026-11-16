@@ -405,9 +405,9 @@ Abrufe je Abfrage.
 
 Abgeglichen wird ausschließlich an Tokengrenzen (`_retrieval_tokens`,
 `_phrase_present`). Ein rohes Substring-`in` gibt es im externen Pfad nicht,
-sonst fände „himmel" ein „schimmel". Stoppwörter durchlaufen dieselbe
-Normalisierung wie die Anfrage; in v1 wirkte „für" deshalb nie als
-Stoppwort.
+sonst fände „himmel" ein „schimmel". Stoppwörter stehen in derselben
+Schreibung wie die normalisierte Anfrage, ein Test hält das fest; in v1
+stand dort „für" und wirkte nie als Stoppwort.
 
 Der Katalog ist ausdrücklich **kein Integritätsartefakt**. Prüfsummen trägt er
 nur für lokale Quellen, wo sie überprüfbar bleiben; bei einer Netzquelle sind

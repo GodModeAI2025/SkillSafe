@@ -29,7 +29,7 @@ geschützte `dir_fd`-Operationen fail-closed ab.
 📖 **Konzept & Architekturentscheidungen:** [`wissenstresor/KONZEPT.md`](wissenstresor/KONZEPT.md)
 🌐 **Landingpage:** [`index.html`](index.html) (GitHub-Pages-fähig, Source = repo root)
 
-**Aktueller Release: v0.18.8** (Profil `oksv-lite/1.3`) mit Begriffswelten,
+**Aktueller Release: v0.18.9** (Profil `oksv-lite/1.3`) mit Begriffswelten,
 deterministischem Hybrid-Retrieval, geprüften Bild-/PDF-Regionen und einem
 reproduzierbaren `.skill`-Paket für Claude Code und Codex. Der
 Frontmatter-Parser lehnt Verschachtelung fail-closed ab statt sie still
@@ -380,9 +380,23 @@ dokumentiert: Ein Zeilenendkommentar liest sich mit der Codezeile darunter,
 eingerückter Code in einem Listenpunkt bleibt Listentext, und ein
 kleingeschriebenes Begriffspaar („miete/kaution") gilt als Pfad.
 
-Abnahme: 252 Tests bestanden · 37 manifestierte Dateien · 39 sichere
+v0.18.9 schließt den Rest eines alten Befunds an der Stoppwortliste. Dort
+stand „für" in Umlautschreibung, verglichen wird aber mit dem schon
+normalisierten Token „fuer"; seit `extern-zweistufig/v2` glich das eine
+normalisierte Kopie der Liste aus. Jetzt steht der Eintrag selbst
+normalisiert, und ein Test prüft jeden Eintrag. Das lokale Ranking filtert
+vorher weiter ohne „fuer", damit `hybrid-local/v4` bytegleich bleibt. Die
+Rechenvorschrift ändert sich nicht, eine neue Profilnummer gibt es deshalb
+nicht: Der Schnappschuss der Rangfolge, die Recall-Messung, die Messung des
+externen Routings und die Zahlen 60/460 und 78/152 bleiben gleich. Neu
+erzeugt ergibt der Katalog von X-0001 dieselben Zahlen. Den von X-0002 hat
+`orchestrator-template` über die Fassungen nachgerechnet, aus denen er
+entstand; `token_count` und `top_tokens` zählen dort „fuer" nicht mehr, und
+„bestand" rückt unter die häufigsten Wörter von `BETRIEB.md`.
+
+Abnahme: 253 Tests bestanden · 37 manifestierte Dateien · 39 sichere
 Paketeinträge · SHA-256
-`2f5c1cbf9417293cc592f104046ac37ceb7f70698575ef732a7e6a9fc9bedc19`.
+`dfc6ef4c9a4723e14dfd8910e158fc3cf19d4686deb3fe752be7f695af6a53cc`.
 Dazu 2 aufgeführte externe Bezugsquellen · 2 Satzanker.
 
 Alles läuft mit der Python-Standardbibliothek, gemessen mit CPython 3.9 und

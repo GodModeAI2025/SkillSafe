@@ -716,21 +716,37 @@ def _secret_platzhalter(fund):
     # Längster Abschnitt des Rumpfs aus höchstens zwei Zeichen (xxxx, XXXX, 0000).
     rumpf = max(re.split(r"[_.-]", fund[4:]), key=len)
     return len(rumpf) >= 12 and len(set(rumpf.lower())) <= 2
-RETRIEVAL_STOPWORDS = {
+
+
+# Stoppwörter der Tokenisierung (_retrieval_tokens): externe Suche,
+# Katalogzahlen und Satzbestand. Verglichen wird mit dem schon normalisierten
+# Token, deshalb steht jeder Eintrag in der Schreibung von _retrieval_norm
+# (ae/oe/ue/ss); ein Test hält das fest. Bis v0.18.8 stand hier „für". Als
+# Eintrag traf das nie; seit extern-zweistufig/v2 wirkte es über eine
+# normalisierte Kopie der Liste. Diese Liste ergibt dieselbe Ausgabe.
+RETRIEVAL_STOPWORDS = frozenset({
     "aber", "als", "auch", "auf", "aus", "bei", "das", "dem", "den", "der",
-    "des", "die", "ein", "eine", "einer", "eines", "für", "hat", "ich", "im",
+    "des", "die", "ein", "eine", "einer", "eines", "fuer", "hat", "ich", "im",
     "in", "ist", "mit", "nach", "oder", "sich", "sind", "und", "von", "vor",
     "was", "welche", "welcher", "wie", "wo", "zu", "zum", "zur",
     "a", "an", "and", "are", "for", "from", "how", "in", "is", "of", "on",
     "or", "the", "to", "what", "which", "with",
-}
+})
+
+# Das lokale Ranking filtert vor der Kürzel-Erkennung mit der Liste, die dort
+# bis v0.18.8 tatsächlich gewirkt hat, also ohne „fuer". Lokal sortiert
+# FUNKTIONSWOERTER das Wort aus. Ein großgeschriebenes „FÜR" in gemischt
+# geschriebenem Text bleibt dort aber ein Kürzel; der Schnappschuss der
+# Rangfolge hält das mit „Was gilt FÜR OKF?" fest. Wer das angleicht, ändert
+# hybrid-local/v4 und hebt die Profilnummer.
+LOKALE_STOPWORDS = RETRIEVAL_STOPWORDS - {"fuer"}
 
 # Funktionswörter des lokalen Rankings (seit hybrid-local/v2), in der normalisierten
 # Schreibung von _retrieval_norm (ae/oe/ue/ss). Bewusst eine ZWEITE Liste und
 # keine Erweiterung von RETRIEVAL_STOPWORDS: die alte Liste formt auch die
 # nachrechenbaren Katalogzahlen (token_count, top_tokens). Sie bleibt
-# unberührt, damit sich dort kein Wert verschiebt; seit extern-zweistufig/v2
-# wird sie nur noch normalisiert (RETRIEVAL_STOPWORDS_NORM). Seit
+# unberührt, damit sich dort kein Wert verschiebt; nur „fuer" steht seit
+# v0.18.9 so geschrieben, wie es seit extern-zweistufig/v2 wirkt. Seit
 # extern-zweistufig/v3 nimmt auch die externe Suche diese Liste aus den
 # Anfragebegriffen, aber nur auf der Seite der Frage (_anfragebegriffe).
 #
@@ -1549,18 +1565,10 @@ def _retrieval_norm(value):
     return re.sub(r"\s+", " ", text).strip()
 
 
-# Stoppwörter durchlaufen dieselbe Normalisierung wie jede Anfrage. In v1
-# stand „für" roh in der Liste und wurde mit dem schon normalisierten Token
-# „fuer" verglichen — das Wort wirkte nie als Stoppwort.
-RETRIEVAL_STOPWORDS_NORM = frozenset(
-    _retrieval_norm(wort) for wort in RETRIEVAL_STOPWORDS
-)
-
-
 def _retrieval_tokens(value):
     return tuple(
         token for token in _retrieval_norm(value).split()
-        if token not in RETRIEVAL_STOPWORDS_NORM
+        if token not in RETRIEVAL_STOPWORDS
         and (len(token) >= 2 or token.isdigit())
     )
 
@@ -1600,17 +1608,17 @@ def _kuerzel_tokens(text):
 
 
 def _lokale_tokens(value):
-    """Tokens für das lokale Ranking, mit der Stoppwortliste in alter Form.
+    """Tokens für das lokale Ranking, mit der Stoppwortliste ohne „fuer".
 
-    Die Normalisierung der Stoppwörter (seit extern-zweistufig/v2) gilt für die
-    externe Suche. Lokal sortiert FUNKTIONSWOERTER die Funktionswörter aus; die
-    alte Filterung bleibt, damit hybrid-local/v4 bytegleich bleibt. Ein
-    großgeschriebenes „FÜR" in gemischt geschriebenem Text ist dort, wie jedes
-    Wort in Großbuchstaben, ein Kürzel.
+    Lokal sortiert FUNKTIONSWOERTER die Funktionswörter aus. Gefiltert wird
+    vorher mit LOKALE_STOPWORDS, der Liste, die hier bis v0.18.8 gewirkt hat,
+    damit hybrid-local/v4 bytegleich bleibt. Ein großgeschriebenes „FÜR" in
+    gemischt geschriebenem Text ist dort deshalb ein Kürzel, anders als „IN"
+    oder „MIT", die schon diese Liste aussortiert.
     """
     return tuple(
         token for token in _retrieval_norm(value).split()
-        if token not in RETRIEVAL_STOPWORDS and (len(token) >= 2 or token.isdigit())
+        if token not in LOKALE_STOPWORDS and (len(token) >= 2 or token.isdigit())
     )
 
 

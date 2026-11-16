@@ -450,3 +450,36 @@ mit Schraegstrich am Ende einen Ordner; ein kleingeschriebenes Begriffspaar
 ("miete/kaution") und ein Ordnerpfad ohne Schraegstrich und ohne "Ordner"
 davor sind von einem Pfad ohne Endung nicht zu unterscheiden und zaehlen als
 Fundstelle, auch das ein Preis.
+
+## [2026-11-16] Stolperdraht im kuratierten Text neben den Claims als Fehler (Wiedervorlage) — erneut verworfen
+Ein Review stellte nach, dass ein Seitentitel mit Zweiwortformel und
+"ignore ... instructions" durch validate und release geht; die Gegenpruefung
+stufte das als Haertungswunsch gegen eine dokumentierte Grenze ein
+(KONZEPT.md AD-09: "greift heute an Claim-Text und Fundstelle"). Am Stand
+v0.18.8 nachgestellt: Der Titel geht weiter durch, mit einer Warnung ohne
+Wortlaut, steht aber in keiner Ausgabe; jeder Stapel von sweep fuehrt ihn als
+null und markiert die Seite, query ebenso
+(test_curated_text_beside_claims_is_flagged_and_withheld). Die Signatur in
+jedem Stapel hat v0.18.0 geschlossen (Eintrag vom 2026-11-14). Offen war nur,
+ob die Warnung ein Fehler werden soll, fuer Titel und Tags, Registerangaben
+(Titel, Stand, Rechte), den uebrigen Seitentext und den Pfad. Weiter nein.
+Der Gewinn ist klein: Der Draht kennt vier englische Formeln; eine deutsche
+Umschreibung passiert auch im Claim, ein Bindestrich in der Zweiwortformel
+auch im Titel. Die Kosten fallen bei legitimen Bestaenden an: Ein
+Quellentitel soll den echten Titel wiedergeben, und ihn umzuschreiben, damit
+er den Draht passiert, faelschte das Register; eine Seite ueber Sprachmodelle
+darf eine Zweiwortformel im Titel fuehren. Rot wuerde so ein Bestand ohne
+eigenen Mangel, nach der Stufenregel ein Major. Der Praezedenzfall v0.11.11
+(Zugangsdaten fail-closed, als Patch) traegt nicht, ebenso wenig das Ziel mit
+Leerraum in v0.18.1: Beide machen nur rot, was ohnehin ein Mangel ist (ein
+Zugangsdatum im ausgelieferten Wissen, Platzhalter ausgenommen; ein Ziel, das
+nie erreichbar war). Eine Zweiwortformel in einem Titel ist oft keiner. Und
+ein Fehler allein an Titel und Tags schloesse nur sie: Wer die Seite ganz
+liest (antworten.md, Schritt 4), liest auch Kurzfassung und Kontext, und dort
+bliebe es eine Warnung, weil eine Seite ueber Prompt Injection die Formel
+erklaeren darf. Den Rest tragen Regel 6 und die Markierung. Nachgezogen in
+v0.18.9: AD-09 beschreibt den Umfang des Stolperdrahts richtig, und
+KONZEPT.md fuehrt die Grenze unter Bewusste Grenzen. Wieder aufnehmen, wenn
+eine Abnahmerunde zeigt, dass ein Agent einer markierten Signatur folgt oder
+ihren Wortlaut wiederholt; dann zuerst fuer Titel und Tags einer Seite, die
+keinen fremden Titel wiedergeben muessen.

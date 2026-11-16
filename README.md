@@ -29,7 +29,7 @@ geschützte `dir_fd`-Operationen fail-closed ab.
 📖 **Konzept & Architekturentscheidungen:** [`wissenstresor/KONZEPT.md`](wissenstresor/KONZEPT.md)
 🌐 **Landingpage:** [`index.html`](index.html) (GitHub-Pages-fähig, Source = repo root)
 
-**Aktueller Release: v0.18.8** (Profil `oksv-lite/1.3`) mit Begriffswelten,
+**Aktueller Release: v0.18.9** (Profil `oksv-lite/1.3`) mit Begriffswelten,
 deterministischem Hybrid-Retrieval, geprüften Bild-/PDF-Regionen und einem
 reproduzierbaren `.skill`-Paket für Claude Code und Codex. Der
 Frontmatter-Parser lehnt Verschachtelung fail-closed ab statt sie still
@@ -380,9 +380,23 @@ dokumentiert: Ein Zeilenendkommentar liest sich mit der Codezeile darunter,
 eingerückter Code in einem Listenpunkt bleibt Listentext, und ein
 kleingeschriebenes Begriffspaar („miete/kaution") gilt als Pfad.
 
+v0.18.9 ändert kein Verhalten. Ein Review schlug vor, Instruktionssignaturen
+auch in Titel, Tags, Registerangaben, übrigem Seitentext und Pfad zum Fehler
+zu machen, und stützte sich auf AD-09, das den Umfang des Stolperdrahts noch
+mit „Claim-Text und Fundstelle" angab. Seit v0.18.0 warnt `validate` dort,
+und `query` und `sweep` geben das Feld nicht aus. Zum Fehler wird das
+bewusst nicht: Der Stolperdraht kennt nur vier englische Formeln, zwei davon
+gängige Fachbegriffe der Arbeit mit Sprachmodellen. Ein Quellentitel gibt
+den echten Titel wieder, und eine Seite über Sprachmodelle darf diese
+Fachbegriffe im Titel führen; als Fehler machte der Stolperdraht einen
+solchen Bestand rot, ohne dass er einen Mangel hätte. AD-09 nennt den
+Umfang jetzt richtig, `wissenstresor/KONZEPT.md` führt die Grenze unter
+„Bewusste Grenzen", und `wissenstresor/notes/dead-ends.md` hält die Gründe
+und die Bedingung für eine Wiederaufnahme fest.
+
 Abnahme: 252 Tests bestanden · 37 manifestierte Dateien · 39 sichere
 Paketeinträge · SHA-256
-`2f5c1cbf9417293cc592f104046ac37ceb7f70698575ef732a7e6a9fc9bedc19`.
+`344b2a59aa94a3a57fbbdb2e23d22522c3f00dae32e7d94a6e3ce7dbf892e063`.
 Dazu 2 aufgeführte externe Bezugsquellen · 2 Satzanker.
 
 Alles läuft mit der Python-Standardbibliothek, gemessen mit CPython 3.9 und

@@ -84,8 +84,9 @@ FESTE_ABFRAGEN = (
     ("S-0007", 8, None),
     ("Was steht in S-0007?", 8, None),
     ("IT", 8, None),
-    # Ein großgeschriebenes „FÜR" in gemischtem Text ist lokal ein Kürzel;
-    # die normalisierten Stoppwörter der externen Suche ändern daran nichts.
+    # Ein großgeschriebenes „FÜR" in gemischtem Text war lokal bis
+    # hybrid-local/v4 ein Kürzel; seit v5 ist es wie „IN" ein Stoppwort und
+    # kein Fragebegriff mehr.
     ("Was gilt FÜR OKF?", 8, None),
     ("Kann ich bei nassen Wänden die Miete kürzen?", 8, None),
     ("Wie hoch ist der Urlaubsanspruch in Teilzeit?", 8, None),

@@ -191,15 +191,15 @@ class WortformTests(VaultCase):
         self.assertEqual(
             self.engine._retrieval_tokens("Quelle für Daten"), ("quelle", "daten")
         )
-        # Das lokale Ranking filtert vorher ohne „fuer", damit hybrid-local/v4
-        # bytegleich bleibt: Ein großgeschriebenes „FÜR" ist dort ein Kürzel,
-        # „IN" nicht (Schnappschuss der Rangfolge: „Was gilt FÜR OKF?").
-        self.assertEqual(self.engine.LOKALE_STOPWORDS,
-                         self.engine.RETRIEVAL_STOPWORDS - {"fuer"})
+        # Seit hybrid-local/v5 filtert auch das lokale Ranking mit dieser
+        # Liste, vor der Kürzel-Erkennung: Ein großgeschriebenes „FÜR" ist dort
+        # wie „IN" kein Kürzel, „IT" bleibt eines.
         self.assertEqual(self.engine._inhaltstokens("Was gilt FÜR OKF?"),
-                         ("gilt", "fuer", "okf"))
+                         ("gilt", "okf"))
         self.assertEqual(self.engine._inhaltstokens("Was gilt IN OKF?"),
                          ("gilt", "okf"))
+        self.assertEqual(self.engine._inhaltstokens("Was regelt die IT?"),
+                         ("regelt", "it"))
 
     def test_one_word_family_shares_one_stem(self):
         familien = [
@@ -1140,6 +1140,39 @@ class QuerySignalTests(VaultCase):
                 self.assertTrue(
                     payload["fallback"]["exhaustive_review_required"])
 
+    def test_a_capitalised_stopword_is_no_acronym(self):
+        """hybrid-local/v5: Ein großgeschriebenes „FÜR" ist wie „IN" kein Kürzel.
+
+        In v4 filterte das lokale Ranking vor der Kürzel-Erkennung mit der
+        alten Stoppwortliste, in der das rohe „für" nie traf. Schrieb ein Claim
+        „FÜR" ebenfalls groß, kam eine Frage aus nichts als „FÜR" bis 'strong'
+        und schaltete die Pflicht-Vollsichtung ab.
+        """
+        self.use_private_vault()
+        seite = self.root / "knowledge/demo-okf/fakten.md"
+        text = seite.read_text(encoding="utf-8")
+        claim = '- **C-0290** [S-0003 | "The POLE+O Data Model" | Wortlaut] '
+        self.assertIn(claim, text)
+        seite.write_text(text.replace(claim, claim + "Regeln FÜR Agenten: ", 1),
+                         encoding="utf-8")
+        self.release()
+        for frage in ("FÜR", "Was ist FÜR?"):
+            with self.subTest(frage=frage):
+                _, payload = self.query(frage)
+                self.assertEqual(
+                    payload["coverage"]["query_terms"]["content"], [])
+                self.assertIn(
+                    payload["coverage"]["match_strength"], {"weak", "none"})
+                self.assertTrue(
+                    payload["fallback"]["exhaustive_review_required"])
+        # Groß oder klein geschrieben ist es dieselbe Frage.
+        _, gross = self.query("Was gilt FÜR OKF?")
+        _, klein = self.query("Was gilt für OKF?")
+        self.assertEqual(gross["coverage"]["query_terms"],
+                         klein["coverage"]["query_terms"])
+        self.assertEqual(gross["coverage"]["match_strength"],
+                         klein["coverage"]["match_strength"])
+
     def test_an_acronym_is_never_a_function_word(self):
         """'die IT' ist nicht das englische 'it'."""
         engine = load_engine(self.root)
@@ -1227,7 +1260,7 @@ class QuerySignalTests(VaultCase):
             "query", "Wie werden Bestätigungen und Vertrauensstufen geprüft?")
         self.assertEqual(erster.returncode, 0, erster.stdout + erster.stderr)
         self.assertEqual(
-            json.loads(erster.stdout)["retrieval"], "hybrid-local/v4")
+            json.loads(erster.stdout)["retrieval"], "hybrid-local/v5")
         for _ in range(5):
             wieder = self.run_cli(
                 "query", "Wie werden Bestätigungen und Vertrauensstufen geprüft?")

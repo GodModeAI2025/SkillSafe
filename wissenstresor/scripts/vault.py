@@ -168,8 +168,12 @@ QUERY_SCHEMA = "skillsafe.query/v1"
 ANCHORS_SCHEMA = "skillsafe.anchors/v1"
 ORCHESTRATOR_SCHEMA = "skillsafe.orchestrator/v1"
 BINDING_SCHEMA = "skillsafe.bindung/v1"
-# Lokal gilt hybrid-local/v4 (Wortform, Funktionswörter, Trefferstärke; siehe
-# schema/profil.md). extern-zweistufig/v2: Stoppwörter werden wie die Anfrage
+# Lokal gilt hybrid-local/v5 (Wortform, Funktionswörter, Trefferstärke; siehe
+# schema/profil.md). v5 filtert lokal mit derselben Stoppwortliste wie die
+# externe Suche: Ein großgeschriebenes „FÜR" ist wie „IN" ein Stoppwort und
+# kein Kürzel. In v4 traf das rohe „für" der Liste nie, und eine Frage aus
+# nichts als „FÜR" kam bis 'strong', wenn ein Claim „FÜR" ebenso groß schrieb.
+# extern-zweistufig/v2: Stoppwörter werden wie die Anfrage
 # normalisiert — in v1 wirkte „für" nie als Stoppwort, weil das rohe Wort mit
 # dem Token „fuer" verglichen wurde. Dazu liest v2 lokale Quellen vollständig,
 # filtert über den Katalog nur noch bei Netzquellen und zählt Abrufe je Abfrage.
@@ -177,7 +181,7 @@ BINDING_SCHEMA = "skillsafe.bindung/v1"
 # lokal; ein Kürzel in Großbuchstaben bleibt) sind kein Anfragebegriff mehr.
 # In v2 trafen „sie", „nur" oder „ohne" beliebige Sätze, und jeder Treffer
 # verlangt in der Antwort eine eigene Zeile.
-RETRIEVAL_PROFILE = "hybrid-local/v4"
+RETRIEVAL_PROFILE = "hybrid-local/v5"
 EXTERN_RETRIEVAL_PROFILE = "extern-zweistufig/v3"
 SEGMENTATION_PROFILE = "satzsegmentierung/v1"
 # Wortform ist kein Bedeutungsmodell: nur Flexion, Umlaut-Plural, -ung und
@@ -719,11 +723,13 @@ def _secret_platzhalter(fund):
 
 
 # Stoppwörter der Tokenisierung (_retrieval_tokens): externe Suche,
-# Katalogzahlen und Satzbestand. Verglichen wird mit dem schon normalisierten
-# Token, deshalb steht jeder Eintrag in der Schreibung von _retrieval_norm
-# (ae/oe/ue/ss); ein Test hält das fest. Bis v0.18.9 stand hier „für". Als
-# Eintrag traf das nie; seit extern-zweistufig/v2 wirkte es über eine
-# normalisierte Kopie der Liste. Diese Liste ergibt dieselbe Ausgabe.
+# Katalogzahlen, Satzbestand und seit hybrid-local/v5 auch das lokale Ranking,
+# dort vor der Kürzel-Erkennung (_inhaltstokens). Verglichen wird mit dem
+# schon normalisierten Token, deshalb steht jeder Eintrag in der Schreibung
+# von _retrieval_norm (ae/oe/ue/ss); ein Test hält das fest. Bis v0.18.9
+# stand hier „für". Als Eintrag traf das nie; extern wirkte es seit
+# extern-zweistufig/v2 über eine normalisierte Kopie der Liste, lokal erst
+# seit hybrid-local/v5.
 RETRIEVAL_STOPWORDS = frozenset({
     "aber", "als", "auch", "auf", "aus", "bei", "das", "dem", "den", "der",
     "des", "die", "ein", "eine", "einer", "eines", "fuer", "hat", "ich", "im",
@@ -732,14 +738,6 @@ RETRIEVAL_STOPWORDS = frozenset({
     "a", "an", "and", "are", "for", "from", "how", "in", "is", "of", "on",
     "or", "the", "to", "what", "which", "with",
 })
-
-# Das lokale Ranking filtert vor der Kürzel-Erkennung mit der Liste, die dort
-# bis v0.18.9 tatsächlich gewirkt hat, also ohne „fuer". Lokal sortiert
-# FUNKTIONSWOERTER das Wort aus. Ein großgeschriebenes „FÜR" in gemischt
-# geschriebenem Text bleibt dort aber ein Kürzel; der Schnappschuss der
-# Rangfolge hält das mit „Was gilt FÜR OKF?" fest. Wer das angleicht, ändert
-# hybrid-local/v4 und hebt die Profilnummer.
-LOKALE_STOPWORDS = RETRIEVAL_STOPWORDS - {"fuer"}
 
 # Funktionswörter des lokalen Rankings (seit hybrid-local/v2), in der normalisierten
 # Schreibung von _retrieval_norm (ae/oe/ue/ss). Bewusst eine ZWEITE Liste und
@@ -1607,21 +1605,6 @@ def _kuerzel_tokens(text):
     return gefunden
 
 
-def _lokale_tokens(value):
-    """Tokens für das lokale Ranking, mit der Stoppwortliste ohne „fuer".
-
-    Lokal sortiert FUNKTIONSWOERTER die Funktionswörter aus. Gefiltert wird
-    vorher mit LOKALE_STOPWORDS, der Liste, die hier bis v0.18.9 gewirkt hat,
-    damit hybrid-local/v4 bytegleich bleibt. Ein großgeschriebenes „FÜR" in
-    gemischt geschriebenem Text ist dort deshalb ein Kürzel, anders als „IN"
-    oder „MIT", die schon diese Liste aussortiert.
-    """
-    return tuple(
-        token for token in _retrieval_norm(value).split()
-        if token not in LOKALE_STOPWORDS and (len(token) >= 2 or token.isdigit())
-    )
-
-
 # Funktionswörter, die großgeschrieben ein Substantiv sind ("die Waren",
 # "Soll und Haben", "die Würde"). Bewusst eine geschlossene Liste: Eine
 # allgemeine Regel "groß mitten im Satz" machte jede Titelschreibung, jede
@@ -1734,11 +1717,16 @@ def _anfragebegriffe(query):
 
 
 def _inhaltstokens(value):
-    """Inhaltstragende Tokens des lokalen Rankings: ohne Funktionswörter."""
+    """Inhaltstragende Tokens des lokalen Rankings: ohne Funktionswörter.
+
+    Die Stoppwortliste greift vor der Kürzel-Erkennung: „IN", „MIT" und seit
+    hybrid-local/v5 auch „FÜR" sind in Großbuchstaben kein Kürzel, „IT" bleibt
+    eines (siehe _kuerzel_tokens).
+    """
     text = str(value)
     kuerzel = _kuerzel_tokens(text)
     return tuple(
-        token for token in _lokale_tokens(text)
+        token for token in _retrieval_tokens(text)
         if token not in FUNKTIONSWOERTER or token in kuerzel
     )
 

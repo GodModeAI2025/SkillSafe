@@ -276,7 +276,7 @@ Tags, Begriffe).
 
 **Wer am Ranking dreht** — Gewichte, Funktionswörter, Wortform-Regeln,
 Schwellen der Trefferstärke —, hebt die Profilnummer (als Nächstes
-`hybrid-local/v5`), misst neu, hält den Schnappschuss neu fest
+`hybrid-local/v6`), misst neu, hält den Schnappschuss neu fest
 (`rangfolge_check.py --schreiben`), trägt `MESSUNG` in
 `tests/test_vault_recall.py` nach und zieht die Messtabelle in `README.md`
 und `index.html` nach; `check_docs.py` vergleicht beide mit der echten

@@ -29,7 +29,7 @@ geschützte `dir_fd`-Operationen fail-closed ab.
 📖 **Konzept & Architekturentscheidungen:** [`wissenstresor/KONZEPT.md`](wissenstresor/KONZEPT.md)
 🌐 **Landingpage:** [`index.html`](index.html) (GitHub-Pages-fähig, Source = repo root)
 
-**Aktueller Release: v0.18.10** (Profil `oksv-lite/1.3`) mit Begriffswelten,
+**Aktueller Release: v0.18.11** (Profil `oksv-lite/1.3`) mit Begriffswelten,
 deterministischem Hybrid-Retrieval, geprüften Bild-/PDF-Regionen und einem
 reproduzierbaren `.skill`-Paket für Claude Code und Codex. Der
 Frontmatter-Parser lehnt Verschachtelung fail-closed ab statt sie still
@@ -410,9 +410,21 @@ die Fassungen nachgerechnet, aus denen er entstand; `token_count` und
 `top_tokens` zählen dort „fuer" nicht mehr, und „bestand" rückt unter die
 häufigsten Wörter von `BETRIEB.md`.
 
-Abnahme: 253 Tests bestanden · 37 manifestierte Dateien · 39 sichere
+v0.18.11 schließt den letzten Rest dieses Befunds im lokalen Ranking und
+hebt es dafür auf `hybrid-local/v5`. Bis v4 filterte das lokale Ranking vor
+der Kürzel-Erkennung mit der alten Liste, in der das rohe „für" nie traf;
+ein großgeschriebenes „FÜR" galt deshalb als Abkürzung wie „IT". Schrieb
+ein Claim „FÜR" ebenso groß, kam eine Frage aus nichts als „FÜR" bis
+`strong` und schaltete die Pflicht-Vollsichtung ab. Jetzt ist „FÜR" wie
+„IN" oder „MIT" kein Kürzel, „IT" bleibt eines. Externe Suche,
+Katalogzahlen und Kürzel-Erkennung sind unverändert. Im Schnappschuss der
+Rangfolge ändert sich nur „Was gilt FÜR OKF?": von `partial` mit 66 % auf
+`strong` mit 100 %, wie die kleingeschriebene Frage, bei gleicher Evidenz
+und Punktzahl. Die Recall-Messung bleibt gleich.
+
+Abnahme: 254 Tests bestanden · 37 manifestierte Dateien · 39 sichere
 Paketeinträge · SHA-256
-`90920e788e91af6fef12c16de395036f310ce4f4af873f6abf68f3b3e077d0fe`.
+`0c1aa5b87c8c2314ef3d3b32d7b4492dd3bbcffb43454fcf94e3054472b948dd`.
 Dazu 2 aufgeführte externe Bezugsquellen · 2 Satzanker.
 
 Alles läuft mit der Python-Standardbibliothek, gemessen mit CPython 3.9 und

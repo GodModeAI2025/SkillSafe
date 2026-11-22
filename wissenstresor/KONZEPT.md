@@ -469,7 +469,7 @@ und `BETRIEB.md`.
 **Entscheidung:** Der Tresor bekommt eine Bedeutungssuche, aber keinen
 Bedeutungsindex. Drei Bausteine tragen sie gemeinsam:
 
-1. **Das Ranking wird ehrlich.** `hybrid-local/v4` weist aus, welche
+1. **Das Ranking wird ehrlich.** `hybrid-local/v5` weist aus, welche
    Fragebegriffe es erkannt hat (`coverage.match_strength`,
    `coverage.query_terms`), meldet jede Kürzung durch das Limit und macht bei
    `weak` und `none` die Vollsichtung zur Pflicht.
@@ -933,7 +933,7 @@ statt übermischt · Ziel im Tresor, in `.claude`/`.codex` oder mit fremdem
 Inhalt bricht ab · `stats` läuft auch auf einem roten Bestand ohne Traceback.
 
 **Auffindbarkeit und Vollsichtung (seit v0.12.0, gemessen am 2026-11-12 mit
-`hybrid-local/v4`):**
+`hybrid-local/v4`, am 2026-11-22 mit `hybrid-local/v5` unverändert):**
 `tools/recall_check.py` gegen `tests/gold/recall-demo.json`, Limit 8 ·
 Gruppe „entwicklung" (28 Fragen): 19 direkt gefunden, 9 in der
 Pflicht-Vollsichtung, 0 still · Gruppe „kontrolle" (56 blind geschriebene

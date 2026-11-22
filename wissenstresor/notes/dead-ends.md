@@ -89,7 +89,9 @@ lokale Ranking filtert weiter mit der alten Form, damit hybrid-local/v4
 bytegleich bleibt. Seit v0.18.10 (entstanden als paralleles v0.18.9) ist der
 Fehler auch in der Liste selbst behoben: dort steht 'fuer', ein Test prueft
 jeden Eintrag gegen _retrieval_norm, der Katalog von X-0002 ist
-nachgerechnet, und lokal filtert LOKALE_STOPWORDS weiter ohne 'fuer'.
+nachgerechnet, und seit v0.18.11 (hybrid-local/v5) filtert auch das lokale
+Ranking mit der Liste, ein grossgeschriebenes 'FÜR' ist dort kein Kuerzel
+mehr.
 
 ## [2026-11-12] Kompositum nur bei vollstaendiger Zerlegung gegen das Bestandsvokabular — verworfen
 Die strengere Regel (beide Teile muessen als eigenes Wort im Bestand stehen)

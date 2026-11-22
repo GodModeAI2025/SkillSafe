@@ -72,7 +72,13 @@ jobs:
           # 3.9 — zugesagte Untergrenze, System-Python auf macOS. Die belegte
           # API-Untergrenze des Codes liegt darunter, wird aber nicht
           # zugesagt. Wer 3.9 streicht, muss README und BETRIEB.md mitziehen.
-          - os: ubuntu-latest
+          # Seit 22.11.2026 fest auf ubuntu-24.04: ubuntu-latest ist 26.04,
+          # und setup-python meldete in Lauf 86 "The version '3.9' with
+          # architecture 'x64' was not found for Ubuntu 26.04". Das
+          # Versionsverzeichnis von actions/python-versions führt 3.9 bis
+          # 24.04 (3.9.25). Fällt auch 24.04 weg, wird die Untergrenze neu
+          # entschieden, nicht still gestrichen.
+          - os: ubuntu-24.04
             python: "3.9"
           # 3.13 — aktuelle Fassung, das obere Ende derselben Spanne.
           - os: ubuntu-latest

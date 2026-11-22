@@ -274,11 +274,12 @@ oder Laufanweisungen zeigt. Code kennt der Tresor bisher nur in der
 Engine-Zone, die sich ausschließlich durch bewusste Motor-Releases ändert.
 Fünf Punkte tragen die Ablehnung je einzeln:
 
-1. **Injection eskaliert.** Regel 6 hält Quellen als Daten, und die
-   Injection-Prüfung greift heute an Claim-Text und Fundstelle. Darf Content
-   einen Ausführungspfad benennen, wird aus „falsche Antwort" ein
+1. **Injection eskaliert.** Regel 6 hält Quellen als Daten. Der
+   Stolperdraht für Instruktionssignaturen fängt nur offensichtliche Formeln,
+   und im kuratierten Text neben den Claims warnt er nur. Darf Content einen
+   Ausführungspfad benennen, wird aus „falsche Antwort" ein
    „Codeausführung". Der Weg läuft über kuratierten Content, und Kuratierung
-   bleibt probabilistisch (siehe Bewusste Grenzen).
+   bleibt probabilistisch (beides unter Bewusste Grenzen).
 2. **Pfadhärtung.** Zwei der drei in §6.2 erlaubten Pfadformen fallen an
    `_safe_relative_path` durch: absolute URLs und bundle-relative Pfade mit
    führendem `/`, ebenso `..`. Nur ein relativer Pfad unterhalb `ROOT` wäre
@@ -786,6 +787,24 @@ Modell) — der Linter repariert nur Metadaten und Router, nie Inhalte.
 * Extraktion und Verdichtung bleiben Modellarbeit und damit
   probabilistisch; das Profil macht ihre Ergebnisse prüfbar, nicht ihre
   Entstehung deterministisch.
+* Der Stolperdraht für Instruktionssignaturen kennt vier englische Formeln
+  in gewöhnlich geschriebenem Text. Eine Umschreibung, eine andere Sprache
+  oder gezielte Verschleierung erkennt er nicht, auch nicht im Claim;
+  dagegen steht Regel 6. Den Release hält er an Claim-Text, Fundstelle,
+  Prüfangabe, Vorzugsbegriffen, Aliasen und Alttext an, und eine Region oder
+  ein Satzanker mit Signatur muss markiert sein und trägt dann keinen Claim.
+  Im kuratierten Text daneben (Titel, Tags, übriger Seitentext, Pfade,
+  Registerangaben einer Quelle) warnt `validate` nur; `query` und `sweep`
+  lassen ein solches Feld weg, ein Pfad bleibt als Kennung stehen, und
+  Seite, Quelle oder Treffer sind markiert (`schema/profil.md`). Das ist
+  gewollt: Ein Quellentitel gibt den echten Titel wieder, und eine Seite
+  über Sprachmodelle darf eine der Zweiwortformeln im Titel führen. Als
+  Fehler machte die Prüfung einen solchen Bestand rot, nach der Stufenregel
+  in `references/befuellen.md` ein `major`, und zurück zu Grün führte nur
+  ein umgeschriebener Titel, bei einer Quelle ein falscher. Wer eine
+  markierte Seite ganz liest, liest den Text trotzdem mit; ihn nicht zu
+  befolgen und nicht zu wiederholen, verlangen Regel 6 und
+  `references/antworten.md`. Die Abwägung steht in `notes/dead-ends.md`.
 * Nicht-Text-Extraktion bleibt Modell-/OCR-Arbeit. Der Tresor prüft
   Dateisignatur, Originalhash, Repräsentationsschema und Claim-Bindung,
   nicht die semantische Richtigkeit der Bilderkennung selbst. Diese muss

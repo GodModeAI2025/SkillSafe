@@ -29,7 +29,7 @@ geschützte `dir_fd`-Operationen fail-closed ab.
 📖 **Konzept & Architekturentscheidungen:** [`wissenstresor/KONZEPT.md`](wissenstresor/KONZEPT.md)
 🌐 **Landingpage:** [`index.html`](index.html) (GitHub-Pages-fähig, Source = repo root)
 
-**Aktueller Release: v0.18.9** (Profil `oksv-lite/1.3`) mit Begriffswelten,
+**Aktueller Release: v0.18.10** (Profil `oksv-lite/1.3`) mit Begriffswelten,
 deterministischem Hybrid-Retrieval, geprüften Bild-/PDF-Regionen und einem
 reproduzierbaren `.skill`-Paket für Claude Code und Codex. Der
 Frontmatter-Parser lehnt Verschachtelung fail-closed ab statt sie still
@@ -380,23 +380,39 @@ dokumentiert: Ein Zeilenendkommentar liest sich mit der Codezeile darunter,
 eingerückter Code in einem Listenpunkt bleibt Listentext, und ein
 kleingeschriebenes Begriffspaar („miete/kaution") gilt als Pfad.
 
-v0.18.9 schließt den Rest eines alten Befunds an der Stoppwortliste. Dort
-stand „für" in Umlautschreibung, verglichen wird aber mit dem schon
-normalisierten Token „fuer"; seit `extern-zweistufig/v2` glich das eine
-normalisierte Kopie der Liste aus. Jetzt steht der Eintrag selbst
-normalisiert, und ein Test prüft jeden Eintrag. Das lokale Ranking filtert
-vorher weiter ohne „fuer", damit `hybrid-local/v4` bytegleich bleibt. Die
-Rechenvorschrift ändert sich nicht, eine neue Profilnummer gibt es deshalb
-nicht: Der Schnappschuss der Rangfolge, die Recall-Messung, die Messung des
-externen Routings und die Zahlen 60/460 und 78/152 bleiben gleich. Neu
-erzeugt ergibt der Katalog von X-0001 dieselben Zahlen. Den von X-0002 hat
-`orchestrator-template` über die Fassungen nachgerechnet, aus denen er
-entstand; `token_count` und `top_tokens` zählen dort „fuer" nicht mehr, und
-„bestand" rückt unter die häufigsten Wörter von `BETRIEB.md`.
+v0.18.9 ändert kein Verhalten. Ein Review schlug vor, Instruktionssignaturen
+auch in Titel, Tags, Registerangaben, übrigem Seitentext und Pfad zum Fehler
+zu machen, und stützte sich auf AD-09, das den Umfang des Stolperdrahts noch
+mit „Claim-Text und Fundstelle" angab. Seit v0.18.0 warnt `validate` dort,
+und `query` und `sweep` geben das Feld nicht aus. Zum Fehler wird das
+bewusst nicht: Der Stolperdraht kennt nur vier englische Formeln, zwei davon
+gängige Fachbegriffe der Arbeit mit Sprachmodellen. Ein Quellentitel gibt
+den echten Titel wieder, und eine Seite über Sprachmodelle darf diese
+Fachbegriffe im Titel führen; als Fehler machte der Stolperdraht einen
+solchen Bestand rot, ohne dass er einen Mangel hätte. AD-09 nennt den
+Umfang jetzt richtig, `wissenstresor/KONZEPT.md` führt die Grenze unter
+„Bewusste Grenzen", und `wissenstresor/notes/dead-ends.md` hält die Gründe
+und die Bedingung für eine Wiederaufnahme fest.
+
+v0.18.10 führt zwei Stände zusammen, die parallel als v0.18.9 entstanden
+sind: den eben beschriebenen und einen zweiten, der den Rest eines alten
+Befunds an der Stoppwortliste schließt. Dort stand „für" in
+Umlautschreibung, verglichen wird aber mit dem schon normalisierten Token
+„fuer"; seit `extern-zweistufig/v2` glich das eine normalisierte Kopie der
+Liste aus. Jetzt steht der Eintrag selbst normalisiert, und ein Test prüft
+jeden Eintrag. Das lokale Ranking filtert vorher weiter ohne „fuer", damit
+`hybrid-local/v4` bytegleich bleibt. Die Rechenvorschrift ändert sich
+nicht, eine neue Profilnummer gibt es deshalb nicht: Der Schnappschuss der
+Rangfolge, die Recall-Messung, die Messung des externen Routings und die
+Zahlen 60/460 und 78/152 bleiben gleich. Neu erzeugt ergibt der Katalog von
+X-0001 dieselben Zahlen. Den von X-0002 hat `orchestrator-template` über
+die Fassungen nachgerechnet, aus denen er entstand; `token_count` und
+`top_tokens` zählen dort „fuer" nicht mehr, und „bestand" rückt unter die
+häufigsten Wörter von `BETRIEB.md`.
 
 Abnahme: 253 Tests bestanden · 37 manifestierte Dateien · 39 sichere
 Paketeinträge · SHA-256
-`dfc6ef4c9a4723e14dfd8910e158fc3cf19d4686deb3fe752be7f695af6a53cc`.
+`90920e788e91af6fef12c16de395036f310ce4f4af873f6abf68f3b3e077d0fe`.
 Dazu 2 aufgeführte externe Bezugsquellen · 2 Satzanker.
 
 Alles läuft mit der Python-Standardbibliothek, gemessen mit CPython 3.9 und

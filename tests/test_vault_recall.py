@@ -168,7 +168,7 @@ class WortformTests(VaultCase):
 
         Genau dieser Fehler steckte bis extern-zweistufig/v1 in
         RETRIEVAL_STOPWORDS ('für' stand dort, geprüft wurde gegen 'fuer');
-        seit v2 glich eine normalisierte Kopie ihn aus, seit v0.18.9 ist er
+        seit v2 glich eine normalisierte Kopie ihn aus, seit v0.18.10 ist er
         in der Liste selbst behoben (Test darunter). Die neue Liste darf ihn
         nie haben.
         """
@@ -181,7 +181,7 @@ class WortformTests(VaultCase):
     def test_retrieval_stopwords_are_stored_in_normalized_spelling(self):
         """Dieselbe Regel für die ältere Liste RETRIEVAL_STOPWORDS.
 
-        _retrieval_tokens vergleicht erst nach _retrieval_norm. Bis v0.18.8
+        _retrieval_tokens vergleicht erst nach _retrieval_norm. Bis v0.18.9
         stand 'für' in der Liste und traf als Eintrag nie; extern wirkte es
         seit extern-zweistufig/v2 nur über eine normalisierte Kopie. Jetzt
         steht jeder Eintrag selbst in der Schreibung von _retrieval_norm.

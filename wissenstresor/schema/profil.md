@@ -355,7 +355,7 @@ nur, dass dieser Ranking-Scan alle validierten Claims gesehen hat; es ist
 kein semantischer Vollständigkeitsbeweis. Den liefert allein die
 Vollsichtung, und auch sie nur in dem Sinn, der unter „Vollsichtung" steht.
 Die Stoppwortliste steht in derselben Schreibung wie die normalisierte
-Anfrage; bis v0.18.8 stand dort das rohe „für", das als Eintrag nie traf
+Anfrage; bis v0.18.9 stand dort das rohe „für", das als Eintrag nie traf
 (extern wirkte es seit `extern-zweistufig/v2` über eine normalisierte
 Kopie). Lokal sortiert die Liste der Funktionswörter „fuer" aus. Anders als
 „IN" oder „MIT" bleibt ein großgeschriebenes „FÜR" in gemischt

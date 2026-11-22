@@ -721,7 +721,7 @@ def _secret_platzhalter(fund):
 # Stoppwörter der Tokenisierung (_retrieval_tokens): externe Suche,
 # Katalogzahlen und Satzbestand. Verglichen wird mit dem schon normalisierten
 # Token, deshalb steht jeder Eintrag in der Schreibung von _retrieval_norm
-# (ae/oe/ue/ss); ein Test hält das fest. Bis v0.18.8 stand hier „für". Als
+# (ae/oe/ue/ss); ein Test hält das fest. Bis v0.18.9 stand hier „für". Als
 # Eintrag traf das nie; seit extern-zweistufig/v2 wirkte es über eine
 # normalisierte Kopie der Liste. Diese Liste ergibt dieselbe Ausgabe.
 RETRIEVAL_STOPWORDS = frozenset({
@@ -734,7 +734,7 @@ RETRIEVAL_STOPWORDS = frozenset({
 })
 
 # Das lokale Ranking filtert vor der Kürzel-Erkennung mit der Liste, die dort
-# bis v0.18.8 tatsächlich gewirkt hat, also ohne „fuer". Lokal sortiert
+# bis v0.18.9 tatsächlich gewirkt hat, also ohne „fuer". Lokal sortiert
 # FUNKTIONSWOERTER das Wort aus. Ein großgeschriebenes „FÜR" in gemischt
 # geschriebenem Text bleibt dort aber ein Kürzel; der Schnappschuss der
 # Rangfolge hält das mit „Was gilt FÜR OKF?" fest. Wer das angleicht, ändert
@@ -746,7 +746,7 @@ LOKALE_STOPWORDS = RETRIEVAL_STOPWORDS - {"fuer"}
 # keine Erweiterung von RETRIEVAL_STOPWORDS: die alte Liste formt auch die
 # nachrechenbaren Katalogzahlen (token_count, top_tokens). Sie bleibt
 # unberührt, damit sich dort kein Wert verschiebt; nur „fuer" steht seit
-# v0.18.9 so geschrieben, wie es seit extern-zweistufig/v2 wirkt. Seit
+# v0.18.10 so geschrieben, wie es seit extern-zweistufig/v2 wirkt. Seit
 # extern-zweistufig/v3 nimmt auch die externe Suche diese Liste aus den
 # Anfragebegriffen, aber nur auf der Seite der Frage (_anfragebegriffe).
 #
@@ -1611,7 +1611,7 @@ def _lokale_tokens(value):
     """Tokens für das lokale Ranking, mit der Stoppwortliste ohne „fuer".
 
     Lokal sortiert FUNKTIONSWOERTER die Funktionswörter aus. Gefiltert wird
-    vorher mit LOKALE_STOPWORDS, der Liste, die hier bis v0.18.8 gewirkt hat,
+    vorher mit LOKALE_STOPWORDS, der Liste, die hier bis v0.18.9 gewirkt hat,
     damit hybrid-local/v4 bytegleich bleibt. Ein großgeschriebenes „FÜR" in
     gemischt geschriebenem Text ist dort deshalb ein Kürzel, anders als „IN"
     oder „MIT", die schon diese Liste aussortiert.

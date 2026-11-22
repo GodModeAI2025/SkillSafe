@@ -12,7 +12,7 @@
         "stoerfall"
       ],
       "title": "Betrieb und Uebergabe",
-      "token_count": 1051,
+      "token_count": 1043,
       "top_tokens": [
         "nicht",
         "md",
@@ -23,9 +23,9 @@
         "tests",
         "checksum",
         "erst",
-        "fuer",
         "wer",
-        "3"
+        "3",
+        "bestand"
       ]
     },
     {
@@ -39,7 +39,7 @@
         "ueberblick"
       ],
       "title": "SkillSafe — der Wissenstresor",
-      "token_count": 954,
+      "token_count": 948,
       "top_tokens": [
         "wissenstresor",
         "md",

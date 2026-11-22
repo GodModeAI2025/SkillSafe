@@ -348,15 +348,19 @@ Mögliche Zustände sind:
 * `invalid_query`, `invalid_vault`, `vault_busy`, `snapshot_changed` —
   fail-closed, immer ohne Evidenz.
 
-Das Ranking `hybrid-local/v4` verwendet ausschließlich Ganzzahlen:
+Das Ranking `hybrid-local/v5` verwendet ausschließlich Ganzzahlen:
 kontrollierte Begriffe/Aliase, lexikalische Token-Treffer, Wortformen nach
 `wortform/v1` und höchstens einen Graph-Hop. `retrieval_complete` bedeutet
 nur, dass dieser Ranking-Scan alle validierten Claims gesehen hat; es ist
 kein semantischer Vollständigkeitsbeweis. Den liefert allein die
 Vollsichtung, und auch sie nur in dem Sinn, der unter „Vollsichtung" steht.
-Stoppwörter durchlaufen dieselbe Normalisierung wie die Anfrage; früher
-verglich das Script das rohe „für" mit dem Token „fuer", und das Wort wirkte
-nie als Stoppwort.
+Die Stoppwortliste steht in derselben Schreibung wie die normalisierte
+Anfrage; bis v0.18.9 stand dort das rohe „für", das als Eintrag nie traf
+(extern wirkte es seit `extern-zweistufig/v2` über eine normalisierte
+Kopie). Seit `hybrid-local/v5` filtert auch das lokale Ranking mit ihr, vor
+der Kürzel-Erkennung: Ein großgeschriebenes „FÜR" ist wie „IN" oder „MIT"
+kein Kürzel. In v4 war es eines, und eine Frage aus nichts als „FÜR" kam
+bis `strong`, wenn ein Claim „FÜR" ebenso groß schrieb.
 
 Keine Embeddings, niemals. Auf dem **Default-Query-Pfad** verlässt außerdem
 kein Byte den Skill-Ordner: kein Netzwerk, kein Dateizugriff nach außen, kein

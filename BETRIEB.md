@@ -107,6 +107,14 @@ auch wenn die Profil-Nummer dabei steigt.
 `.github/workflows/gates.yml` fährt dieselbe Kette über Python 3.9 und 3.13
 auf Ubuntu und 3.13 auf macOS.
 
+Der 3.9-Job läuft seit dem 22. November 2026 fest auf `ubuntu-24.04`.
+`ubuntu-latest` zeigt seitdem auf Ubuntu 26.04, und `actions/setup-python`
+brach dort ab, bevor ein Schritt des Repositorys lief: „The version '3.9'
+with architecture 'x64' was not found for Ubuntu 26.04" (Lauf 86). Das
+Versionsverzeichnis von `actions/python-versions` führt 3.9 bis Ubuntu 24.04.
+Verschwindet auch 24.04, wird die zugesagte Untergrenze neu entschieden und in
+`README.md` und hier nachgezogen, nicht still gestrichen.
+
 Die Matrix ist an ihrem Ertrag gemessen, nicht an einem Gefühl von Gründlichkeit.
 Über die ersten 14 Läufe gab es genau einen roten Lauf, und dort war **nur**
 `macos-latest` rot: 18 Testfehler, alle Ubuntu-Jobs grün, Ursache `/var` als
@@ -166,6 +174,13 @@ beiden Läufe zu `0f2bae9` nach 15:15 als `cancelled` abgeräumt, ubuntu/3.9
 in beiden, ubuntu/3.13 und macOS/3.13 im zweiten. Die Kette selbst brauchte
 inzwischen rund 15 Minuten; der 3.9-Job zu `670f2dc` brauchte 20½ Minuten. Auch ein so
 abgeräumter Lauf ist kein grüner. Seitdem steht `timeout-minutes` auf 30.
+
+Am 16. November 2026 bekam der macOS-Job von Lauf 83 keinen Runner (kein
+`runner_name`, kein einziger Schritt) und wurde genau 15:00 nach dem Anlegen
+als `cancelled` abgeräumt, obwohl `timeout-minutes` auf 30 steht. Einen
+zweiten Lauf auf demselben Ref, den `concurrency` hätte abbrechen können, gab
+es nicht, und GitHub hat zu dem Job weder Meldung noch Log hinterlegt. Eine
+Ursache ist nicht belegt. Der nächste Lauf auf dem Branch bekam einen Runner.
 
 **Was unabhängig von der Ursache trägt — und das Verfahren ist:**
 
@@ -261,7 +276,7 @@ Tags, Begriffe).
 
 **Wer am Ranking dreht** — Gewichte, Funktionswörter, Wortform-Regeln,
 Schwellen der Trefferstärke —, hebt die Profilnummer (als Nächstes
-`hybrid-local/v5`), misst neu, hält den Schnappschuss neu fest
+`hybrid-local/v6`), misst neu, hält den Schnappschuss neu fest
 (`rangfolge_check.py --schreiben`), trägt `MESSUNG` in
 `tests/test_vault_recall.py` nach und zieht die Messtabelle in `README.md`
 und `index.html` nach; `check_docs.py` vergleicht beide mit der echten

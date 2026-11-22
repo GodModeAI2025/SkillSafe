@@ -29,7 +29,7 @@ geschützte `dir_fd`-Operationen fail-closed ab.
 📖 **Konzept & Architekturentscheidungen:** [`wissenstresor/KONZEPT.md`](wissenstresor/KONZEPT.md)
 🌐 **Landingpage:** [`index.html`](index.html) (GitHub-Pages-fähig, Source = repo root)
 
-**Aktueller Release: v0.18.9** (Profil `oksv-lite/1.3`) mit Begriffswelten,
+**Aktueller Release: v0.18.10** (Profil `oksv-lite/1.3`) mit Begriffswelten,
 deterministischem Hybrid-Retrieval, geprüften Bild-/PDF-Regionen und einem
 reproduzierbaren `.skill`-Paket für Claude Code und Codex. Der
 Frontmatter-Parser lehnt Verschachtelung fail-closed ab statt sie still
@@ -382,21 +382,35 @@ kleingeschriebenes Begriffspaar („miete/kaution") gilt als Pfad.
 
 v0.18.9 ändert kein Verhalten. Ein Review schlug vor, Instruktionssignaturen
 auch in Titel, Tags, Registerangaben, übrigem Seitentext und Pfad zum Fehler
-zu machen, und stützte sich auf AD-09, das den Umfang des Stolperdrahts noch
-mit „Claim-Text und Fundstelle" angab. Seit v0.18.0 warnt `validate` dort,
-und `query` und `sweep` geben das Feld nicht aus. Zum Fehler wird das
+zu machen; die Gegenprüfung stufte das als Härtungswunsch ein und stützte
+sich auf AD-09, das den Umfang des Stolperdrahts noch mit „Claim-Text und
+Fundstelle" angab. Dort warnt `validate` seit v0.18.0, an Pfaden seit
+v0.18.2, und `query` und `sweep` geben ein solches Feld nicht aus; ein Pfad
+bleibt als Kennung stehen, und die Seite ist markiert. Zum Fehler wird das
 bewusst nicht: Der Stolperdraht kennt nur vier englische Formeln, zwei davon
 gängige Fachbegriffe der Arbeit mit Sprachmodellen. Ein Quellentitel gibt
 den echten Titel wieder, und eine Seite über Sprachmodelle darf diese
 Fachbegriffe im Titel führen; als Fehler machte der Stolperdraht einen
-solchen Bestand rot, ohne dass er einen Mangel hätte. AD-09 nennt den
-Umfang jetzt richtig, `wissenstresor/KONZEPT.md` führt die Grenze unter
+solchen Bestand rot, ohne dass der Bestand einen Mangel hätte. AD-09 nennt
+den Umfang jetzt richtig, `wissenstresor/KONZEPT.md` führt die Grenze unter
 „Bewusste Grenzen", und `wissenstresor/notes/dead-ends.md` hält die Gründe
 und die Bedingung für eine Wiederaufnahme fest.
 
+v0.18.10 berichtigt, was eine Faktenprüfung an den Texten von v0.18.9 fand,
+ebenfalls vor `main`; das Verhalten bleibt gleich. Ein Titel mit Signatur
+fehlt nur in der Ausgabe von `query` und `sweep`. Roh steht er weiter in der
+Seite, in `INDEX.md` und `graph/graph.json`, in den Zeilen von `search` und
+im OKF-Export, und `KONZEPT.md` nennt das jetzt als Restrisiko. Die Grenze
+dort nennt die Felder genauer (eine Signatur im Satz oder in der Fundstelle
+eines Satzankers verlangt die Markierung, eine in seinem Dokumentpfad nur
+eine Warnung), schließt das
+Ziel unter den Registerangaben ein und zitiert die Stufenwahl aus
+`BETRIEB.md`. Die Tests belegen jetzt auch, dass eine Signatur in einem
+Vorzugsbegriff oder im Alttext den Release anhält.
+
 Abnahme: 252 Tests bestanden · 37 manifestierte Dateien · 39 sichere
 Paketeinträge · SHA-256
-`344b2a59aa94a3a57fbbdb2e23d22522c3f00dae32e7d94a6e3ce7dbf892e063`.
+`93b9c05028971599e628d244cd916d7483bd5635b85d5804b9b3f718bf896104`.
 Dazu 2 aufgeführte externe Bezugsquellen · 2 Satzanker.
 
 Alles läuft mit der Python-Standardbibliothek, gemessen mit CPython 3.9 und

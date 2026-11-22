@@ -457,12 +457,15 @@ Ein Review stellte nach, dass ein Seitentitel mit Zweiwortformel und
 stufte das als Haertungswunsch gegen eine dokumentierte Grenze ein
 (KONZEPT.md AD-09: "greift heute an Claim-Text und Fundstelle"). Am Stand
 v0.18.8 nachgestellt: Der Titel geht weiter durch, mit einer Warnung ohne
-Wortlaut, steht aber in keiner Ausgabe; jeder Stapel von sweep fuehrt ihn als
-null und markiert die Seite, query ebenso
-(test_curated_text_beside_claims_is_flagged_and_withheld). Die Signatur in
-jedem Stapel hat v0.18.0 geschlossen (Eintrag vom 2026-11-14). Offen war nur,
-ob die Warnung ein Fehler werden soll, fuer Titel und Tags, Registerangaben
-(Titel, Stand, Rechte), den uebrigen Seitentext und den Pfad. Weiter nein.
+Wortlaut, steht aber in keiner Ausgabe von query und sweep; jeder Stapel
+fuehrt ihn als null und markiert die Seite, query ebenso
+(test_curated_text_beside_claims_is_flagged_and_withheld). Roh steht er
+weiter in der Seite, in INDEX.md und graph/graph.json, in den Zeilen von
+search und im OKF-Export (nachgetragen am 2026-11-22 nach einer
+Faktenpruefung von v0.18.9). Die Signatur in jedem Stapel hat v0.18.0
+geschlossen (Eintrag vom 2026-11-14). Offen war nur, ob die Warnung ein
+Fehler werden soll, fuer Titel und Tags, Registerangaben (Titel, Stand,
+Rechte, Ziel), den uebrigen Seitentext und den Pfad. Weiter nein.
 Der Gewinn ist klein: Der Draht kennt vier englische Formeln; eine deutsche
 Umschreibung passiert auch im Claim, ein Bindestrich in der Zweiwortformel
 auch im Titel. Die Kosten fallen bei legitimen Bestaenden an: Ein
@@ -475,11 +478,14 @@ Leerraum in v0.18.1: Beide machen nur rot, was ohnehin ein Mangel ist (ein
 Zugangsdatum im ausgelieferten Wissen, Platzhalter ausgenommen; ein Ziel, das
 nie erreichbar war). Eine Zweiwortformel in einem Titel ist oft keiner. Und
 ein Fehler allein an Titel und Tags schloesse nur sie: Wer die Seite ganz
-liest (antworten.md, Schritt 4), liest auch Kurzfassung und Kontext, und dort
-bliebe es eine Warnung, weil eine Seite ueber Prompt Injection die Formel
-erklaeren darf. Den Rest tragen Regel 6 und die Markierung. Nachgezogen in
-v0.18.9: AD-09 beschreibt den Umfang des Stolperdrahts richtig, und
-KONZEPT.md fuehrt die Grenze unter Bewusste Grenzen. Wieder aufnehmen, wenn
-eine Abnahmerunde zeigt, dass ein Agent einer markierten Signatur folgt oder
-ihren Wortlaut wiederholt; dann zuerst fuer Titel und Tags einer Seite, die
-keinen fremden Titel wiedergeben muessen.
+liest (antworten.md, Schritt 4) oder search nutzt (Schritt 4b), liest auch
+Kurzfassung und Kontext, und dort bliebe es eine Warnung, weil eine Seite
+ueber Prompt Injection die Formel erklaeren darf. Den Rest tragen Regel 6
+und die Markierung. Nachgezogen in v0.18.9 und v0.18.10: AD-09 beschreibt
+den Umfang des Stolperdrahts richtig, und KONZEPT.md fuehrt die Grenze samt
+Restrisiko unter Bewusste Grenzen. Wieder aufnehmen, wenn eine Abnahmerunde
+zeigt, dass ein Agent einer markierten Signatur folgt oder ihren Wortlaut
+wiederholt; dann zuerst fuer Titel und Tags einer Seite, denn anders als ein
+Quellentitel geben sie keinen fremden Titel wieder. Ebenso, wenn der
+Antworten-Vertrag INDEX.md zur Pflichtlektuere macht: Dann gehoert ein
+solcher Titel dort zurueckgehalten wie in query und sweep.

@@ -275,11 +275,12 @@ Engine-Zone, die sich ausschließlich durch bewusste Motor-Releases ändert.
 Fünf Punkte tragen die Ablehnung je einzeln:
 
 1. **Injection eskaliert.** Regel 6 hält Quellen als Daten. Der
-   Stolperdraht für Instruktionssignaturen fängt nur offensichtliche Formeln,
-   und im kuratierten Text neben den Claims warnt er nur. Darf Content einen
-   Ausführungspfad benennen, wird aus „falsche Antwort" ein
-   „Codeausführung". Der Weg läuft über kuratierten Content, und Kuratierung
-   bleibt probabilistisch (beides unter Bewusste Grenzen).
+   Stolperdraht für Instruktionssignaturen fängt nur offensichtliche Formeln
+   und hält den Release nicht in jedem Feld an; an Titel, Tags oder dem
+   übrigen Seitentext etwa warnt er nur. Darf Content einen Ausführungspfad
+   benennen, wird aus „falsche Antwort" eine „Codeausführung". Der Weg läuft
+   über kuratierten Content, und Kuratierung bleibt probabilistisch. Beide
+   Grenzen stehen unter Bewusste Grenzen.
 2. **Pfadhärtung.** Zwei der drei in §6.2 erlaubten Pfadformen fallen an
    `_safe_relative_path` durch: absolute URLs und bundle-relative Pfade mit
    führendem `/`, ebenso `..`. Nur ein relativer Pfad unterhalb `ROOT` wäre
@@ -792,19 +793,23 @@ Modell) — der Linter repariert nur Metadaten und Router, nie Inhalte.
   oder gezielte Verschleierung erkennt er nicht, auch nicht im Claim;
   dagegen steht Regel 6. Den Release hält er an Claim-Text, Fundstelle,
   Prüfangabe, Vorzugsbegriffen, Aliasen und Alttext an, und eine Region oder
-  ein Satzanker mit Signatur muss markiert sein und trägt dann keinen Claim.
-  Im kuratierten Text daneben (Titel, Tags, übriger Seitentext, Pfade,
-  Registerangaben einer Quelle) warnt `validate` nur; `query` und `sweep`
-  lassen ein solches Feld weg, ein Pfad bleibt als Kennung stehen, und
-  Seite, Quelle oder Treffer sind markiert (`schema/profil.md`). Das ist
-  gewollt: Ein Quellentitel gibt den echten Titel wieder, und eine Seite
-  über Sprachmodelle darf eine der Zweiwortformeln im Titel führen. Als
-  Fehler machte die Prüfung einen solchen Bestand rot, nach der Stufenregel
-  in `references/befuellen.md` ein `major`, und zurück zu Grün führte nur
-  ein umgeschriebener Titel, bei einer Quelle ein falscher. Wer eine
-  markierte Seite ganz liest, liest den Text trotzdem mit; ihn nicht zu
-  befolgen und nicht zu wiederholen, verlangen Regel 6 und
-  `references/antworten.md`. Die Abwägung steht in `notes/dead-ends.md`.
+  ein Satzanker mit Signatur im Text oder in der Fundstelle muss markiert
+  sein und trägt dann keinen Claim. An Titel, Tags, übrigem Seitentext,
+  Seiten- und Dokumentpfaden und den Registerangaben einer Quelle (Titel,
+  Stand, Rechte, Ziel; ein Ziel mit Leerraum ist schon für sich ein Fehler)
+  warnt `validate` nur. `query` und `sweep` lassen ein solches Feld weg, ein
+  Pfad bleibt als Kennung stehen, und Seite, Quelle oder Treffer sind
+  markiert (`schema/profil.md`). Das ist gewollt: Ein Quellentitel gibt den
+  echten Titel wieder, und eine Seite über Sprachmodelle darf eine der
+  Zweiwortformeln im Titel führen. Als Fehler machte die Prüfung einen
+  solchen Bestand rot, nach der Stufenwahl in `BETRIEB.md` ein `major`, und
+  zurück zu Grün führte nur ein umgeschriebener Titel, bei einer Quelle ein
+  falscher. Roh und ohne Markierung bleibt der Text überall sonst: in Seite
+  und Register selbst, in `INDEX.md` und `graph/graph.json`, in den Zeilen
+  von `search` und im OKF-Export. Wer ihn dort liest, etwa die ganze Seite
+  in Schritt 4 oder eine Zeile von `search` in Schritt 4b, befolgt und
+  wiederholt ihn nicht (Regel 6, `references/antworten.md`). Die Abwägung
+  steht in `notes/dead-ends.md`.
 * Nicht-Text-Extraktion bleibt Modell-/OCR-Arbeit. Der Tresor prüft
   Dateisignatur, Originalhash, Repräsentationsschema und Claim-Bindung,
   nicht die semantische Richtigkeit der Bilderkennung selbst. Diese muss
@@ -898,8 +903,9 @@ auf einem gewachsenen Fremdbestand schlägt.
 **Negativ (fail-closed nachgewiesen):** unbekannter Typ oder Begriff,
 Alias-Kollision und `broader`-Zyklus → Abbruch · fehlende Medienrepräsentation,
 unbekannte oder als Injection markierte Region → Abbruch · OCR-Injection-
-Canary erscheint nie in Query-Evidenz · Instruktionssignatur in Claim-Text
-oder Fundstelle → Abbruch · Instruktionssignatur in Titel, Tag, Seitentext
+Canary erscheint nie in Query-Evidenz · Instruktionssignatur in Claim-Text,
+Fundstelle, Vorzugsbegriff, Alias, Prüfangabe oder Alttext → Abbruch ·
+Instruktionssignatur in Titel, Tag, Seitentext
 oder Registerangabe → Warnung, und `query` und `sweep` geben das Feld nicht
 aus und markieren Seite oder Quelle (seit v0.18.0 Titel, Tag im Stapel
 sowie Titel, Stand und Rechte einer Quelle; seit v0.18.1 Seitentext und

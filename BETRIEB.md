@@ -105,7 +105,10 @@ auch wenn die Profil-Nummer dabei steigt.
 ## Was die CI prüft
 
 `.github/workflows/gates.yml` fährt dieselbe Kette über Python 3.9 und 3.13
-auf Ubuntu und 3.13 auf macOS.
+auf Ubuntu und 3.13 auf macOS. Der 3.9-Job läuft seit dem 22.11.2026 auf
+`ubuntu-24.04`: `ubuntu-latest` ist seitdem Ubuntu 26.04, und dafür liefert
+`setup-python` kein 3.9 mehr. Fällt 24.04 weg, braucht die Untergrenze einen
+anderen Weg, etwa einen eigenen Build.
 
 Die Matrix ist an ihrem Ertrag gemessen, nicht an einem Gefühl von Gründlichkeit.
 Über die ersten 14 Läufe gab es genau einen roten Lauf, und dort war **nur**

@@ -43,8 +43,8 @@ Protokoll für den jeweils maßgeblichen Tresor durchlaufen — eine
 
    | Stärke | Heißt | Was zu tun ist |
    |---|---|---|
-   | `strong` | Jeder Inhaltsbegriff ist exakt, als Wortform oder über einen kuratierten Begriff getroffen, jeder getroffene Begriff ist in der Ausgabe vertreten, und jede genannte Kennung gibt es | Weiter mit Schritt 3 und 4: Kandidaten lesen und antworten. Decken sie die Frage nicht, Schritt 4b. |
-   | `partial` | Ein Anker trägt (ein vertretener kuratierter Begriff, eine vorhandene ID an einem ausgegebenen Claim oder die ganze Frage als Wortfolge in einem Claim, wenn dabei ein Inhaltswort getroffen ist), oder mindestens zwei Begriffe sind getroffen und das sind mindestens 60 % — aber etwas blieb offen: `unmatched` oder `partial` ist nicht leer, ein Begriff ist unvertreten, oder eine Kennung gibt es nicht | Tragen die getroffenen Begriffe die Frage: weiter mit Schritt 3 und 4. Steht unter den ungetroffenen das, wonach gefragt wird: direkt zu Schritt 4b, wie bei `weak`. Im Zweifel erst Schritt 4; bleibt danach etwas offen, folgt 4b. |
+   | `strong` | Jeder Inhaltsbegriff ist exakt, als Wortform oder über einen kuratierten Begriff getroffen, jeder getroffene Begriff ist in der Ausgabe vertreten, jede genannte Kennung gibt es, und `query_terms.scattered` und `.crowded` sind leer: Was kein kuratierter Begriff trägt, steht zusammen auf einer gezeigten Seite (in ihren ausgegebenen Claims, ihrem Titel oder ihren Tags), und kein gleich guter Träger davon fiel auf einer nicht gezeigten Seite dem Limit zum Opfer | Weiter mit Schritt 3 und 4: Kandidaten lesen und antworten. Decken sie die Frage nicht, Schritt 4b. |
+   | `partial` | Ein Anker trägt (ein vertretener kuratierter Begriff, eine vorhandene ID an einem ausgegebenen Claim oder die ganze Frage als Wortfolge in einem Claim, wenn dabei ein Inhaltswort getroffen ist), oder mindestens zwei Begriffe sind getroffen und das sind mindestens 60 % — aber etwas blieb offen: `unmatched` oder `partial` ist nicht leer, ein Begriff ist unvertreten, eine Kennung gibt es nicht, die Wörter verteilen sich über mehrere Seiten (`scattered`), oder ein gleich guter Träger fiel dem Limit zum Opfer (`crowded`) | Tragen die getroffenen Begriffe die Frage: weiter mit Schritt 3 und 4. Steht unter `unmatched` oder `scattered` das, wonach gefragt wird: direkt zu Schritt 4b, wie bei `weak`. Bei `crowded` die Seiten aus `coverage.omitted_pages` in Schritt 4 mitlesen (siehe „Gekürzte Treffer“). Im Zweifel erst Schritt 4; bleibt danach etwas offen, folgt 4b. |
    | `weak` | Weniger als das: ein einzelner getroffener Begriff ohne Anker, Wortteil- oder Zufallstreffer | Schritt 4 entfällt, direkt zu Schritt 4b. Die Kandidaten sind Fingerzeige, keine Antwort. |
    | `none` | Kein Kandidat | Schritt 4 entfällt, direkt zu Schritt 4b. |
 
@@ -66,6 +66,17 @@ Protokoll für den jeweils maßgeblichen Tresor durchlaufen — eine
    deshalb dort als Grund stehen und trotzdem `unmatched` sein: Der Claim,
    der ihn trägt, fiel dem Limit zum Opfer. Und ein Treffer kann in der
    Fundstelle eines Claims liegen (`source.locator`) statt in seinem Text.
+
+   **Verteilt oder verdrängt.** Ein `partial` mit voller Abdeckung erklärt
+   eine von zwei Listen in `coverage.query_terms`. `scattered` nennt Wörter,
+   die kein vertretener kuratierter Begriff trägt und die auf der gezeigten
+   Seite fehlen, die die meisten solchen Wörter trägt: Jedes steht irgendwo,
+   zusammen stehen sie nirgends. `crowded` nennt Wörter, von denen ein Claim
+   auf einer nicht gezeigten Seite dem Limit zum Opfer fiel, obwohl er
+   mindestens so viele Punkte hat wie der schwächste gezeigte Claim mit
+   diesem Wort; welcher Träger zu sehen ist, hat dann nicht die Punktzahl
+   entschieden. Seine Seite steht unter `coverage.omitted_pages`, oder die
+   Liste ist gekürzt. Bei `strong` sind beide leer.
 
    **Unbekannte Kennungen.** Nennt die Frage eine C-, S- oder B-ID, die es im
    Bestand nicht gibt, steht sie unter `coverage.unknown_ids`, und das

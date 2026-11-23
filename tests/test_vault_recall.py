@@ -5,6 +5,7 @@ Der Leitgedanke dieser Datei: Eine Suche, die etwas nicht findet, ist kein
 Fehler. Ein Ergebnis, das das nicht zugibt, ist einer.
 """
 
+import copy
 import importlib.util
 import json
 import os
@@ -607,7 +608,8 @@ class QuerySignalTests(VaultCase):
         _, mehrere = self.query("Wann erscheint OKF v1.0?")
         self.assertEqual(mehrere["coverage"]["query_terms"], {
             "content": ["0", "erscheint", "okf", "v1"], "matched": ["okf"],
-            "partial": [], "unmatched": ["0", "erscheint", "v1"]})
+            "partial": [], "unmatched": ["0", "erscheint", "v1"],
+            "scattered": [], "crowded": []})
         self.assertEqual(mehrere["coverage"]["candidates"], {
             "total": 26, "returned": 8,
             "omitted_direct": 1, "omitted_context": 17})
@@ -946,6 +948,105 @@ class QuerySignalTests(VaultCase):
         self.assertEqual(beide["coverage"]["unknown_ids"], ["S-2026"])
         self.assertEqual(beide["coverage"]["match_strength"], "partial")
 
+    def test_loose_words_must_meet_on_one_page_for_strong(self):
+        """'strong' verlangt seit hybrid-local/v5 eine Stelle, die die Frage
+        trägt.
+
+        Verteilt über mehrere Seiten ist jedes Wort irgendwo getroffen, aber
+        keine Seite trägt die Frage. In einem großen Bestand findet jedes
+        Allerweltswort einen Träger, und die Nachrück-Regel holt ihn eigens
+        in die Auswahl; bis v4 hieß das 'strong' (tools/skalierung_check.py
+        fand so Goldfragen, die 'strong' hießen, während ihr Claim fehlte).
+        Seit v5 heißt es 'partial', und
+        query_terms.scattered nennt, was nicht mit dem Rest auf einer Seite
+        steht. Auf einer Seite zusammen, auch in zwei Claims, bleibt es
+        'strong'; was ein kuratierter Begriff trägt, zählt weiter über die
+        ganze Ausgabe (Paare von Vorzugsbenennungen oben).
+        """
+        def einsetzen(seite, alt, neu):
+            pfad = self.root / "knowledge/demo-okf" / seite
+            text = pfad.read_text(encoding="utf-8")
+            self.assertEqual(text.count(alt), 1, (seite, alt))
+            pfad.write_text(text.replace(alt, neu), encoding="utf-8")
+
+        self.use_private_vault()
+        einsetzen("okf.md", "Wortlaut] Der Dateipfad ist die Identität",
+                  "Wortlaut] Der Dateipfad ist im Kranichzug die Identität")
+        einsetzen("llm-wiki-muster.md", "Wortlaut] Kernoperationen sind",
+                  "Wortlaut] In der Moorlandschaft sind Kernoperationen")
+        self.release()
+        _, verteilt = self.query("Kranichzug Moorlandschaft")
+        abdeckung = verteilt["coverage"]
+        self.assertEqual(abdeckung["query_terms"]["unmatched"], [])
+        self.assertEqual(abdeckung["term_coverage_percent"], 100)
+        self.assertEqual(
+            {b["claim_id"] for b in verteilt["evidence"]} & {"C-0002", "C-0102"},
+            {"C-0002", "C-0102"})
+        self.assertEqual(abdeckung["match_strength"], "partial")
+        self.assertFalse(verteilt["fallback"]["exhaustive_review_required"])
+        self.assertEqual(len(abdeckung["query_terms"]["scattered"]), 1)
+        self.assertLessEqual(set(abdeckung["query_terms"]["scattered"]),
+                             {"kranichzug", "moorlandschaft"})
+        self.assertEqual(abdeckung["query_terms"]["crowded"], [])
+
+        self.use_private_vault()
+        einsetzen("fakten.md", "Wortlaut] POLE stammt aus",
+                  "Wortlaut] Im Kranichzug stammt POLE aus")
+        einsetzen("fakten.md", "Wortlaut] Atomare Fact-Einheiten vermeiden",
+                  "Wortlaut] In der Moorlandschaft vermeiden atomare "
+                  "Fact-Einheiten")
+        self.release()
+        _, zusammen = self.query("Kranichzug Moorlandschaft")
+        self.assertEqual(
+            zusammen["coverage"]["query_terms"]["unmatched"], [])
+        self.assertEqual(zusammen["coverage"]["query_terms"]["scattered"], [])
+        self.assertEqual(zusammen["coverage"]["match_strength"], "strong")
+
+    def test_an_equal_carrier_cut_by_the_limit_is_no_strong(self):
+        """Seit hybrid-local/v5: Schneidet das Limit einen gleich gut
+        bewerteten Träger eines Worts auf einer Seite ab, die nicht gezeigt
+        wird, hat nur die Kennung entschieden, welcher zu sehen ist. In einem
+        großen Bestand ist das bei Allerweltswörtern die Regel. Das Wort
+        steht dann unter query_terms.crowded, und das Ergebnis ist nicht
+        'strong' (hier 'partial': die ganze Frage steht als Wortfolge im
+        Claim, ein Anker). Passen beide Träger in die Ausgabe, bleibt es
+        'strong'. Ein abgeschnittener Träger auf einer gezeigten Seite zählt
+        nicht: Gezeigte Seiten werden ganz gelesen.
+        """
+        def einsetzen(seite, alt, neu):
+            pfad = self.root / "knowledge/demo-okf" / seite
+            text = pfad.read_text(encoding="utf-8")
+            self.assertEqual(text.count(alt), 1, (seite, alt))
+            pfad.write_text(text.replace(alt, neu), encoding="utf-8")
+
+        self.use_private_vault()
+        einsetzen("okf.md", "Wortlaut] Der Dateipfad ist die Identität",
+                  "Wortlaut] Der Dateipfad ist im Kranichzug die Identität")
+        einsetzen("llm-wiki-muster.md", "Wortlaut] Kernoperationen sind",
+                  "Wortlaut] Im Kranichzug sind Kernoperationen")
+        self.release()
+        _, knapp = self.query("Kranichzug", "--limit", "1")
+        self.assertEqual(knapp["coverage"]["query_terms"]["crowded"],
+                         ["kranichzug"])
+        self.assertEqual(knapp["coverage"]["match_strength"], "partial")
+        _, beide = self.query("Kranichzug", "--limit", "2")
+        self.assertEqual(beide["coverage"]["query_terms"]["crowded"], [])
+        self.assertEqual(
+            {b["claim_id"] for b in beide["evidence"]}, {"C-0002", "C-0102"})
+        self.assertEqual(beide["coverage"]["match_strength"], "strong")
+
+        # Zwei Träger auf derselben Seite: Der abgeschnittene steht auf
+        # einer gezeigten Seite, und die wird ganz gelesen.
+        self.use_private_vault()
+        einsetzen("fakten.md", "Wortlaut] POLE stammt aus",
+                  "Wortlaut] Im Kranichzug stammt POLE aus")
+        einsetzen("fakten.md", "Wortlaut] Atomare Fact-Einheiten vermeiden",
+                  "Wortlaut] Im Kranichzug vermeiden atomare Fact-Einheiten")
+        self.release()
+        _, eine_seite = self.query("Kranichzug", "--limit", "1")
+        self.assertEqual(eine_seite["coverage"]["query_terms"]["crowded"], [])
+        self.assertEqual(eine_seite["coverage"]["match_strength"], "strong")
+
     def test_the_definition_page_survives_a_shortened_page_list(self):
         """Die Liste der gekürzten Seiten hat eine Obergrenze.
 
@@ -1000,7 +1101,7 @@ class QuerySignalTests(VaultCase):
         self.assertEqual(
             payload["coverage"]["query_terms"],
             {"content": ["it"], "matched": [], "partial": [],
-             "unmatched": ["it"]})
+             "unmatched": ["it"], "scattered": [], "crowded": []})
         self.assertIn("exact:claim", payload["evidence"][0]["reasons"])
         self.assertEqual(payload["coverage"]["match_strength"], "weak")
         self.assertTrue(payload["fallback"]["exhaustive_review_required"])
@@ -1202,7 +1303,7 @@ class QuerySignalTests(VaultCase):
             "query", "Wie werden Bestätigungen und Vertrauensstufen geprüft?")
         self.assertEqual(erster.returncode, 0, erster.stdout + erster.stderr)
         self.assertEqual(
-            json.loads(erster.stdout)["retrieval"], "hybrid-local/v4")
+            json.loads(erster.stdout)["retrieval"], "hybrid-local/v5")
         for _ in range(5):
             wieder = self.run_cli(
                 "query", "Wie werden Bestätigungen und Vertrauensstufen geprüft?")
@@ -1809,6 +1910,41 @@ class RecallGateTests(unittest.TestCase):
         self.assertIn("VERFEHLT, STILL", result.stdout)
         self.assertIn("1 stille Verfehlung", result.stdout)
         self.assertNotIn("🟢", result.stdout)
+
+    def test_a_partial_is_a_hint_only_with_a_named_reason(self):
+        """Seit hybrid-local/v5 kann 'partial' bei voller Abdeckung stehen.
+        Ein Hinweis ist es nur, wenn die Ausgabe den Grund nennt; sonst
+        täte ein Agent dasselbe wie bei 'strong'. Eine gekürzte Liste
+        ausgelassener Seiten schickt wie 'weak' in die Vollsichtung
+        (references/antworten.md, „Gekürzte Treffer“)."""
+        frage = "Kernoperationen Chunking Vermieter"
+        echt = self.tool.lauf(SOURCE_SKILL, "query", frage)
+        self.assertEqual(echt["coverage"]["match_strength"], "partial")
+        self.assertEqual(echt["coverage"]["term_coverage_percent"], 100)
+        self.assertEqual(len(echt["coverage"]["query_terms"]["scattered"]), 2)
+        self.assertEqual(echt["coverage"]["query_terms"]["crowded"], [])
+        self.assertFalse(echt["coverage"]["omitted_pages_truncated"])
+        ohne = copy.deepcopy(echt)
+        ohne["coverage"]["query_terms"]["scattered"] = []
+        gedraengt = copy.deepcopy(ohne)
+        gedraengt["coverage"]["query_terms"]["crowded"] = ["chunking"]
+        gekuerzt = copy.deepcopy(ohne)
+        gekuerzt["coverage"]["omitted_pages_truncated"] = True
+        # Der erwartete Claim steht nicht unter den Kandidaten.
+        eintrag = [{"frage": frage, "erwartet": ["C-0201"], "gruppe": "probe"}]
+        self.assertNotIn("C-0201", [b["claim_id"] for b in echt["evidence"]])
+        ausgang = {}
+        echter_lauf = self.tool.lauf
+        for name, antwort in (("echt", echt), ("ohne", ohne),
+                              ("gedraengt", gedraengt), ("gekuerzt", gekuerzt)):
+            self.tool.lauf = lambda vault, *argv, antwort=antwort: antwort
+            try:
+                zeilen, _ = self.tool.messe(SOURCE_SKILL, eintrag, [])
+            finally:
+                self.tool.lauf = echter_lauf
+            ausgang[name] = zeilen[0]["ausgang"]
+        self.assertEqual(ausgang, {"echt": "hinweis", "ohne": "still",
+                                   "gedraengt": "hinweis", "gekuerzt": "pflicht"})
 
     def test_each_gate_fires_on_its_own(self):
         """Jedes Gate einzeln, mit Eingaben, die nur dieses eine verletzen."""

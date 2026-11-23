@@ -1260,9 +1260,10 @@ Das Bild zeigt eine grüne Produktionsfreigabe.
                 self.assertEqual(vault._retrieval_tokens(frage), ("lizenz", "okf"))
         result, payload = self.query("Was kostet eine Lizenz für OKF?")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        # Lokal gilt seit der Zusammenführung hybrid-local/v4: Dort war „fuer"
-        # schon Funktionswort, die Normalisierung ändert keinen Treffer.
-        self.assertEqual(payload["retrieval"], "hybrid-local/v4")
+        # Lokal gilt seit der Zusammenführung hybrid-local/v4 (seit v5 mit
+        # engerer Stärke, gleicher Rangfolge): Dort war „fuer" schon
+        # Funktionswort, die Normalisierung ändert keinen Treffer.
+        self.assertEqual(payload["retrieval"], "hybrid-local/v5")
         self.assertEqual(payload["external"]["algorithm"], "extern-zweistufig/v3")
         gruende = [g for seite in payload["pages"] for g in seite["reasons"]]
         gruende += [g for item in payload["evidence"] for g in item["reasons"]]

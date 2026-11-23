@@ -168,8 +168,13 @@ QUERY_SCHEMA = "skillsafe.query/v1"
 ANCHORS_SCHEMA = "skillsafe.anchors/v1"
 ORCHESTRATOR_SCHEMA = "skillsafe.orchestrator/v1"
 BINDING_SCHEMA = "skillsafe.bindung/v1"
-# Lokal gilt hybrid-local/v4 (Wortform, Funktionswörter, Trefferstärke; siehe
-# schema/profil.md). extern-zweistufig/v2: Stoppwörter werden wie die Anfrage
+# Lokal gilt hybrid-local/v5 (Wortform, Funktionswörter, Trefferstärke; siehe
+# schema/profil.md). v5 rechnet nur die Stärke enger: 'strong' verlangt, dass
+# die Wörter der Frage, die kein kuratierter Begriff trägt, auf einer
+# gezeigten Seite zusammenkommen und dass das Limit keinen gleichwertigen
+# Träger auf einer nicht gezeigten Seite abschneidet; die Rangfolge ist
+# dieselbe wie in v4, query_terms nennt dazu scattered und crowded.
+# extern-zweistufig/v2: Stoppwörter werden wie die Anfrage
 # normalisiert — in v1 wirkte „für" nie als Stoppwort, weil das rohe Wort mit
 # dem Token „fuer" verglichen wurde. Dazu liest v2 lokale Quellen vollständig,
 # filtert über den Katalog nur noch bei Netzquellen und zählt Abrufe je Abfrage.
@@ -177,7 +182,7 @@ BINDING_SCHEMA = "skillsafe.bindung/v1"
 # lokal; ein Kürzel in Großbuchstaben bleibt) sind kein Anfragebegriff mehr.
 # In v2 trafen „sie", „nur" oder „ohne" beliebige Sätze, und jeder Treffer
 # verlangt in der Antwort eine eigene Zeile.
-RETRIEVAL_PROFILE = "hybrid-local/v4"
+RETRIEVAL_PROFILE = "hybrid-local/v5"
 EXTERN_RETRIEVAL_PROFILE = "extern-zweistufig/v3"
 SEGMENTATION_PROFILE = "satzsegmentierung/v1"
 # Wortform ist kein Bedeutungsmodell: nur Flexion, Umlaut-Plural, -ung und
@@ -1604,7 +1609,8 @@ def _lokale_tokens(value):
 
     Die Normalisierung der Stoppwörter (seit extern-zweistufig/v2) gilt für die
     externe Suche. Lokal sortiert FUNKTIONSWOERTER die Funktionswörter aus; die
-    alte Filterung bleibt, damit hybrid-local/v4 bytegleich bleibt. Ein
+    alte Filterung bleibt, damit die Rangfolge seit hybrid-local/v4 bytegleich
+    bleibt. Ein
     großgeschriebenes „FÜR" in gemischt geschriebenem Text ist dort, wie jedes
     Wort in Großbuchstaben, ein Kürzel.
     """
@@ -3672,6 +3678,7 @@ def _query_base(query, state, *, manifest_digest=None, version=None,
             "term_coverage_percent": 0,
             "query_terms": {
                 "content": [], "matched": [], "partial": [], "unmatched": [],
+                "scattered": [], "crowded": [],
             },
             "candidates": {
                 "total": 0, "returned": 0,
@@ -4779,13 +4786,70 @@ def build_query_result(snapshot, world=None, limit=8):
     # irgendwo stehen ("S-2026" und ein Datum), verstanden ist sie damit
     # nicht.
     unvertretene = [cid for cid in direct if cid not in vertretene]
+    # Seit hybrid-local/v5 zwei Bedingungen mehr, beide für die Wörter der
+    # Frage, die keine vertretene kuratierte Benennung trägt (lose Wörter).
+    # Erstens stehen sie zusammen auf einer gezeigten Seite, in deren
+    # ausgegebenen Claims, Titel oder Tags; was nicht auf der Seite steht,
+    # die die meisten von ihnen trägt, ist verstreut (query_terms.scattered).
+    # Zweitens hat das Limit keinen gleich gut bewerteten Träger eines losen
+    # Worts auf einer nicht gezeigten Seite abgeschnitten; sonst hat nicht die
+    # Punktzahl entschieden, welcher Träger zu sehen ist, meist die kleinere
+    # Kennung (query_terms.crowded). Beides wird mit dem Bestand häufiger: Ein
+    # Allerweltswort findet in einem großen Bestand Träger, oft viele, und
+    # die Nachrück-Regel holt einen eigens in die Auswahl. Mit 200 bis 1.800
+    # Ablenkerseiten (tools/skalierung_check.py) hieß das bei einzelnen
+    # Goldfragen 'strong', während der erwartete Claim fehlte; im
+    # Demo-Bestand nie. Ein kuratierter Begriff ist dagegen kein Zufall:
+    # Eine Frage nach zwei Begriffen braucht zwei Seiten und bleibt 'strong'.
+    # Wie die Seitenrechnung, die 2026-11-12 verworfen wurde
+    # (notes/dead-ends.md), können beide Bedingungen die Stärke nur senken.
+    begriffs_terme = set()
+    for cid in vertretene:
+        begriffs_terme |= begriff_terme[cid]
+    lose_terme = [term for term in terms
+                  if term in getroffen and term not in begriffs_terme]
+
+    def traegt_selbst(kandidat, term):
+        return (TERM_RANG.get(kandidat["eigene"].get(term), 0)
+                >= TERM_RANG["stem"])
+
+    def seite_traegt(pfad):
+        getragen_hier = set()
+        for k in gezeigt:
+            if k["path"] != pfad:
+                continue
+            for term, stufe in list(k["eigene"].items()) + list(
+                    seiten_begriffe.get(pfad, {}).items()):
+                if TERM_RANG[stufe] >= TERM_RANG["stem"]:
+                    getragen_hier.add(term)
+        return getragen_hier
+
+    verstreut = []
+    if lose_terme and page_paths:
+        getragen_je_seite = {pfad: seite_traegt(pfad) for pfad in page_paths}
+        # Bei Gleichstand die vordere Seite der Ausgabe (page_paths).
+        beste = max(page_paths, key=lambda pfad: len(
+            getragen_je_seite[pfad] & set(lose_terme)))
+        verstreut = [term for term in lose_terme
+                     if term not in getragen_je_seite[beste]]
+    gezeigte_pfade = {k["path"] for k in gezeigt}
+    gedraengt = []
+    for term in lose_terme:
+        werte = [k["score"] for k in gezeigt if traegt_selbst(k, term)]
+        grenze = min(werte) if werte else None
+        if any(k["direkt"] and traegt_selbst(k, term)
+               and k["path"] not in gezeigte_pfade
+               and (grenze is None or k["score"] >= grenze)
+               for k in gekuerzt):
+            gedraengt.append(term)
     if terms:
         abdeckung = 100 * len(getroffen) // len(terms)
     else:
         abdeckung = 100 if anker else 0
     if not evidence:
         staerke = "none"
-    elif abdeckung == 100 and not unvertretene and not unbekannte_ids:
+    elif (abdeckung == 100 and not verstreut and not gedraengt
+            and not unvertretene and not unbekannte_ids):
         staerke = "strong"
     elif anker or (len(getroffen) >= 2 and abdeckung >= 60):
         staerke = "partial"
@@ -4914,6 +4978,8 @@ def build_query_result(snapshot, world=None, limit=8):
                 "matched": getroffen,
                 "partial": teilgetroffen,
                 "unmatched": ungetroffen,
+                "scattered": verstreut,
+                "crowded": gedraengt,
             },
             "candidates": {
                 "total": len(kandidaten),

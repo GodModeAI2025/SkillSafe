@@ -172,8 +172,9 @@ BINDING_SCHEMA = "skillsafe.bindung/v1"
 # schema/profil.md). v5 rechnet nur die Stärke enger: 'strong' verlangt, dass
 # die Wörter der Frage, die kein kuratierter Begriff trägt, auf einer
 # gezeigten Seite zusammenkommen und dass das Limit keinen gleichwertigen
-# Träger auf einer nicht gezeigten Seite abschneidet; die Rangfolge ist
-# dieselbe wie in v4, query_terms nennt dazu scattered und crowded.
+# Träger auf einer nicht gezeigten Seite abschneidet (trägt kein gezeigter
+# Claim das Wort selbst, keinen Träger); die Rangfolge ist dieselbe wie in
+# v4, query_terms nennt dazu scattered und crowded.
 # extern-zweistufig/v2: Stoppwörter werden wie die Anfrage
 # normalisiert — in v1 wirkte „für" nie als Stoppwort, weil das rohe Wort mit
 # dem Token „fuer" verglichen wurde. Dazu liest v2 lokale Quellen vollständig,
@@ -4794,7 +4795,10 @@ def build_query_result(snapshot, world=None, limit=8):
     # Zweitens hat das Limit keinen gleich gut bewerteten Träger eines losen
     # Worts auf einer nicht gezeigten Seite abgeschnitten; sonst hat nicht die
     # Punktzahl entschieden, welcher Träger zu sehen ist, meist die kleinere
-    # Kennung (query_terms.crowded). Beides wird mit dem Bestand häufiger: Ein
+    # Kennung (query_terms.crowded). Trägt kein gezeigter Claim das Wort
+    # selbst, nur Titel oder Tags seiner Seite, zählt jeder abgeschnittene
+    # Träger, auch ein schwächerer: Der Claim, der das Wort enthält, bliebe
+    # sonst ungelesen. Beides wird mit dem Bestand häufiger: Ein
     # Allerweltswort findet in einem großen Bestand Träger, oft viele, und
     # die Nachrück-Regel holt einen eigens in die Auswahl. Mit 200 bis 1.800
     # Ablenkerseiten (tools/skalierung_check.py) hieß das bei einzelnen

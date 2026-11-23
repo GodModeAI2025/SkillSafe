@@ -101,19 +101,22 @@ class RangfolgeTests(unittest.TestCase):
     def test_strength_thresholds_are_written_down(self):
         """Die Tabelle aus profil.md, an Grenzfällen ohne Anker.
 
-        100 % ist 'strong'; ab zwei getroffenen Begriffen und 60 % ist es
-        'partial'; darunter 'weak' mit Pflicht-Vollsichtung. Die Abdeckung
-        wird abgerundet.
+        100 % ist 'strong', wenn die Wörter auf einer gezeigten Seite
+        zusammenkommen; verteilt über drei Seiten ist es seit hybrid-local/v5
+        'partial'. Ab zwei getroffenen Begriffen und 60 % ist es 'partial';
+        darunter 'weak' mit Pflicht-Vollsichtung. Die Abdeckung wird
+        abgerundet.
         """
         basis = "Kernoperationen Chunking "
         faelle = {
             basis + "Urlaubsanspruch Zahnarzt": ("weak", 50),
             basis + "Vermieter Urlaubsanspruch Zahnarzt": ("partial", 60),
             basis + "Vermieter Urlaubsanspruch": ("partial", 75),
-            basis + "Vermieter": ("strong", 100),
+            basis + "Vermieter": ("partial", 100),
             basis + ("Vermieter Dateipfad Urlaubsanspruch Zahnarzt "
                      "Fahrradhelm"): ("weak", 57),
             basis + "Paragraphen": ("partial", 66),
+            "Kernoperationen Lint Ingest": ("strong", 100),
         }
         for frage, (staerke, abdeckung) in faelle.items():
             with self.subTest(frage=frage):

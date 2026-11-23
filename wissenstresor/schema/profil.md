@@ -348,7 +348,7 @@ Mögliche Zustände sind:
 * `invalid_query`, `invalid_vault`, `vault_busy`, `snapshot_changed` —
   fail-closed, immer ohne Evidenz.
 
-Das Ranking `hybrid-local/v4` verwendet ausschließlich Ganzzahlen:
+Das Ranking `hybrid-local/v5` verwendet ausschließlich Ganzzahlen:
 kontrollierte Begriffe/Aliase, lexikalische Token-Treffer, Wortformen nach
 `wortform/v1` und höchstens einen Graph-Hop. `retrieval_complete` bedeutet
 nur, dass dieser Ranking-Scan alle validierten Claims gesehen hat; es ist
@@ -512,6 +512,17 @@ Das Ranking gibt an, wie viel der Frage es erkannt hat. Gerechnet wird nur
   Kandidat trägt, steht hier: das Modell hat ihn nicht gesehen. Die Gründe
   unter `pages[].reasons` beschreiben dagegen die ganze Seite samt ihrer
   gekürzten Claims und können einen solchen Begriff deshalb nennen;
+* `.scattered` — seit v5: getroffene Wörter, die kein vertretener
+  kuratierter Begriff trägt (lose Wörter), sofern keine gezeigte Seite alle
+  losen Wörter trägt (in ihren ausgegebenen Claims, ihrem Titel oder ihren
+  Tags). Dann stehen hier die losen Wörter, die einer der Seiten fehlen, die
+  die meisten tragen; zwei Wörter auf zwei Seiten stehen also beide hier,
+  gleich in welcher Reihenfolge die Seiten stehen;
+* `.crowded` — seit v5: lose Wörter, die ein gekürzter Claim auf einer nicht
+  gezeigten Seite selbst trägt (exakt oder als Wortform), mit mindestens so
+  vielen Punkten wie der schwächste ausgegebene Claim, der das Wort selbst
+  trägt, oder irgendeinem Punktwert, wenn das keiner tut. Seine Seite steht
+  unter `coverage.omitted_pages`, oder die Liste ist gekürzt;
 * `coverage.term_coverage_percent` — Anteil von `matched` an `content`,
   ganzzahlig abgerundet; ohne Fragebegriff 100 mit Anker, sonst 0.
 
@@ -535,8 +546,8 @@ Fragebegriff, der nur in der Fundstelle steht, gilt deshalb als getroffen.
 | `coverage.match_strength` | Bedingung |
 |---|---|
 | `none` | kein Kandidat |
-| `strong` | Abdeckung 100 %, jeder direkt getroffene Begriff ist vertreten, und die Frage nennt keine unbekannte Kennung |
-| `partial` | nicht `strong`, aber ein Anker, oder mindestens zwei getroffene Begriffe bei mindestens 60 % |
+| `strong` | Abdeckung 100 %, jeder direkt getroffene Begriff ist vertreten, die Frage nennt keine unbekannte Kennung, und `query_terms.scattered` und `.crowded` sind leer |
+| `partial` | nicht `strong`, aber ein Anker, oder mindestens zwei getroffene Begriffe bei mindestens 60 % (auch bei 100 %, wenn `scattered` oder `crowded` nicht leer ist) |
 | `weak` | alles andere |
 | `null` | nicht bewertet: Fehlerzustand (`invalid_query`, `ambiguous`, `invalid_vault`, `vault_busy`, `snapshot_changed`) |
 
@@ -600,13 +611,31 @@ eingefroren. Ein Fehlerzustand ist kein „kein Kandidat": Dort ist die Stärke
 gibt, solange der Fehler besteht.
 
 `strong` heißt: das Ranking hat jedes Wort der Frage wiedererkannt, zeigt zu
-jedem genannten Begriff etwas und kennt jede genannte Kennung. Die beiden
-letzten Bedingungen gelten seit `hybrid-local/v4`; bis v3 konnte ein per ID
-genannter Begriff in der Ausgabe fehlen und eine unbekannte Kennung über ihre
-Ziffern als verstanden gelten. Es heißt
-nicht, dass die Kandidaten die Frage beantworten, und es erlaubt nie ein
-„Nicht im Bestand". Auch eine Frage nach etwas, das der Bestand nicht enthält,
-kann `strong` sein, wenn sie nur bekannte Wörter benutzt.
+jedem genannten Begriff etwas, kennt jede genannte Kennung und hat eine
+Stelle, an der die Frage zusammenkommt. Die zweite und dritte Bedingung
+gelten seit `hybrid-local/v4`; bis v3 konnte ein per ID genannter Begriff in
+der Ausgabe fehlen und eine unbekannte Kennung über ihre Ziffern als
+verstanden gelten. Die letzte gilt seit `hybrid-local/v5` und hat zwei
+Teile. Was ein vertretener kuratierter Begriff trägt, zählt über die ganze
+Ausgabe (eine Frage nach zwei Begriffen braucht zwei Seiten); die übrigen
+Wörter müssen auf einer gezeigten Seite zusammen stehen, in ihren
+ausgegebenen Claims, ihrem Titel oder ihren Tags (sonst `scattered`). Und
+keines dieser Wörter hat einen gleich gut bewerteten Träger auf einer nicht
+gezeigten Seite, den nur das Limit abgeschnitten hat (sonst `crowded`):
+Dann hätte nicht die Punktzahl entschieden, welcher Träger zu sehen ist,
+meist die kleinere Kennung. Trägt kein ausgegebener Claim das Wort selbst,
+sondern nur Titel oder Tags einer gezeigten Seite, zählt jeder
+abgeschnittene Träger auf einer nicht gezeigten Seite, auch ein schwächerer. Bis v4 genügte es, dass jedes Wort irgendwo getroffen war. In einem
+großen Bestand findet aber jedes Allerweltswort Träger, oft viele gleich
+gute, und die Nachrück-Regel holt einen eigens in die Auswahl: Mit 200 bis
+1.800 Ablenkerseiten (`tools/skalierung_check.py`) hieß so eine Goldfrage
+`strong`, während der erwartete Claim fehlte. Die Rangfolge ist in v5
+dieselbe wie in v4; nur die Stärke ist enger gerechnet und kann dadurch nur
+sinken. Es heißt nicht, dass die Kandidaten die Frage beantworten, und es
+erlaubt nie ein „Nicht im Bestand". Auch eine Frage nach etwas, das der
+Bestand nicht enthält, kann `strong` sein, wenn sie nur bekannte Wörter
+benutzt; erst recht eine Stichwortfrage aus ein oder zwei Allerweltswörtern,
+die in einem großen Bestand irgendein Claim zusammen trägt.
 
 `coverage.candidates` zählt `total`, `returned`, `omitted_direct` und
 `omitted_context`. Direkt ist ein Kandidat, der den Treffer selbst trägt

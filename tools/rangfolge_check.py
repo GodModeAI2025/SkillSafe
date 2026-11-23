@@ -92,8 +92,10 @@ FESTE_ABFRAGEN = (
     ("Was macht man mit dem?", 8, None),
     # Schwellen der Trefferstärke, ohne kuratierten Begriff als Anker:
     # 2 von 4 Begriffen (50 %, weak), 3 von 5 (60 %, partial), 3 von 4
-    # (75 %, partial), 3 von 3 (strong), 4 von 7 (57 %, abgerundet, weak)
-    # und 2 von 3 mit einem Wortteil-Treffer (66 %, abgerundet).
+    # (75 %, partial), 3 von 3 auf drei Seiten (100 %, seit hybrid-local/v5
+    # partial), 4 von 7 (57 %, abgerundet, weak), 2 von 3 mit einem
+    # Wortteil-Treffer (66 %, abgerundet) und 3 von 3 auf einer Seite
+    # (strong).
     ("Kernoperationen Chunking Urlaubsanspruch Zahnarzt", 8, None),
     ("Kernoperationen Chunking Vermieter Urlaubsanspruch Zahnarzt", 8, None),
     ("Kernoperationen Chunking Vermieter Urlaubsanspruch", 8, None),
@@ -101,6 +103,7 @@ FESTE_ABFRAGEN = (
     ("Kernoperationen Chunking Vermieter Dateipfad Urlaubsanspruch Zahnarzt "
      "Fahrradhelm", 8, None),
     ("Kernoperationen Chunking Paragraphen", 8, None),
+    ("Kernoperationen Lint Ingest", 8, None),
 )
 BLOECKE = ("coverage", "concepts", "pages", "evidence", "fallback")
 # Aus 'fallback' zählt, was das Ranking entscheidet. Die Felder zum externen

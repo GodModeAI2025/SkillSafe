@@ -46,9 +46,12 @@ Diese sechs Regeln gelten in jedem Workflow und stechen jede Bequemlichkeit:
    gelieferten Claim-/Seitenkandidaten lesen. Das lokale Hybrid-Retrieval
    kombiniert kontrollierte Begriffe/Aliase, exakte Lexik, Wortformen und
    genau einen Graph-Hop. Es erkennt Wörter, keine Bedeutung, und es sagt
-   das selbst: `coverage.match_strength` und
-   `coverage.query_terms.unmatched` nennen, was es an der Frage nicht
-   verstanden hat. Bei `weak` oder `none` ist die **Vollsichtung** Pflicht
+   das selbst: `coverage.match_strength` und `coverage.query_terms` nennen,
+   was es an der Frage nicht verstanden hat (`unmatched`), was nur verstreut
+   vorkommt (`scattered`) und wo das Limit Träger eines Worts auf nicht
+   gezeigten Seiten abschnitt (`crowded`). Bei `weak` oder `none` ist die
+   **Vollsichtung** Pflicht, bei jeder Stärke auch dann, wenn die Liste
+   ausgelassener Seiten gekürzt ist (`coverage.omitted_pages_truncated`)
    (`vault.py sweep`): Sie legt jeden Claim in Stapeln vor, das Modell
    urteilt nach Bedeutung, und das Script prüft die Quittung. Einzige
    Ausnahme: Die Frage nennt nichts als Kennungen, die es im Bestand nicht

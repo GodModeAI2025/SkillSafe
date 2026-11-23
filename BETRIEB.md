@@ -105,7 +105,10 @@ auch wenn die Profil-Nummer dabei steigt.
 ## Was die CI prüft
 
 `.github/workflows/gates.yml` fährt dieselbe Kette über Python 3.9 und 3.13
-auf Ubuntu und 3.13 auf macOS.
+auf Ubuntu und 3.13 auf macOS. Der 3.9-Job läuft seit dem 22.11.2026 auf
+`ubuntu-24.04`: `ubuntu-latest` ist seitdem Ubuntu 26.04, und dafür liefert
+`setup-python` kein 3.9 mehr. Fällt 24.04 weg, braucht die Untergrenze einen
+anderen Weg, etwa einen eigenen Build.
 
 Die Matrix ist an ihrem Ertrag gemessen, nicht an einem Gefühl von Gründlichkeit.
 Über die ersten 14 Läufe gab es genau einen roten Lauf, und dort war **nur**
@@ -214,9 +217,9 @@ Es stellt jede Frage aus dem Gold einmal an `query` und ordnet den Ausgang ein:
 | Ausgang | Heißt | Gate |
 |---|---|---|
 | gefunden | der erwartete Claim steht unter den ersten acht Kandidaten | Gütezahl, Untergrenze über `--min-recall` |
-| verfehlt, Vollsichtung Pflicht | Claim fehlt, `match_strength` ist `weak` oder `none` | keins: das Ergebnis gibt die Lücke zu |
-| verfehlt, mit Hinweis | Claim fehlt bei `partial`; die unverstandenen Wörter sind benannt | optional über `--max-hinweis` |
-| verfehlt, still | Claim fehlt bei `strong` | **hart, immer null** |
+| verfehlt, Vollsichtung Pflicht | Claim fehlt, `match_strength` ist `weak` oder `none`, oder die Liste `omitted_pages` ist gekürzt; das geht vor, auch bei `strong` | keins: das Ergebnis gibt die Lücke zu |
+| verfehlt, mit Hinweis | Claim fehlt bei `partial`, und die Ausgabe nennt den Grund: unverstandene, nur teilweise getroffene, verstreute oder verdrängte Wörter, eine unbekannte Kennung oder einen unvertretenen Begriff | optional über `--max-hinweis` |
+| verfehlt, still | Claim fehlt bei `strong` ohne gekürzte Liste, oder bei `partial` ohne benannten Grund | **hart, immer null** |
 
 Dazu drei Wächter ohne Bezug zur Güte: Die Vollsichtung muss jeden Claim genau
 einmal vorlegen, das Gold darf nicht im Skill-Ordner liegen, und keine
@@ -261,11 +264,19 @@ Tags, Begriffe).
 
 **Wer am Ranking dreht** — Gewichte, Funktionswörter, Wortform-Regeln,
 Schwellen der Trefferstärke —, hebt die Profilnummer (als Nächstes
-`hybrid-local/v5`), misst neu, hält den Schnappschuss neu fest
+`hybrid-local/v6`), misst neu, hält den Schnappschuss neu fest
 (`rangfolge_check.py --schreiben`), trägt `MESSUNG` in
 `tests/test_vault_recall.py` nach und zieht die Messtabelle in `README.md`
 und `index.html` nach; `check_docs.py` vergleicht beide mit der echten
-Ausgabe.
+Ausgabe. Dazu fährt er `python3 tools/skalierung_check.py --seiten
+0,200,500,1000,1800`, standardmäßig in beiden Reihenfolgen der Kennungen: Bei
+keiner Größe darf eine Goldfrage still verfehlt werden, das ist das Gate. Die
+Spalte `o. Claim` zählt Goldfragen, die `strong` heißen, obwohl ihr Claim
+fehlt; seit v5 steht sie überall auf null. Steigt sie, verspricht `strong`
+wieder mehr, als die Ausgabe zeigt, auch wenn der Vertrag den Fall noch
+auffängt. Die Messtabelle zum
+wachsenden Bestand in `wissenstresor/KONZEPT.md` zieht er von Hand nach;
+`check_docs.py` bindet sie nicht, weil die volle Messung lange läuft.
 Wer dabei die Gruppe `kontrolle` zum Einstellen benutzt, hat sie verbraucht.
 Dann braucht es einen neuen Kontrollsatz, wieder von jemandem, der weder die
 Engine noch die alten Fragen gesehen hat. Genau so ist am 12. November 2026
@@ -281,8 +292,16 @@ und ein Funktionswort, das über seine Wortform einen Begriff benennt. Beide
 `hybrid-local/v4` schließt (ein per ID genannter Begriff ohne Platz in der
 Ausgabe, eine unbekannte Kennung mit zufällig getroffenen Ziffern, eine
 Abkürzung als Phrasen-Anker): Gefunden hat sie ein Orakel über zufällig
-erzeugten Beständen. Wer am Ranking arbeitet, braucht also
-beides: die Messung für die Güte und gezielte Tests für jeden Weg, auf dem
+erzeugten Beständen. Und die Wege, die `hybrid-local/v5` schließt, zeigten
+sich erst in einem großen Bestand: Wörter einer Frage, verteilt über Seiten
+ohne Bezug zueinander, und ein gleich guter Träger, den nur die Kennung aus
+der Auswahl hielt. Mit 200 bis 1.800 Ablenkerseiten
+(`tools/skalierung_check.py`) hieß so eine Goldfrage `strong`, während ihr
+Claim fehlte; im Demo-Bestand nie. Offen bleibt die Stichwortfrage aus ein
+oder zwei Allerweltswörtern, die in einem großen Bestand irgendein Claim
+zusammen trägt (`--kurzfragen` zählt sie).
+`tests/test_skalierung_check.py` hält 200 Seiten als festen Test. Wer am
+Ranking arbeitet, braucht also beides: die Messung für die Güte und gezielte Tests für jeden Weg, auf dem
 `strong` lügen könnte. Für den zweiten Zweck gibt es in
 `tests/test_vault_recall.py` unter anderem die Reihe über alle Paare von
 Vorzugsbenennungen.

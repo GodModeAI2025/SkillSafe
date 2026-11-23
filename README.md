@@ -29,7 +29,7 @@ geschützte `dir_fd`-Operationen fail-closed ab.
 📖 **Konzept & Architekturentscheidungen:** [`wissenstresor/KONZEPT.md`](wissenstresor/KONZEPT.md)
 🌐 **Landingpage:** [`index.html`](index.html) (GitHub-Pages-fähig, Source = repo root)
 
-**Aktueller Release: v0.18.8** (Profil `oksv-lite/1.3`) mit Begriffswelten,
+**Aktueller Release: v0.19.0** (Profil `oksv-lite/1.3`) mit Begriffswelten,
 deterministischem Hybrid-Retrieval, geprüften Bild-/PDF-Regionen und einem
 reproduzierbaren `.skill`-Paket für Claude Code und Codex. Der
 Frontmatter-Parser lehnt Verschachtelung fail-closed ab statt sie still
@@ -380,9 +380,38 @@ dokumentiert: Ein Zeilenendkommentar liest sich mit der Codezeile darunter,
 eingerückter Code in einem Listenpunkt bleibt Listentext, und ein
 kleingeschriebenes Begriffspaar („miete/kaution") gilt als Pfad.
 
-Abnahme: 252 Tests bestanden · 37 manifestierte Dateien · 39 sichere
+v0.19.0 misst, was das Gold nicht messen konnte: wie ehrlich die Suche in
+einem großen Bestand bleibt. `tools/skalierung_check.py` baut Kopien des
+Tresors mit bis zu 1.800 Ablenkerseiten (8.199 Claims) aus eingefrorenem
+Fachtext dieses Repositorys und misst darin die 84 Goldfragen, in zwei
+Reihenfolgen der Kennungen, weil ein Punktgleichstand an die kleinere geht.
+Bis `hybrid-local/v4` hießen dort ein bis drei Fragen `strong`, während der
+erwartete Claim fehlte: Jedes Wort der Frage war irgendwo getroffen, aber
+verteilt über Seiten, die nichts miteinander zu tun hatten. Im Demo-Bestand
+kam das nie vor. Aufgefangen hat es der Vertrag: Die Liste ausgelassener
+Seiten war jedes Mal gekürzt, und dann verlangt er die Vollsichtung; bei
+einer der Fragen stand die Seite des Claims zudem unter den gezeigten
+Seiten. `strong` versprach trotzdem mehr, als die Ausgabe zeigte.
+`hybrid-local/v5` verlangt für `strong` deshalb, dass die Wörter, die kein
+kuratierter Begriff trägt, auf einer gezeigten Seite zusammen stehen, und
+dass kein gleich guter Träger am Limit scheiterte; die zweite Bedingung
+zeigten Stichwortfragen, bei denen ein Gleichstand der Punkte über die
+Kennung entschied, welcher Träger zu sehen ist. Was fehlt, nennt die Ausgabe
+unter `query_terms.scattered` und `.crowded`. Eine Frage nach zwei
+kuratierten Begriffen braucht zwei Seiten und bleibt `strong`. Rangfolge und
+Messtabelle bleiben; keine Goldfrage heißt mehr `strong` ohne ihren Claim,
+still verfehlt wird bei keiner Größe. Direkt gefunden werden bei 1.800
+Seiten 16 statt 37 der 84 Fragen (13, wenn das Gesuchte jünger ist als das
+Rauschen), und mindestens neun von zehn Verfehlungen verlangen die
+Vollsichtung (`weak`, `none` oder eine gekürzte Liste ausgelassener Seiten).
+Das ist die Grenze eines lexikalischen Rankings, jetzt gemessen statt
+geschätzt (Tabelle in `wissenstresor/KONZEPT.md`). `tools/recall_check.py`
+zählt eine gekürzte Liste ausgelassener Seiten jetzt wie der Vertrag als
+Pflicht zur Vollsichtung, und ein `partial` ohne benannten Grund als still.
+
+Abnahme: 260 Tests bestanden · 37 manifestierte Dateien · 39 sichere
 Paketeinträge · SHA-256
-`2f5c1cbf9417293cc592f104046ac37ceb7f70698575ef732a7e6a9fc9bedc19`.
+`e18efd1894168162b7cf9a503758aaa59560de1c7a9612d571a2bf1cfee68d46`.
 Dazu 2 aufgeführte externe Bezugsquellen · 2 Satzanker.
 
 Alles läuft mit der Python-Standardbibliothek, gemessen mit CPython 3.9 und
@@ -395,6 +424,7 @@ cd wissenstresor && python3 scripts/vault.py doctor
 cd .. && python3 tools/build_skill_package.py && python3 tools/check_docs.py
 python3 tools/recall_check.py --kurz
 python3 tools/rangfolge_check.py
+python3 tools/skalierung_check.py
 ```
 
 Wie man am Projekt arbeitet, freigibt und Störfälle behebt, steht in
@@ -486,8 +516,8 @@ Frage gebraucht hätte.
 
 *direkt:* das Ranking liefert den Claim unter den ersten acht Kandidaten ·
 *Pflicht:* verfehlt, und die Vollsichtung ist vorgeschrieben · *Hinweis:*
-verfehlt, die unverstandenen Wörter sind benannt · *still:* verfehlt, ohne dass
-das Ergebnis es zugibt.
+verfehlt, die Ausgabe nennt den Grund, etwa unverstandene Wörter · *still:*
+verfehlt, ohne dass das Ergebnis es zugibt.
 
 Die mittlere Zeile ist geschönt, denn an diesen Fragen wurde eingestellt. Die
 untere ist die ehrliche: 56 Fragen von einem zweiten Agenten, der nur die
@@ -940,8 +970,13 @@ Protokoll und benannte Verluste: [`references/export-okf.md`](wissenstresor/refe
 ## Grenzen
 
 Ausgelegt für kuratierte Bestände bis in den niedrigen Tausenderbereich an
-Seiten. Medien werden nicht durch die Engine dekodiert; sie verwaltet
-gehashte Originale und geprüfte Regionen.
+Seiten. Gemessen mit bis zu 1.800 Ablenkerseiten: Direkt gefunden werden
+dort 16 statt 37 der 84 Goldfragen, mindestens neun von zehn Verfehlungen
+verlangen die Vollsichtung (`weak`, `none` oder eine gekürzte Liste; 215
+Stapel zu 40 Claims), still verfehlt keine
+(`tools/skalierung_check.py`). Eine Stichwortfrage aus ein oder zwei
+Allerweltswörtern kann dort `strong` heißen, ohne das Gesuchte zu zeigen. Medien werden nicht durch die Engine
+dekodiert; sie verwaltet gehashte Originale und geprüfte Regionen.
 
 Die Bedeutungssuche ist so vollständig wie ihr Umfang und so gut wie ihr
 Leser. Die Quittung belegt, dass jeder Stapel für genau diesen Stand und diese

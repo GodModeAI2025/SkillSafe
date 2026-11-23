@@ -11,9 +11,14 @@ Zwei Zahlen zählen, und nur eine davon ist ein Gate:
   Antworten-Workflow liest genannte Seiten ganz.
 * Stille Verfehlungen: Wie oft fehlt der Claim, OHNE dass das Ergebnis das
   zugibt? Das ist das Gate, und es steht hart auf null. Eine Verfehlung ist
-  nur dann harmlos, wenn ``match_strength`` unter ``strong`` liegt: Dann
-  nennt die Ausgabe die unverstandenen Begriffe, und bei ``weak`` oder
-  ``none`` ist die Vollsichtung (``sweep``) Pflicht.
+  nur dann harmlos, wenn die Vollsichtung Pflicht ist
+  (``fallback.exhaustive_review_required`` bei ``weak`` und ``none``, nach
+  dem Vertrag auch ``coverage.omitted_pages_truncated``) oder wenn die
+  Ausgabe unter ``strong`` bleibt und einen Grund nennt: unverstandene,
+  nur teilweise, verstreute oder abgeschnittene Begriffe
+  (``query_terms.unmatched``, ``partial``, ``scattered``, ``crowded``), eine
+  unbekannte Kennung oder einen unvertretenen Begriff. ``partial`` ohne
+  benannten Grund zählt wie ``strong``.
 
 Dazu drei Wächter, die nichts mit Güte zu tun haben: Die Vollsichtung muss
 jeden Claim genau einmal vorlegen, das Gold darf nicht im Skill liegen, und
@@ -341,6 +346,21 @@ def _parallel(funktion, eintraege):
         return list(pool.map(funktion, eintraege))
 
 
+def _grund_genannt(antwort):
+    """Nennt die Ausgabe, warum sie nicht 'strong' ist? Seit hybrid-local/v5
+    stehen verstreute und abgeschnittene Wörter in eigenen Listen; ohne
+    einen benannten Grund wüsste ein Agent bei 'partial' nicht, was offen
+    ist, und täte dasselbe wie bei 'strong'."""
+    coverage = antwort["coverage"]
+    begriffe = coverage.get("query_terms") or {}
+    return bool(
+        any(begriffe.get(feld) for feld in
+            ("unmatched", "partial", "scattered", "crowded"))
+        or coverage.get("unknown_ids")
+        or any(not treffer.get("represented", True) for treffer in
+               (antwort.get("concepts") or {}).get("matched", [])))
+
+
 def messe(vault, fragen, negativ, limit=8, seite_von=None):
     """Jede Goldfrage einmal abfragen und nach ihrem Ausgang einordnen.
 
@@ -385,9 +405,10 @@ def messe(vault, fragen, negativ, limit=8, seite_von=None):
         )
         if rang is not None:
             ausgang = "treffer"
-        elif antwort["fallback"]["exhaustive_review_required"]:
+        elif (antwort["fallback"]["exhaustive_review_required"]
+              or coverage.get("omitted_pages_truncated")):
             ausgang = "pflicht"
-        elif staerke == "strong":
+        elif staerke == "strong" or not _grund_genannt(antwort):
             ausgang = "still"
         else:
             ausgang = "hinweis"
@@ -408,7 +429,10 @@ def messe(vault, fragen, negativ, limit=8, seite_von=None):
         return {
             "frage": frage,
             "staerke": antwort["coverage"]["match_strength"],
-            "pflicht": antwort["fallback"]["exhaustive_review_required"],
+            # Wie bei den Goldfragen: Auch eine gekürzte Liste ausgelassener
+            # Seiten schickt nach dem Vertrag in die Vollsichtung.
+            "pflicht": bool(antwort["fallback"]["exhaustive_review_required"]
+                            or antwort["coverage"].get("omitted_pages_truncated")),
         }
 
     return _parallel(eine_frage, fragen), _parallel(eine_negativfrage, negativ)
@@ -478,8 +502,8 @@ def gates(zeilen, sichtung, lecks, min_recall, max_hinweis):
     zahl = zusammenfassung(zeilen)
     if zahl["still"]:
         verletzt.append(
-            f"{zahl['still']} stille Verfehlung(en): Claim fehlt, Ergebnis "
-            f"behauptet trotzdem 'strong'"
+            f"{zahl['still']} stille Verfehlung(en): Claim fehlt, und das "
+            f"Ergebnis nennt keinen Grund ('strong' oder 'partial' ohne Grund)"
         )
     if zahl["recall_prozent"] < min_recall:
         verletzt.append(

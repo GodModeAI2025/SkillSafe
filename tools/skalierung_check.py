@@ -66,7 +66,8 @@ Exit 0, wenn bei keiner Größe still verfehlt wird, sonst 1. Exit 2 bei
 unbrauchbaren Eingaben, bevor gebaut wird: ``--seiten`` keine Liste nicht
 negativer Zahlen, ``--limit`` außerhalb von 1 bis 20, kein Tresor unter
 ``--vault``, ein Gold, das ``recall_check`` nicht annähme (auch eines im
-Skill-Ordner), oder kein Verzeichnis für ``--json``.
+Skill-Ordner), oder ``--json`` ist kein Dateipfad in einem vorhandenen
+Verzeichnis.
 """
 
 import argparse
@@ -547,8 +548,10 @@ def main(argv=None):
     except RC.GoldFehler as exc:
         print(f"🔴 skalierung-check: {exc}")
         return 2
-    if args.json and not Path(args.json).resolve().parent.is_dir():
-        print(f"🔴 skalierung-check: für --json {args.json} fehlt das Verzeichnis")
+    if args.json and (Path(args.json).is_dir()
+                      or not Path(args.json).resolve().parent.is_dir()):
+        print(f"🔴 skalierung-check: --json {args.json} ist kein Dateipfad in einem "
+              f"vorhandenen Verzeichnis")
         return 2
     reihenfolgen = REIHENFOLGEN if args.reihenfolge == "beide" else (args.reihenfolge,)
     ergebnisse = []

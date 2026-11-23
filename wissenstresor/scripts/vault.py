@@ -4789,8 +4789,8 @@ def build_query_result(snapshot, world=None, limit=8):
     # Seit hybrid-local/v5 zwei Bedingungen mehr, beide für die Wörter der
     # Frage, die keine vertretene kuratierte Benennung trägt (lose Wörter).
     # Erstens stehen sie zusammen auf einer gezeigten Seite, in deren
-    # ausgegebenen Claims, Titel oder Tags; was nicht auf der Seite steht,
-    # die die meisten von ihnen trägt, ist verstreut (query_terms.scattered).
+    # ausgegebenen Claims, Titel oder Tags; sonst nennt query_terms.scattered,
+    # was den Seiten fehlt, die die meisten von ihnen tragen.
     # Zweitens hat das Limit keinen gleich gut bewerteten Träger eines losen
     # Worts auf einer nicht gezeigten Seite abgeschnitten; sonst hat nicht die
     # Punktzahl entschieden, welcher Träger zu sehen ist, meist die kleinere
@@ -4826,12 +4826,20 @@ def build_query_result(snapshot, world=None, limit=8):
 
     verstreut = []
     if lose_terme and page_paths:
-        getragen_je_seite = {pfad: seite_traegt(pfad) for pfad in page_paths}
-        # Bei Gleichstand die vordere Seite der Ausgabe (page_paths).
-        beste = max(page_paths, key=lambda pfad: len(
-            getragen_je_seite[pfad] & set(lose_terme)))
-        verstreut = [term for term in lose_terme
-                     if term not in getragen_je_seite[beste]]
+        lose = set(lose_terme)
+        getragen_je_seite = {pfad: seite_traegt(pfad) & lose
+                             for pfad in page_paths}
+        meiste = max(len(getragen) for getragen in getragen_je_seite.values())
+        # Verstreut ist, was einer der Seiten fehlt, die die meisten losen
+        # Wörter tragen. So hängt die Liste nicht an der Reihenfolge gleich
+        # starker Seiten: Stehen zwei Wörter je auf ihrer eigenen Seite,
+        # stehen beide darin. Leer ist sie genau dann, wenn eine gezeigte
+        # Seite alle losen Wörter trägt.
+        fehlend = set()
+        for getragen in getragen_je_seite.values():
+            if len(getragen) == meiste:
+                fehlend |= lose - getragen
+        verstreut = [term for term in lose_terme if term in fehlend]
     gezeigte_pfade = {k["path"] for k in gezeigt}
     gedraengt = []
     for term in lose_terme:

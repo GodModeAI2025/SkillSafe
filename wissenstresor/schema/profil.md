@@ -513,10 +513,11 @@ Das Ranking gibt an, wie viel der Frage es erkannt hat. Gerechnet wird nur
   unter `pages[].reasons` beschreiben dagegen die ganze Seite samt ihrer
   gekürzten Claims und können einen solchen Begriff deshalb nennen;
 * `.scattered` — seit v5: getroffene Wörter, die kein vertretener
-  kuratierter Begriff trägt (lose Wörter) und die auf der gezeigten Seite
-  fehlen, die die meisten losen Wörter trägt, in ihren ausgegebenen Claims,
-  ihrem Titel oder ihren Tags. Tragen zwei Seiten gleich viele, zählt die
-  vordere unter `pages`;
+  kuratierter Begriff trägt (lose Wörter), sofern keine gezeigte Seite alle
+  losen Wörter trägt (in ihren ausgegebenen Claims, ihrem Titel oder ihren
+  Tags). Dann stehen hier die losen Wörter, die einer der Seiten fehlen, die
+  die meisten tragen; zwei Wörter auf zwei Seiten stehen also beide hier,
+  gleich in welcher Reihenfolge die Seiten stehen;
 * `.crowded` — seit v5: lose Wörter, die ein gekürzter Claim auf einer nicht
   gezeigten Seite selbst trägt (exakt oder als Wortform), mit mindestens so
   vielen Punkten wie der schwächste ausgegebene Claim, der das Wort selbst
@@ -622,7 +623,9 @@ ausgegebenen Claims, ihrem Titel oder ihren Tags (sonst `scattered`). Und
 keines dieser Wörter hat einen gleich gut bewerteten Träger auf einer nicht
 gezeigten Seite, den nur das Limit abgeschnitten hat (sonst `crowded`):
 Dann hätte nicht die Punktzahl entschieden, welcher Träger zu sehen ist,
-meist die kleinere Kennung. Bis v4 genügte es, dass jedes Wort irgendwo getroffen war. In einem
+meist die kleinere Kennung. Trägt kein ausgegebener Claim das Wort selbst,
+sondern nur Titel oder Tags einer gezeigten Seite, zählt jeder
+abgeschnittene Träger auf einer nicht gezeigten Seite, auch ein schwächerer. Bis v4 genügte es, dass jedes Wort irgendwo getroffen war. In einem
 großen Bestand findet aber jedes Allerweltswort Träger, oft viele gleich
 gute, und die Nachrück-Regel holt einen eigens in die Auswahl: Mit 200 bis
 1.800 Ablenkerseiten (`tools/skalierung_check.py`) hieß so eine Goldfrage

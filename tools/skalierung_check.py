@@ -9,16 +9,16 @@ Zählungen von tools/recall_check.py:
 
 * direkt gefunden: der erwartete Claim steht unter den Kandidaten;
 * verfehlt, Vollsichtung Pflicht: ``weak`` oder ``none``, oder die Liste
-  ausgelassener Seiten ist gekürzt;
+  ausgelassener Seiten ist gekürzt; das geht vor, auch bei ``strong``;
 * verfehlt, mit Hinweis: ``partial``, und die Ausgabe nennt den Grund;
 * verfehlt, still: der Claim fehlt, und das Ergebnis nennt keinen Grund
-  (``strong``, oder ``partial`` ohne benannten Grund).
+  (``strong`` ohne gekürzte Liste, oder ``partial`` ohne benannten Grund).
 
 Die Spalte ``still`` ist das Gate und steht hart auf null, bei jeder Größe
 und in jeder Reihenfolge. ``Claims`` zählt den ganzen gemessenen Bestand:
 die 28 Demo-Claims und die Ablenker. ``strong`` zählt die Goldfragen mit
-'strong', ``o. Claim`` davon die, deren Claim fehlt: Dann behauptet das
-Etikett mehr, als die Ausgabe hält, auch wenn der Vertrag den Fall über
+'strong', ``o. Claim`` davon die, deren Claim fehlt: Dann verspricht
+'strong' mehr, als die Ausgabe zeigt, auch wenn der Vertrag den Fall über
 die gekürzte Liste ausgelassener Seiten noch in die Vollsichtung schickt.
 
 Die Ablenker kommen aus deutschem Fachtext dieses Repositorys, eingefroren
@@ -48,19 +48,25 @@ Gate gilt für jede Reihenfolge.
 aus einem oder zwei Wörtern einer Goldfrage 'strong' heißt, ohne den Claim
 der ganzen Frage zu zeigen, und davon, wie oft auch nichts anderes in der
 Ausgabe auf ihn führt (seine Seite steht weder unter ``pages`` noch unter
-``omitted_pages``, ``omitted_pages_truncated`` ist falsch). Das ist die
-Grenze eines lexikalischen Rankings: Steht die Antwort in anderen Wörtern,
-erkennt es sie nicht, auch im Demo-Bestand. Gerechnet wird im Prozess.
+``omitted_pages``, ``omitted_pages_truncated`` ist falsch). Steckt dieselbe
+Stichwortfrage in mehreren Goldfragen, zählt sie einmal, und jeder ihrer
+Claims gilt. Das ist die Grenze eines lexikalischen Rankings: Steht die
+Antwort in anderen Wörtern, erkennt es sie nicht, auch im Demo-Bestand.
+Gerechnet wird im Prozess.
 
-Read-only gegenüber dem Repository, nur Standardbibliothek; die Kopien liegen
-in einem Temporärverzeichnis. Aus der Repository-Wurzel:
+Read-only gegenüber dem Repository (bis auf ``--korpus-neu``), nur
+Standardbibliothek; die Kopien liegen in einem Temporärverzeichnis. Aus der
+Repository-Wurzel:
 
     python3 tools/skalierung_check.py
     python3 tools/skalierung_check.py --seiten 0,200,500,1000 --art nah --saat 1
     python3 tools/skalierung_check.py --seiten 500 --reihenfolge neu --kurzfragen
 
-Exit 0, wenn bei keiner Größe still verfehlt wird, sonst 1; Exit 2, wenn
-``--seiten`` keine Liste nicht negativer Zahlen ist.
+Exit 0, wenn bei keiner Größe still verfehlt wird, sonst 1. Exit 2 bei
+unbrauchbaren Eingaben, bevor gebaut wird: ``--seiten`` keine Liste nicht
+negativer Zahlen, ``--limit`` außerhalb von 1 bis 20, kein Tresor unter
+``--vault``, ein Gold, das ``recall_check`` nicht annähme (auch eines im
+Skill-Ordner), oder kein Verzeichnis für ``--json``.
 """
 
 import argparse
@@ -71,6 +77,7 @@ import json
 import random
 import re
 import shutil
+import signal
 import statistics
 import subprocess
 import sys
@@ -200,12 +207,12 @@ def korpus_lesen(pfad=KORPUS):
     return saetze, titel
 
 
-def korpus_schreiben(saetze, titel, pfad=KORPUS, stand="Arbeitsbaum"):
+def korpus_schreiben(saetze, titel, stand, pfad=KORPUS):
     kopf = (
         "# Ablenker-Korpus für tools/skalierung_check.py. Nicht von Hand ändern.\n"
         f"# Fließtext der Doku im Stand {stand} ({len(KORPUS_DATEIEN)} Dateien,\n"
         "# siehe KORPUS_DATEIEN), gesäubert wie in korpus_aus_texten().\n"
-        "# Neu erzeugen: python3 tools/skalierung_check.py --korpus-neu\n")
+        f"# Neu erzeugen: python3 tools/skalierung_check.py --korpus-neu {stand}\n")
     Path(pfad).parent.mkdir(parents=True, exist_ok=True)
     Path(pfad).write_text(
         kopf + "[saetze]\n" + "\n".join(saetze) + "\n[titel]\n"
@@ -220,8 +227,8 @@ class Filter:
 
     def __init__(self, vault, gold):
         self.engine = _laden("skalierung_vault", Path(vault) / "scripts" / "vault.py")
-        daten = json.loads(Path(gold).read_text(encoding="utf-8"))
-        fragen = [e["frage"] for e in daten["fragen"]] + list(daten.get("negativ", []))
+        gold_fragen, negativ = RC.lade_gold(gold, vault)
+        fragen = [e["frage"] for e in gold_fragen] + list(negativ)
         self.nadeln = [f" {RC._stammform(f)} " for f in fragen if RC._stammform(f)]
         self.claims = []
         for seite in sorted((Path(vault) / "knowledge").rglob("*.md")):
@@ -445,9 +452,11 @@ def kurzfragen(vault, gold=STANDARD_GOLD, limit=8, abbildung=None):
     abbildung = abbildung or {}
     seite_von = {claim["id"]: pfad for pfad, seite in stand["pages"].items()
                  for claim in seite["claims"]}
-    daten = json.loads(Path(gold).read_text(encoding="utf-8"))
-    gesehen, zahl, strong_ohne, still = set(), 0, 0, 0
-    for eintrag in daten["fragen"]:
+    gold_fragen, _ = RC.lade_gold(gold, vault)
+    # Jede Teilfrage einmal, in der Reihenfolge ihres ersten Auftretens; wer
+    # sie in mehreren Goldfragen findet, nimmt die Claims aller mit.
+    teilfragen = {}
+    for eintrag in gold_fragen:
         erwartet = {abbildung.get(c, c) for c in eintrag["erwartet"]}
         woerter = [wort for wort in re.findall(r"[^\W_]+(?:[-+][^\W_]+)*", eintrag["frage"])
                    if engine._inhaltstokens(wort)]
@@ -456,24 +465,24 @@ def kurzfragen(vault, gold=STANDARD_GOLD, limit=8, abbildung=None):
                 continue
             for auswahl in itertools.combinations(woerter, groesse):
                 frage = " ".join(auswahl)
-                if frage.casefold() in gesehen:
-                    continue
-                gesehen.add(frage.casefold())
-                zahl += 1
-                ergebnis = engine.build_query_result(dict(stand, query=frage),
-                                                     world=None, limit=limit)
-                if (ergebnis["state"] != "candidates_found"
-                        or ergebnis["coverage"]["match_strength"] != "strong"
-                        or {b["claim_id"] for b in ergebnis["evidence"]} & erwartet):
-                    continue
-                strong_ohne += 1
-                abdeckung = ergebnis["coverage"]
-                seiten = ({s["path"] for s in ergebnis["pages"]}
-                          | {s["path"] for s in abdeckung["omitted_pages"]})
-                if (not abdeckung["omitted_pages_truncated"]
-                        and not {seite_von.get(c) for c in erwartet} & seiten):
-                    still += 1
-    return {"teilfragen": zahl, "strong_ohne_claim": strong_ohne, "davon_still": still}
+                teilfragen.setdefault(frage.casefold(), [frage, set()])[1].update(erwartet)
+    strong_ohne, still = 0, 0
+    for frage, erwartet in teilfragen.values():
+        ergebnis = engine.build_query_result(dict(stand, query=frage),
+                                             world=None, limit=limit)
+        if (ergebnis["state"] != "candidates_found"
+                or ergebnis["coverage"]["match_strength"] != "strong"
+                or {b["claim_id"] for b in ergebnis["evidence"]} & erwartet):
+            continue
+        strong_ohne += 1
+        abdeckung = ergebnis["coverage"]
+        seiten = ({s["path"] for s in ergebnis["pages"]}
+                  | {s["path"] for s in abdeckung["omitted_pages"]})
+        if (not abdeckung["omitted_pages_truncated"]
+                and not {seite_von.get(c) for c in erwartet} & seiten):
+            still += 1
+    return {"teilfragen": len(teilfragen), "strong_ohne_claim": strong_ohne,
+            "davon_still": still}
 
 
 def main(argv=None):
@@ -490,15 +499,32 @@ def main(argv=None):
                         help="zusätzlich Stichwortfragen aus ein oder zwei Wörtern zählen (kein Gate)")
     parser.add_argument("--limit", type=int, default=8)
     parser.add_argument("--json", help="Ergebnisse zusätzlich als JSON schreiben")
-    parser.add_argument("--korpus-neu", action="store_true",
-                        help="tests/skalierung/korpus.txt aus der Doku neu schreiben")
+    parser.add_argument("--korpus-neu", metavar="STAND",
+                        help="tests/skalierung/korpus.txt aus der Doku eines Commits neu "
+                             "schreiben (der eingefrorene Korpus: 6d32ae3)")
     args = parser.parse_args(argv)
+    try:
+        # Wer den Lauf beendet (timeout, CI, kill), räumt sonst die Kopien
+        # nicht ab: Bei SIGTERM liefe kein finally und kein __exit__.
+        signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))
+    except ValueError:
+        pass
     if args.korpus_neu:
-        texte = [(REPOSITORY / name).read_text(encoding="utf-8") for name in KORPUS_DATEIEN]
+        texte = []
+        for name in KORPUS_DATEIEN:
+            ergebnis = subprocess.run(
+                ["git", "-C", str(REPOSITORY), "show", f"{args.korpus_neu}:{name}"],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+            if ergebnis.returncode != 0:
+                print(f"🔴 skalierung-check: {name} im Stand {args.korpus_neu!r} nicht "
+                      f"lesbar: {ergebnis.stderr.decode('utf-8', 'replace').strip()}")
+                return 2
+            texte.append(ergebnis.stdout.decode("utf-8"))
         saetze, titel = korpus_aus_texten(texte)
-        korpus_schreiben(saetze, titel)
+        korpus_schreiben(saetze, titel, stand=args.korpus_neu)
         print(f"🟢 skalierung-check: {KORPUS.relative_to(REPOSITORY)} mit "
-              f"{len(saetze)} Sätzen und {len(titel)} Überschriften geschrieben.")
+              f"{len(saetze)} Sätzen und {len(titel)} Überschriften aus dem Stand "
+              f"{args.korpus_neu} geschrieben.")
         return 0
     try:
         groessen = [int(teil) for teil in args.seiten.split(",") if teil.strip()]
@@ -507,6 +533,22 @@ def main(argv=None):
     if not groessen or any(groesse < 0 for groesse in groessen):
         print(f"🔴 skalierung-check: --seiten {args.seiten!r} ist keine Liste "
               f"nicht negativer Zahlen")
+        return 2
+    groessen = list(dict.fromkeys(groessen))
+    if not 1 <= args.limit <= 20:
+        print(f"🔴 skalierung-check: --limit {args.limit} liegt nicht zwischen 1 und 20")
+        return 2
+    if not (Path(args.vault) / "scripts" / "vault.py").is_file():
+        print(f"🔴 skalierung-check: unter --vault {args.vault} liegt kein Tresor "
+              f"(scripts/vault.py fehlt)")
+        return 2
+    try:
+        RC.lade_gold(args.gold, Path(args.vault))
+    except RC.GoldFehler as exc:
+        print(f"🔴 skalierung-check: {exc}")
+        return 2
+    if args.json and not Path(args.json).resolve().parent.is_dir():
+        print(f"🔴 skalierung-check: für --json {args.json} fehlt das Verzeichnis")
         return 2
     reihenfolgen = REIHENFOLGEN if args.reihenfolge == "beide" else (args.reihenfolge,)
     ergebnisse = []

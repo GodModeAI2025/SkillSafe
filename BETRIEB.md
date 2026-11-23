@@ -217,9 +217,9 @@ Es stellt jede Frage aus dem Gold einmal an `query` und ordnet den Ausgang ein:
 | Ausgang | Heißt | Gate |
 |---|---|---|
 | gefunden | der erwartete Claim steht unter den ersten acht Kandidaten | Gütezahl, Untergrenze über `--min-recall` |
-| verfehlt, Vollsichtung Pflicht | Claim fehlt, `match_strength` ist `weak` oder `none`, oder die Liste `omitted_pages` ist gekürzt | keins: das Ergebnis gibt die Lücke zu |
-| verfehlt, mit Hinweis | Claim fehlt bei `partial`, und die Ausgabe nennt den Grund: unverstandene, verstreute oder verdrängte Wörter, eine unbekannte Kennung oder einen unvertretenen Begriff | optional über `--max-hinweis` |
-| verfehlt, still | Claim fehlt bei `strong`, oder bei `partial` ohne benannten Grund | **hart, immer null** |
+| verfehlt, Vollsichtung Pflicht | Claim fehlt, `match_strength` ist `weak` oder `none`, oder die Liste `omitted_pages` ist gekürzt; das geht vor, auch bei `strong` | keins: das Ergebnis gibt die Lücke zu |
+| verfehlt, mit Hinweis | Claim fehlt bei `partial`, und die Ausgabe nennt den Grund: unverstandene, nur teilweise getroffene, verstreute oder verdrängte Wörter, eine unbekannte Kennung oder einen unvertretenen Begriff | optional über `--max-hinweis` |
+| verfehlt, still | Claim fehlt bei `strong` ohne gekürzte Liste, oder bei `partial` ohne benannten Grund | **hart, immer null** |
 
 Dazu drei Wächter ohne Bezug zur Güte: Die Vollsichtung muss jeden Claim genau
 einmal vorlegen, das Gold darf nicht im Skill-Ordner liegen, und keine
@@ -272,8 +272,9 @@ Ausgabe. Dazu fährt er `python3 tools/skalierung_check.py --seiten
 0,200,500,1000,1800`, standardmäßig in beiden Reihenfolgen der Kennungen: Bei
 keiner Größe darf eine Goldfrage still verfehlt werden, das ist das Gate. Die
 Spalte `o. Claim` zählt Goldfragen, die `strong` heißen, obwohl ihr Claim
-fehlt; seit v5 steht sie überall auf null. Steigt sie, lügt das Etikett
-wieder, auch wenn der Vertrag den Fall noch auffängt. Die Messtabelle zum
+fehlt; seit v5 steht sie überall auf null. Steigt sie, verspricht `strong`
+wieder mehr, als die Ausgabe zeigt, auch wenn der Vertrag den Fall noch
+auffängt. Die Messtabelle zum
 wachsenden Bestand in `wissenstresor/KONZEPT.md` zieht er von Hand nach;
 `check_docs.py` bindet sie nicht, weil die volle Messung lange läuft.
 Wer dabei die Gruppe `kontrolle` zum Einstellen benutzt, hat sie verbraucht.

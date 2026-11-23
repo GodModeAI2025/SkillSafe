@@ -459,33 +459,37 @@ tools/skalierung_check.py baut Kopien mit 200 bis 1.800 Ablenkerseiten aus
 eingefrorenem Fachtext dieses Repositorys. Dort hiessen eine bis drei der 84
 Goldfragen 'strong', waehrend der erwartete Claim fehlte: Jedes Wort fand
 irgendwo Traeger, oft viele gleich gute, und die Nachrueck-Regel holte einen
-eigens in die Auswahl. Aufgefangen hat das nur die gekuerzte Liste
-ausgelassener Seiten, die nach dem Vertrag in die Vollsichtung schickt; das
-Etikett log. Erwogen fuer die verteilten Woerter: (1) Eine gezeigte Seite
-muss jedes Wort tragen. Misst an den Ablenkern gleich, nimmt aber einer
-Frage nach zwei kuratierten Begriffen auf zwei Seiten das 'strong' (zwei
-Tests der Suite wurden rot). (2) Ein Claim muss jedes Wort tragen: misst
-ebenfalls gleich, ist aber enger als noetig, denn der Antworten-Workflow
-liest ganze Seiten. (3) Eine Schwelle je Bestandsgroesse: eine Zahl, die man
-fuer jeden Bestand neu einstellen muesste. Fuer die gleich guten Traeger:
-(4) Jeder abgeschnittene Traeger eines losen Worts nimmt 'strong'. Das traf
-im Demo-Schnappschuss "Wissenstresor 10" (--limit 10), dessen abgeschnittene
+eigens in die Auswahl. Aufgefangen hat das der Vertrag, weil die Liste
+ausgelassener Seiten jedes Mal gekuerzt war und er dann die Vollsichtung
+verlangt; bei einer Frage stand die Seite des Claims zudem unter den
+gezeigten Seiten. 'strong' versprach trotzdem mehr, als die Ausgabe zeigte.
+Erwogen fuer die verteilten Woerter: (1) Eine gezeigte Seite muss jedes Wort
+tragen. Misst an den Ablenkern gleich, nimmt aber einer Frage nach zwei
+kuratierten Begriffen auf zwei Seiten das 'strong' (zwei Tests der Suite
+wurden rot). (2) Ein Claim muss jedes Wort tragen: misst ebenfalls gleich,
+ist aber enger als noetig, denn der Antworten-Workflow liest ganze Seiten.
+(3) Eine Schwelle je Bestandsgroesse: eine Zahl, die man fuer jeden Bestand
+neu einstellen muesste. Fuer die gleich guten Traeger: (4) Jeder
+abgeschnittene Traeger eines losen Worts nimmt 'strong'. Das traf im
+Demo-Schnappschuss "Wissenstresor 10" (--limit 10), dessen abgeschnittene
 Traeger schwaecher sind als jeder gezeigte. (5) Jeder gleich gute
 abgeschnittene Traeger, auch auf einer gezeigten Seite: misst gleich, aber
 eine gezeigte Seite liest der Antworten-Workflow ohnehin ganz. Ersatz: Was
 ein vertretener kuratierter Begriff traegt, zaehlt weiter ueber die ganze
 Ausgabe; die uebrigen Woerter muessen auf einer gezeigten Seite zusammen
-stehen (sonst query_terms.scattered), und kein gleich gut bewerteter Traeger
-eines davon darf auf einer nicht gezeigten Seite am Limit gescheitert sein
-(sonst query_terms.crowded). Wie die verworfene Seitenrechnung vom
-2026-11-12 kann das die Staerke nur senken. Rangfolge und Goldzahlen
-bleiben; im Schnappschuss wird "Kernoperationen Chunking Vermieter"
-'partial'. Was direkt gefunden wird, sinkt mit dem Bestand trotzdem (37 auf
-16 der 84 Goldfragen bei 1.800 Seiten, auf 13, wenn das Gesuchte juenger ist
-als das Rauschen und jeden Gleichstand verliert). Das ist die Grenze eines
+stehen (sonst query_terms.scattered: die Woerter, die einer der Seiten mit
+den meisten fehlen), und kein gleich gut bewerteter Traeger eines davon darf
+auf einer nicht gezeigten Seite am Limit gescheitert sein (sonst
+query_terms.crowded). Wie die verworfene Seitenrechnung vom 2026-11-12 kann
+das die Staerke nur senken. Rangfolge und Goldzahlen bleiben; im
+Schnappschuss wird "Kernoperationen Chunking Vermieter" 'partial'. Was
+direkt gefunden wird, sinkt mit dem Bestand trotzdem (37 auf 16 der 84
+Goldfragen bei 1.800 Seiten, auf 13, wenn das Gesuchte juenger ist als das
+Rauschen und jeden Gleichstand verliert). Das ist die Grenze eines
 lexikalischen Rankings. Mindestens neun von zehn Verfehlungen verlangen dann
 die Vollsichtung, und die kostet Lesearbeit im Verhaeltnis zum Bestand.
 Offen bleibt die Stichwortfrage aus ein oder zwei Allerweltswoertern: Von
 2.135 solchen Fragen aus dem Gold hiessen bei 500 Seiten unter v4 615 / 634
 'strong', ohne den Claim der ganzen Frage zu zeigen, unter v5 120 / 123; im
-Demo-Bestand 60 und 51.
+Demo-Bestand 57 und 48 (eine Stichwortfrage aus mehreren Goldfragen zaehlt
+einmal, mit den Claims aller).

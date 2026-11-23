@@ -429,7 +429,10 @@ def messe(vault, fragen, negativ, limit=8, seite_von=None):
         return {
             "frage": frage,
             "staerke": antwort["coverage"]["match_strength"],
-            "pflicht": antwort["fallback"]["exhaustive_review_required"],
+            # Wie bei den Goldfragen: Auch eine gekürzte Liste ausgelassener
+            # Seiten schickt nach dem Vertrag in die Vollsichtung.
+            "pflicht": bool(antwort["fallback"]["exhaustive_review_required"]
+                            or antwort["coverage"].get("omitted_pages_truncated")),
         }
 
     return _parallel(eine_frage, fragen), _parallel(eine_negativfrage, negativ)
@@ -499,8 +502,8 @@ def gates(zeilen, sichtung, lecks, min_recall, max_hinweis):
     zahl = zusammenfassung(zeilen)
     if zahl["still"]:
         verletzt.append(
-            f"{zahl['still']} stille Verfehlung(en): Claim fehlt, Ergebnis "
-            f"behauptet trotzdem 'strong'"
+            f"{zahl['still']} stille Verfehlung(en): Claim fehlt, und das "
+            f"Ergebnis nennt keinen Grund ('strong' oder 'partial' ohne Grund)"
         )
     if zahl["recall_prozent"] < min_recall:
         verletzt.append(

@@ -387,27 +387,31 @@ Fachtext dieses Repositorys und misst darin die 84 Goldfragen, in zwei
 Reihenfolgen der Kennungen, weil ein Punktgleichstand an die kleinere geht.
 Bis `hybrid-local/v4` hießen dort ein bis drei Fragen `strong`, während der
 erwartete Claim fehlte: Jedes Wort der Frage war irgendwo getroffen, aber
-verteilt über Seiten, die nichts miteinander zu tun hatten, oder ein gleich
-guter Träger war bloß am Limit gescheitert. Im Demo-Bestand kam das nie vor.
-Aufgefangen hat es nur die gekürzte Liste ausgelassener Seiten, die nach dem
-Vertrag in die Vollsichtung schickt; das Etikett log. `hybrid-local/v5`
-verlangt für `strong` deshalb, dass die Wörter, die kein kuratierter Begriff
-trägt, auf einer gezeigten Seite zusammen stehen und kein gleich guter Träger
-am Limit scheiterte. Was fehlt, nennt die Ausgabe unter
-`query_terms.scattered` und `.crowded`. Eine Frage nach zwei kuratierten
-Begriffen braucht zwei Seiten und bleibt `strong`. Rangfolge und Messtabelle
-bleiben; keine Goldfrage heißt mehr `strong` ohne ihren Claim, still verfehlt
-wird bei keiner Größe. Direkt gefunden werden bei 1.800 Seiten 16 statt 37
-der 84 Fragen (13, wenn das Gesuchte jünger ist als das Rauschen), und
-mindestens neun von zehn Verfehlungen verlangen die Vollsichtung. Das ist die
-Grenze eines lexikalischen Rankings, jetzt gemessen statt geschätzt (Tabelle
-in `wissenstresor/KONZEPT.md`). `tools/recall_check.py` zählt eine gekürzte
-Liste ausgelassener Seiten jetzt wie der Vertrag als Pflicht zur
-Vollsichtung, und ein `partial` ohne benannten Grund als still.
+verteilt über Seiten, die nichts miteinander zu tun hatten. Im Demo-Bestand
+kam das nie vor. Aufgefangen hat es der Vertrag: Die Liste ausgelassener
+Seiten war jedes Mal gekürzt, und dann verlangt er die Vollsichtung; bei
+einer der Fragen stand die Seite des Claims zudem unter den gezeigten
+Seiten. `strong` versprach trotzdem mehr, als die Ausgabe zeigte.
+`hybrid-local/v5` verlangt für `strong` deshalb, dass die Wörter, die kein
+kuratierter Begriff trägt, auf einer gezeigten Seite zusammen stehen, und
+dass kein gleich guter Träger am Limit scheiterte; die zweite Bedingung
+zeigten Stichwortfragen, bei denen ein Gleichstand der Punkte über die
+Kennung entschied, welcher Träger zu sehen ist. Was fehlt, nennt die Ausgabe
+unter `query_terms.scattered` und `.crowded`. Eine Frage nach zwei
+kuratierten Begriffen braucht zwei Seiten und bleibt `strong`. Rangfolge und
+Messtabelle bleiben; keine Goldfrage heißt mehr `strong` ohne ihren Claim,
+still verfehlt wird bei keiner Größe. Direkt gefunden werden bei 1.800
+Seiten 16 statt 37 der 84 Fragen (13, wenn das Gesuchte jünger ist als das
+Rauschen), und mindestens neun von zehn Verfehlungen verlangen die
+Vollsichtung (`weak`, `none` oder eine gekürzte Liste ausgelassener Seiten).
+Das ist die Grenze eines lexikalischen Rankings, jetzt gemessen statt
+geschätzt (Tabelle in `wissenstresor/KONZEPT.md`). `tools/recall_check.py`
+zählt eine gekürzte Liste ausgelassener Seiten jetzt wie der Vertrag als
+Pflicht zur Vollsichtung, und ein `partial` ohne benannten Grund als still.
 
 Abnahme: 260 Tests bestanden · 37 manifestierte Dateien · 39 sichere
 Paketeinträge · SHA-256
-`0ec197cb2db47600e42ccd7e0913e7ae0e8b9c725cf88b1805e2d69bb12e4f28`.
+`994d78a79448855713314ad793657cad61555e417eb84ccc8cffff631b131f66`.
 Dazu 2 aufgeführte externe Bezugsquellen · 2 Satzanker.
 
 Alles läuft mit der Python-Standardbibliothek, gemessen mit CPython 3.9 und
@@ -968,7 +972,8 @@ Protokoll und benannte Verluste: [`references/export-okf.md`](wissenstresor/refe
 Ausgelegt für kuratierte Bestände bis in den niedrigen Tausenderbereich an
 Seiten. Gemessen mit bis zu 1.800 Ablenkerseiten: Direkt gefunden werden
 dort 16 statt 37 der 84 Goldfragen, mindestens neun von zehn Verfehlungen
-verlangen die Vollsichtung (215 Stapel zu 40 Claims), still verfehlt keine
+verlangen die Vollsichtung (`weak`, `none` oder eine gekürzte Liste; 215
+Stapel zu 40 Claims), still verfehlt keine
 (`tools/skalierung_check.py`). Eine Stichwortfrage aus ein oder zwei
 Allerweltswörtern kann dort `strong` heißen, ohne das Gesuchte zu zeigen. Medien werden nicht durch die Engine
 dekodiert; sie verwaltet gehashte Originale und geprüfte Regionen.

@@ -3,8 +3,9 @@
 Das Gold misst gegen 28 Claims. Bis hybrid-local/v4 hieß eine Frage in einem
 großen Bestand 'strong', sobald jedes ihrer Wörter irgendwo getroffen war,
 auch verteilt über Ablenkerseiten: Mit 200 Seiten Nahtext (Saat 1) hieß so
-eine Goldfrage 'strong', während ihr Claim fehlte. Der Vertrag fing sie nur
-ab, weil die Liste ausgelassener Seiten gekürzt war. Seit v5 verlangt
+eine Goldfrage 'strong', während ihr Claim fehlte. Der Vertrag fing sie ab:
+Die Liste ausgelassener Seiten war gekürzt, und die Seite des Claims stand
+unter den gezeigten Seiten. Seit v5 verlangt
 'strong', dass die losen Wörter auf einer gezeigten Seite zusammenkommen und
 kein gleich guter Träger eines losen Worts nur am Limit gescheitert ist. Der
 Test baut diesen Bestand und hält beides auf null: stille Verfehlungen und
@@ -66,12 +67,25 @@ class SkalierungTests(unittest.TestCase):
         self.assertGreater(len(saetze), 1000)
         self.assertGreater(len(titel), 50)
         self.assertEqual(len(saetze), len(set(saetze)))
-        # Der Korpus kommt aus einem festen Stand: neu erzeugt aus derselben
-        # Doku käme dasselbe heraus, aus der heutigen Doku nicht zwingend.
+        # Der Korpus kommt aus einem festen Stand, und die Prüfsumme hält ihn
+        # fest: `--korpus-neu 6d32ae3` erzeugt genau diese Datei, aus der
+        # heutigen Doku käme eine andere. Ein neuer Korpus ist eine bewusste
+        # Änderung, auch an dieser Zeile.
         kopf = self.sk.KORPUS.read_text(encoding="utf-8").split("\n", 3)
         self.assertIn("6d32ae3", kopf[1])
+        self.assertEqual(
+            hashlib.sha256(self.sk.KORPUS.read_bytes()).hexdigest(),
+            "bc0e6c0de5568da366c974c2001c8cb796183c49c8400374133f2dfa4e49b243")
         for name in self.sk.KORPUS_DATEIEN:
             self.assertTrue((REPOSITORY / name).is_file(), name)
+        # Keine Gold- oder Negativfrage steht im Korpus, verglichen in der
+        # Stammform wie beim Leck-Wächter.
+        gold = json.loads(self.sk.STANDARD_GOLD.read_text(encoding="utf-8"))
+        nadeln = [f" {self.rc._stammform(frage)} " for frage in
+                  [e["frage"] for e in gold["fragen"]] + list(gold["negativ"])]
+        formen = [f" {self.rc._stammform(text)} " for text in saetze + titel]
+        self.assertEqual(
+            [nadel for nadel in nadeln if any(nadel in form for form in formen)], [])
 
     def test_distractors_leak_no_gold_question_and_carry_no_signature(self):
         gold = json.loads(self.sk.STANDARD_GOLD.read_text(encoding="utf-8"))
@@ -147,6 +161,30 @@ class SkalierungTests(unittest.TestCase):
             erwartet = [(f, s, st, ab, qt, [abbildung[c] for c in ids], seiten)
                         for f, s, st, ab, qt, ids, seiten in antworten(alt, "test_alt")]
             self.assertEqual(antworten(neu, "test_neu"), erwartet)
+            # Das Werkzeug nimmt das Gold selbst mit: messen() und
+            # kurzfragen() zählen in beiden Reihenfolgen gleich. Vier
+            # Goldfragen genügen; ihre Stichwortfragen sind teils 'strong'
+            # mit dem Claim, teils ohne.
+            klein = Path(temp) / "gold.json"
+            auswahl = {"In welcher Form legt das Google-Format Inhalte ab?",
+                       "Lohnt es sich, kleine Dokumente einfach abzuschreiben?",
+                       "Wohin mit Angaben, die in keine Kategorie passen?",
+                       "Woher stammt POLE ursprünglich?"}
+            klein.write_text(json.dumps({
+                "schema": gold["schema"],
+                "fragen": [e for e in gold["fragen"] if e["frage"] in auswahl],
+            }, ensure_ascii=False), encoding="utf-8")
+            gemessen = [self.sk.messen(vault, klein, abbildung=abb)
+                        for vault, abb in ((alt, {}), (neu, abbildung))]
+            for ergebnis in gemessen:
+                ergebnis.pop("query_median_s")
+            self.assertEqual(gemessen[0]["fragen"], 4)
+            self.assertGreater(gemessen[0]["treffer"], 0)
+            self.assertEqual(gemessen[1], gemessen[0])
+            kurz = [self.sk.kurzfragen(vault, klein, abbildung=abb)
+                    for vault, abb in ((alt, {}), (neu, abbildung))]
+            self.assertEqual(kurz[1], kurz[0])
+            self.assertEqual(kurz[0]["strong_ohne_claim"], 2)
             # Mit Ablenkern bleiben deren Kennungen unter dem Demo-Block.
             claims, abbildung = self.sk.bauen(mit, 5, "nah", 1, reihenfolge="neu")
             ids = [int(nummer) for seite in (mit / "knowledge" / "demo-okf").glob("abl-*.md")

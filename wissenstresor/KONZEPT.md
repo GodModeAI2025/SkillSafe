@@ -471,7 +471,8 @@ Bedeutungsindex. Drei Bausteine tragen sie gemeinsam:
 1. **Das Ranking wird ehrlich.** `hybrid-local/v5` weist aus, welche
    Fragebegriffe es erkannt hat (`coverage.match_strength`,
    `coverage.query_terms`), meldet jede Kürzung durch das Limit und macht bei
-   `weak` und `none` die Vollsichtung zur Pflicht.
+   `weak` und `none` die Vollsichtung zur Pflicht, ebenso bei einer gekürzten
+   Liste ausgelassener Seiten.
 2. **Wortformen sind keine Bedeutungsfrage.** `wortform/v1` gleicht Flexion,
    Umlaut-Plural, `-ung` und Kompositumteile ab, nachrechenbar und mit eigenem
    Grund am Treffer. Mehr nicht.
@@ -576,15 +577,19 @@ getroffen war. In einem großen Bestand findet aber jedes Allerweltswort
 Träger, oft viele gleich gute, und die Nachrück-Regel holt einen eigens in
 die Auswahl. Mit 200 bis 1.800 Ablenkerseiten hießen so ein bis drei der 84
 Goldfragen `strong`, während der erwartete Claim fehlte, im Demo-Bestand
-keine. Aufgefangen hat sie nur die gekürzte Liste ausgelassener Seiten, die
-nach dem Vertrag in die Vollsichtung schickt; das Etikett log.
-`hybrid-local/v5` verlangt zusätzlich, dass die Wörter, die kein vertretener
-kuratierter Begriff trägt, auf einer gezeigten Seite zusammen stehen (sonst
-`query_terms.scattered`) und dass kein gleich gut bewerteter Träger eines
-dieser Wörter auf einer nicht gezeigten Seite am Limit scheiterte (sonst
-`query_terms.crowded`); eine Frage nach zwei Begriffen braucht zwei Seiten
-und bleibt `strong`. Rangfolge
-und Punktzahlen sind dieselben wie in v4, die Messzahlen des Golds ebenfalls;
+keine. Aufgefangen hat sie der Vertrag, weil die Liste ausgelassener Seiten
+jedes Mal gekürzt war und er dann die Vollsichtung verlangt; bei einer der
+Fragen stand die Seite des Claims zudem unter den gezeigten Seiten. `strong`
+versprach trotzdem mehr, als die Ausgabe zeigte. `hybrid-local/v5` verlangt
+zusätzlich, dass die Wörter, die kein vertretener kuratierter Begriff trägt,
+auf einer gezeigten Seite zusammen stehen (sonst `query_terms.scattered`)
+und dass kein gleich gut bewerteter Träger eines dieser Wörter auf einer
+nicht gezeigten Seite am Limit scheiterte (sonst `query_terms.crowded`);
+eine Frage nach zwei Begriffen braucht zwei Seiten und bleibt `strong`. Die
+erste Bedingung trifft die Goldfragen, deren Wörter verstreut standen; die
+zweite zeigten Stichwortfragen, bei denen ein Gleichstand der Punkte über
+die Kennung entschied, welcher Träger zu sehen ist. Rangfolge und
+Punktzahlen sind dieselben wie in v4, die Messzahlen des Golds ebenfalls;
 von den 309 festgehaltenen Abfragen des Rangfolge-Schnappschusses wird eine
 `partial` („Kernoperationen Chunking Vermieter", drei Wörter auf drei
 Seiten), und neu festgehalten ist der Gegenfall mit drei Wörtern auf einer
@@ -789,8 +794,9 @@ Modell) — der Linter repariert nur Metadaten und Router, nie Inhalte.
   mit bis zu 1.800 Ablenkerseiten (8.199 Claims, `tools/skalierung_check.py`):
   Direkt gefunden werden dort 16 statt 37 der 84 Goldfragen, 13, wenn
   das Gesuchte jünger ist als das Rauschen. Mindestens neun von zehn
-  Verfehlungen verlangen die Vollsichtung, die übrigen nennen ihren Grund,
-  still verfehlt keine. Eine Stichwortfrage aus ein oder zwei
+  Verfehlungen verlangen die Vollsichtung (`weak`, `none` oder eine gekürzte
+  Liste ausgelassener Seiten), die übrigen nennen ihren Grund, still verfehlt
+  keine. Eine Stichwortfrage aus ein oder zwei
   Allerweltswörtern kann in einem großen Bestand `strong` heißen, ohne das
   Gesuchte zu zeigen.
 * Kontrollierte Begriffswelten decken nur kuratierte Synonyme. Nicht
@@ -974,16 +980,18 @@ knapp 3 für das unveränderte Validierungs-Gate; eine Frage mit 105 Begriffen
 (990 Zeichen) 4,7 Sekunden; die Ausgabe einer Abfrage rund 15.000 Zeichen.
 
 **Wachsender Bestand (seit v0.19.0, gemessen am 2026-11-23 mit
-`tools/skalierung_check.py`, Gold wie oben, Limit 8):** Der Demo-Bestand plus
-N Ablenkerseiten mit je drei bis sechs Claims aus eingefrorenem Fachtext
-dieses Repositorys (`tests/skalierung/korpus.txt`): Markov-Text über die
-Sätze der Doku, mit denselben Fachwörtern wie die Fragen, aber ohne
-zusammenhängende Aussagen. Bei Punktgleichstand zeigt die Engine die kleinere
-Kennung zuerst. Jede Zelle nennt deshalb zwei Zahlen: Das Gesuchte ist älter
-als das Rauschen (kleinere Kennungen, ein Gleichstand geht an das Gold) /
-jünger (größere Kennungen, ein Gleichstand geht an den Ablenker). Direkt
-gefunden, Seite gelesen, Pflicht und Hinweis sind unter v4 und v5 gleich,
-denn die Rangfolge ist dieselbe:
+`tools/skalierung_check.py`, Gold wie oben, Limit 8):** Der Demo-Bestand
+plus N Ablenkerseiten mit je drei bis sechs Claims aus eingefrorenem
+Fachtext dieses Repositorys (`tests/skalierung/korpus.txt`): Markov-Text
+über die Sätze der Doku, mit denselben Fachwörtern wie die Fragen, aber ohne
+zusammenhängende Aussagen. Bei Punktgleichstand zeigt die Engine die
+kleinere Kennung zuerst. Jede Zelle nennt deshalb zwei Zahlen: Das Gesuchte
+ist älter als das Rauschen (kleinere Kennungen, ein Gleichstand geht an das
+Gold) / jünger (größere Kennungen, ein Gleichstand geht an den Ablenker).
+Direkt gefunden und Seite gelesen sind unter v4 und v5 gleich, denn die
+Rangfolge ist dieselbe; Pflicht und Hinweis auch, weil jede Goldfrage, die
+v4 `strong` nannte, obwohl ihr Claim fehlte, eine gekürzte Liste
+ausgelassener Seiten hatte:
 
 | Ablenkerseiten | Claims | direkt | Seite gelesen | Pflicht | Hinweis | still | `strong` ohne Claim v4 → v5 | Negativfragen `strong` v4 → v5 |
 |---|---|---|---|---|---|---|---|---|
@@ -996,32 +1004,37 @@ denn die Rangfolge ist dieselbe:
 Still verfehlt, also ohne Pflicht zur Vollsichtung und ohne benannten Grund,
 wurde keine Goldfrage, auch unter v4 nicht: Bei jeder Frage, die v4 `strong`
 nannte, obwohl ihr Claim fehlte, war die Liste ausgelassener Seiten gekürzt,
-und dann verlangt der Vertrag die Vollsichtung. Das Etikett log trotzdem;
-unter v5 heißt keine Goldfrage mehr `strong` ohne ihren Claim. Mit den
-Saaten 2 und 3 bei 1.000 Seiten ebenso (`strong` ohne Claim je 2 / 2 → 0 / 0),
-mit echten Sätzen der Doku statt Markov-Text (300 Seiten, 1.372 Claims) bei
-22 / 15 direkt gefundenen Fragen 1 / 2 → 0 / 0.
+und dann verlangt der Vertrag die Vollsichtung (so zählt `recall_check` seit
+v0.19.0; bis v0.18.8 zählte es eine gekürzte Liste nicht als Pflicht und
+hätte diese Fragen still genannt). `strong` versprach trotzdem mehr, als die
+Ausgabe zeigte; unter v5 heißt keine Goldfrage mehr `strong`, ohne ihren
+Claim zu zeigen. Mit den Saaten 2 und 3 bei 1.000 Seiten ebenso (`strong`
+ohne Claim je 2 / 2 → 0 / 0), mit echten Sätzen der Doku statt Markov-Text
+(300 Seiten, 1.372 Claims) bei 22 / 15 direkt gefundenen Fragen 1 / 2 → 0 /
+0.
 
 Was direkt gefunden wird, sinkt mit dem Bestand, weil Ablenker mit denselben
 Wörtern die acht Plätze besetzen, und noch einmal, wenn das Gesuchte jünger
-ist: Dann gewinnt der Ablenker jeden Gleichstand. Dafür verlangt das Ergebnis
-bei mindestens neun von zehn Verfehlungen die Vollsichtung (`weak`, `none`
-oder eine gekürzte Liste ausgelassener Seiten); die übrigen sind `partial`
-mit benanntem Grund. Die Vollsichtung kostet Lesearbeit im Verhältnis zum
+ist: Dann gewinnt der Ablenker jeden Gleichstand. Dafür verlangt das
+Ergebnis bei mindestens neun von zehn Verfehlungen die Vollsichtung (`weak`,
+`none` oder eine gekürzte Liste ausgelassener Seiten; allein über `weak` und
+`none` wären es rund vier von fünf); die übrigen sind `partial` mit
+benanntem Grund. Die Vollsichtung kostet Lesearbeit im Verhältnis zum
 Bestand (215 Stapel zu 40 Claims bei 1.800 Seiten); `query` braucht dort
 rund 3,8 Sekunden.
 
 Stichwortfragen zeigen, wo das Ranking an seine Grenze kommt: aus jeder
 Goldfrage ein oder zwei ihrer Inhaltswörter, zusammen 2.135 Fragen
-(`--kurzfragen`). Im Demo-Bestand heißen 51 davon `strong`, ohne den Claim
-der ganzen Frage zu zeigen, und bei 21 führt auch sonst nichts in der
-Ausgabe auf ihn (unter v4: 60 und 25). Bei 500 Seiten sind es unter v4 615 /
-634 und 241 / 241, unter v5 120 / 123 und 96 / 96 (älter / jünger). Das Maß
-ist grob, denn für eine Frage aus einem Wort ist der Claim der ganzen Frage
-nur eine von vielen möglichen Antworten. Es zeigt aber, was ein
-lexikalisches Ranking nicht kann: Ein Allerweltswort trägt in einem großen
-Bestand irgendein Claim, und `strong` heißt dann nur, dass die Wörter
-erkannt sind.
+(`--kurzfragen`); steckt dieselbe Stichwortfrage in mehreren Goldfragen,
+zählt sie einmal, und jeder ihrer Claims gilt. Im Demo-Bestand heißen 48
+davon `strong`, ohne einen dieser Claims zu zeigen, und bei 18 führt auch
+sonst nichts in der Ausgabe auf ihn (unter v4: 57 und 22). Bei 500 Seiten
+sind es unter v4 615 / 634 und 241 / 241, unter v5 120 / 123 und 96 / 96
+(älter / jünger). Das Maß ist grob, denn für eine Frage aus einem Wort ist
+der Claim der ganzen Frage nur eine von vielen möglichen Antworten. Es zeigt
+aber, was ein lexikalisches Ranking nicht kann: Ein Allerweltswort trägt in
+einem großen Bestand irgendein Claim, und `strong` heißt dann nur, dass die
+Wörter erkannt sind.
 
 **Ende zu Ende (Messläufe vom 2026-11-12 bis 2026-11-14, Stände v0.12.1 bis v0.17.0, nachgerechnet mit `tools/antwort_check.py` gegen den jeweils gebundenen Stand):**
 Vierundzwanzig frische Agenten, 80 Fragen, 0 Verstöße · bei 51 von 51 Fragen

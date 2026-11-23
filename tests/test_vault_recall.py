@@ -957,9 +957,10 @@ class QuerySignalTests(VaultCase):
         Allerweltswort einen Träger, und die Nachrück-Regel holt ihn eigens
         in die Auswahl; bis v4 hieß das 'strong' (tools/skalierung_check.py
         fand so Goldfragen, die 'strong' hießen, während ihr Claim fehlte).
-        Seit v5 heißt es 'partial', und
-        query_terms.scattered nennt, was nicht mit dem Rest auf einer Seite
-        steht. Auf einer Seite zusammen, auch in zwei Claims, bleibt es
+        Seit v5 heißt es 'partial', und query_terms.scattered nennt, was
+        den Seiten fehlt, die die meisten losen Wörter tragen: bei zwei
+        Wörtern auf zwei Seiten beide, unabhängig von der Reihenfolge der
+        Seiten. Auf einer Seite zusammen, auch in zwei Claims, bleibt es
         'strong'; was ein kuratierter Begriff trägt, zählt weiter über die
         ganze Ausgabe (Paare von Vorzugsbenennungen oben).
         """
@@ -984,9 +985,8 @@ class QuerySignalTests(VaultCase):
             {"C-0002", "C-0102"})
         self.assertEqual(abdeckung["match_strength"], "partial")
         self.assertFalse(verteilt["fallback"]["exhaustive_review_required"])
-        self.assertEqual(len(abdeckung["query_terms"]["scattered"]), 1)
-        self.assertLessEqual(set(abdeckung["query_terms"]["scattered"]),
-                             {"kranichzug", "moorlandschaft"})
+        self.assertEqual(sorted(abdeckung["query_terms"]["scattered"]),
+                         ["kranichzug", "moorlandschaft"])
         self.assertEqual(abdeckung["query_terms"]["crowded"], [])
 
         self.use_private_vault()
@@ -1001,6 +1001,18 @@ class QuerySignalTests(VaultCase):
             zusammen["coverage"]["query_terms"]["unmatched"], [])
         self.assertEqual(zusammen["coverage"]["query_terms"]["scattered"], [])
         self.assertEqual(zusammen["coverage"]["match_strength"], "strong")
+
+        # Zwei Wörter auf einer Seite, das dritte auf einer anderen: Nur das
+        # dritte ist verstreut.
+        einsetzen("okf.md", "Wortlaut] Der Dateipfad ist die Identität",
+                  "Wortlaut] Der Dateipfad ist bei der Wiesenweihe die "
+                  "Identität")
+        self.release()
+        _, zwei_eins = self.query("Kranichzug Moorlandschaft Wiesenweihe")
+        self.assertEqual(zwei_eins["coverage"]["term_coverage_percent"], 100)
+        self.assertEqual(zwei_eins["coverage"]["query_terms"]["scattered"],
+                         ["wiesenweihe"])
+        self.assertEqual(zwei_eins["coverage"]["match_strength"], "partial")
 
     def test_an_equal_carrier_cut_by_the_limit_is_no_strong(self):
         """Seit hybrid-local/v5: Schneidet das Limit einen gleich gut
@@ -1046,6 +1058,28 @@ class QuerySignalTests(VaultCase):
         _, eine_seite = self.query("Kranichzug", "--limit", "1")
         self.assertEqual(eine_seite["coverage"]["query_terms"]["crowded"], [])
         self.assertEqual(eine_seite["coverage"]["match_strength"], "strong")
+
+        # Die Grenze ist der schwächste gezeigte Träger, nicht der stärkste:
+        # C-0290 trägt beide Wörter (40 Punkte), C-0002 nur eines (20). Der
+        # abgeschnittene C-0102 hat ebenfalls 20, also so viel wie der
+        # schwächere gezeigte Träger, und seine Seite ist nicht gezeigt.
+        self.use_private_vault()
+        einsetzen("fakten.md", "Wortlaut] POLE stammt aus",
+                  "Wortlaut] Im Kranichzug stammt POLE aus der "
+                  "Moorlandschaft und aus")
+        einsetzen("okf.md", "Wortlaut] Der Dateipfad ist die Identität",
+                  "Wortlaut] Der Dateipfad ist im Kranichzug die Identität")
+        einsetzen("llm-wiki-muster.md", "Wortlaut] Kernoperationen sind",
+                  "Wortlaut] Im Kranichzug sind Kernoperationen")
+        self.release()
+        _, gestuft = self.query("Kranichzug Moorlandschaft", "--limit", "2")
+        self.assertEqual(
+            [(b["claim_id"], b["score"]) for b in gestuft["evidence"]],
+            [("C-0290", 40), ("C-0002", 20)])
+        self.assertEqual(gestuft["coverage"]["query_terms"]["scattered"], [])
+        self.assertEqual(gestuft["coverage"]["query_terms"]["crowded"],
+                         ["kranichzug"])
+        self.assertEqual(gestuft["coverage"]["match_strength"], "partial")
 
     def test_the_definition_page_survives_a_shortened_page_list(self):
         """Die Liste der gekürzten Seiten hat eine Obergrenze.
@@ -1280,9 +1314,18 @@ class QuerySignalTests(VaultCase):
         self.use_private_vault()
         erwartet = {"match_strength", "term_coverage_percent", "query_terms",
                     "candidates", "omitted_pages", "wortform"}
+        # Auch die Listen in query_terms stehen in jedem Zustand, seit
+        # hybrid-local/v5 mit scattered und crowded: Ein Konsument prüft
+        # nie auf einen fehlenden Schlüssel.
+        _, treffer = self.query("OKF")
+        self.assertEqual(treffer["state"], "candidates_found")
+        listen = set(treffer["coverage"]["query_terms"])
+        self.assertEqual(listen, {"content", "matched", "partial", "unmatched",
+                                  "scattered", "crowded"})
         _, leer = self.query("   ")
         self.assertEqual(leer["state"], "invalid_query")
         self.assertTrue(erwartet <= set(leer["coverage"]))
+        self.assertEqual(set(leer["coverage"]["query_terms"]), listen)
         # Ein Fehlerzustand ist kein "kein Kandidat": Die Stärke ist nicht
         # bewertet, und die Pflicht-Vollsichtung ist kein Thema.
         self.assertIsNone(leer["coverage"]["match_strength"])
@@ -1295,6 +1338,7 @@ class QuerySignalTests(VaultCase):
         _, kaputt = self.query("OKF")
         self.assertEqual(kaputt["state"], "invalid_vault")
         self.assertTrue(erwartet <= set(kaputt["coverage"]))
+        self.assertEqual(set(kaputt["coverage"]["query_terms"]), listen)
         self.assertIsNone(kaputt["coverage"]["match_strength"])
         self.assertIsNone(kaputt["fallback"]["sweep"])
 
@@ -1791,8 +1835,9 @@ class RecallGateTests(unittest.TestCase):
         still = [zeile for zeile in self.zeilen if zeile["ausgang"] == "still"]
         self.assertEqual(
             still, [],
-            "Der Claim fehlt, aber das Ergebnis behauptet 'strong'. "
-            "Entweder fehlt ein Alias, oder die Trefferstärke lügt.",
+            "Der Claim fehlt, und das Ergebnis nennt keinen Grund ('strong' "
+            "oder 'partial' ohne Grund). Entweder fehlt ein Alias, oder die "
+            "Trefferstärke lügt.",
         )
 
     def test_recall_stays_above_the_floor(self):
@@ -1921,7 +1966,8 @@ class RecallGateTests(unittest.TestCase):
         echt = self.tool.lauf(SOURCE_SKILL, "query", frage)
         self.assertEqual(echt["coverage"]["match_strength"], "partial")
         self.assertEqual(echt["coverage"]["term_coverage_percent"], 100)
-        self.assertEqual(len(echt["coverage"]["query_terms"]["scattered"]), 2)
+        self.assertEqual(sorted(echt["coverage"]["query_terms"]["scattered"]),
+                         ["chunking", "kernoperationen", "vermieter"])
         self.assertEqual(echt["coverage"]["query_terms"]["crowded"], [])
         self.assertFalse(echt["coverage"]["omitted_pages_truncated"])
         ohne = copy.deepcopy(echt)

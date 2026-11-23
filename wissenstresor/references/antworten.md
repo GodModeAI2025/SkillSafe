@@ -43,8 +43,8 @@ Protokoll für den jeweils maßgeblichen Tresor durchlaufen — eine
 
    | Stärke | Heißt | Was zu tun ist |
    |---|---|---|
-   | `strong` | Jeder Inhaltsbegriff ist exakt, als Wortform oder über einen kuratierten Begriff getroffen, jeder getroffene Begriff ist in der Ausgabe vertreten, jede genannte Kennung gibt es, und `query_terms.scattered` und `.crowded` sind leer: Was kein kuratierter Begriff trägt, steht zusammen auf einer gezeigten Seite (in ihren ausgegebenen Claims, ihrem Titel oder ihren Tags), und kein gleich guter Träger davon fiel auf einer nicht gezeigten Seite dem Limit zum Opfer | Weiter mit Schritt 3 und 4: Kandidaten lesen und antworten. Decken sie die Frage nicht, Schritt 4b. |
-   | `partial` | Ein Anker trägt (ein vertretener kuratierter Begriff, eine vorhandene ID an einem ausgegebenen Claim oder die ganze Frage als Wortfolge in einem Claim, wenn dabei ein Inhaltswort getroffen ist), oder mindestens zwei Begriffe sind getroffen und das sind mindestens 60 % — aber etwas blieb offen: `unmatched` oder `partial` ist nicht leer, ein Begriff ist unvertreten, eine Kennung gibt es nicht, die Wörter verteilen sich über mehrere Seiten (`scattered`), oder ein gleich guter Träger fiel dem Limit zum Opfer (`crowded`) | Tragen die getroffenen Begriffe die Frage: weiter mit Schritt 3 und 4. Steht unter `unmatched` oder `scattered` das, wonach gefragt wird: direkt zu Schritt 4b, wie bei `weak`. Bei `crowded` die Seiten aus `coverage.omitted_pages` in Schritt 4 mitlesen (siehe „Gekürzte Treffer“). Im Zweifel erst Schritt 4; bleibt danach etwas offen, folgt 4b. |
+   | `strong` | Jeder Inhaltsbegriff ist exakt, als Wortform oder über einen kuratierten Begriff getroffen, jeder getroffene Begriff ist in der Ausgabe vertreten, jede genannte Kennung gibt es, und `query_terms.scattered` und `.crowded` sind leer: Was kein kuratierter Begriff trägt, steht zusammen auf einer gezeigten Seite (in ihren ausgegebenen Claims, ihrem Titel oder ihren Tags), und das Limit hat keinen Träger davon auf einer nicht gezeigten Seite abgeschnitten, der den gezeigten gleichkommt (genau unter „Verteilt oder verdrängt“) | Weiter mit Schritt 3 und 4: Kandidaten lesen und antworten. Decken sie die Frage nicht, Schritt 4b. |
+   | `partial` | Ein Anker trägt (ein vertretener kuratierter Begriff, eine vorhandene ID an einem ausgegebenen Claim oder die ganze Frage als Wortfolge in einem Claim, wenn dabei ein Inhaltswort getroffen ist), oder mindestens zwei Begriffe sind getroffen und das sind mindestens 60 % — aber etwas blieb offen: `unmatched` oder `partial` ist nicht leer, ein Begriff ist unvertreten, eine Kennung gibt es nicht, die Wörter verteilen sich über mehrere Seiten (`scattered`), oder ein gleich guter Träger fiel dem Limit zum Opfer (`crowded`) | Tragen die getroffenen Begriffe die Frage: weiter mit Schritt 3 und 4. Steht unter `unmatched` das, wonach gefragt wird: direkt zu Schritt 4b, wie bei `weak`. Ist `scattered` nicht leer, steht die Frage auf keiner gezeigten Seite beisammen: Schritt 4 prüft, ob eine Seite sie trotzdem beantwortet, sonst folgt 4b. Bei `crowded` die Seiten aus `coverage.omitted_pages` in Schritt 4 mitlesen (siehe „Gekürzte Treffer“). Im Zweifel erst Schritt 4; bleibt danach etwas offen, folgt 4b. |
    | `weak` | Weniger als das: ein einzelner getroffener Begriff ohne Anker, Wortteil- oder Zufallstreffer | Schritt 4 entfällt, direkt zu Schritt 4b. Die Kandidaten sind Fingerzeige, keine Antwort. |
    | `none` | Kein Kandidat | Schritt 4 entfällt, direkt zu Schritt 4b. |
 
@@ -68,15 +68,18 @@ Protokoll für den jeweils maßgeblichen Tresor durchlaufen — eine
    Fundstelle eines Claims liegen (`source.locator`) statt in seinem Text.
 
    **Verteilt oder verdrängt.** Ein `partial` mit voller Abdeckung erklärt
-   eine von zwei Listen in `coverage.query_terms`. `scattered` nennt Wörter,
-   die kein vertretener kuratierter Begriff trägt und die auf der gezeigten
-   Seite fehlen, die die meisten solchen Wörter trägt: Jedes steht irgendwo,
-   zusammen stehen sie nirgends. `crowded` nennt Wörter, von denen ein Claim
-   auf einer nicht gezeigten Seite dem Limit zum Opfer fiel, obwohl er
-   mindestens so viele Punkte hat wie der schwächste gezeigte Claim mit
-   diesem Wort; welcher Träger zu sehen ist, hat dann nicht die Punktzahl
-   entschieden. Seine Seite steht unter `coverage.omitted_pages`, oder die
-   Liste ist gekürzt. Bei `strong` sind beide leer.
+   sich durch einen unvertretenen Begriff, eine unbekannte Kennung oder eine
+   von zwei Listen in `coverage.query_terms`. `scattered` ist nicht leer,
+   wenn keine gezeigte Seite alle Wörter trägt, die kein vertretener
+   kuratierter Begriff trägt: Jedes steht irgendwo, zusammen stehen sie
+   nirgends. Die Liste nennt die Wörter, die einer der Seiten fehlen, die die
+   meisten tragen; maßgeblich ist, dass sie nicht leer ist. `crowded` nennt
+   Wörter, von denen ein Claim auf einer nicht gezeigten Seite dem Limit zum
+   Opfer fiel, obwohl er mindestens so viele Punkte hat wie der schwächste
+   gezeigte Claim mit diesem Wort; trägt kein gezeigter Claim das Wort selbst,
+   sondern nur Titel oder Tags seiner Seite, genügt jeder solche Claim. Seine
+   Seite steht unter `coverage.omitted_pages`, oder die Liste ist gekürzt.
+   Bei `strong` sind beide leer.
 
    **Unbekannte Kennungen.** Nennt die Frage eine C-, S- oder B-ID, die es im
    Bestand nicht gibt, steht sie unter `coverage.unknown_ids`, und das
@@ -118,9 +121,11 @@ Protokoll für den jeweils maßgeblichen Tresor durchlaufen — eine
    Schritt 4b). Sie gehört zu den Seiten, die Schritt 4 liest.
 
    Beantworten die in Schritt 4 gelesenen Seiten die Frage ganz, ist die
-   Vollsichtung bei `partial` und `strong` nicht nötig. Nötig wird sie,
-   sobald ein Teil der Frage offen bleibt und als „Nicht im Bestand"
-   ausgewiesen werden soll (Schritt 6).
+   Vollsichtung bei `partial` und `strong` nicht nötig, außer die Liste
+   ausgelassener Seiten ist gekürzt (`coverage.omitted_pages_truncated`,
+   siehe „Gekürzte Treffer“). Nötig wird sie auch, sobald ein Teil der Frage
+   offen bleibt und als „Nicht im Bestand" ausgewiesen werden soll
+   (Schritt 6).
 
    **Umformulieren ist erlaubt, nie verlangt.** Wer bei `partial` vermutet,
    dass der Bestand ein anderes Wort für dieselbe Sache benutzt, darf
@@ -170,8 +175,10 @@ Protokoll für den jeweils maßgeblichen Tresor durchlaufen — eine
    derselbe ist.
 4b. **Vollsichtung — die Bedeutungssuche.** Pflicht bei `weak` und `none`
    (dort anstelle von Schritt 4; einzige Ausnahme ist die unbekannte Kennung
-   aus Schritt 2b, `fallback.unknown_ids_only: true`), und immer, bevor
-   irgendein Teil der Frage als „Nicht im Bestand" ausgewiesen wird. Hier
+   aus Schritt 2b, `fallback.unknown_ids_only: true`), bei jeder Stärke,
+   wenn `coverage.omitted_pages_truncated` wahr ist (dann nach Schritt 4),
+   und immer, bevor irgendein Teil der Frage als „Nicht im Bestand"
+   ausgewiesen wird. Hier
    liest das Modell jeden Claim und urteilt nach Bedeutung; das Script
    sorgt dafür, dass keiner fehlt.
 

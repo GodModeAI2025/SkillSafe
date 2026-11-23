@@ -1,7 +1,7 @@
 # Ablenker-Korpus für tools/skalierung_check.py. Nicht von Hand ändern.
 # Fließtext der Doku im Stand 6d32ae3 (16 Dateien,
 # siehe KORPUS_DATEIEN), gesäubert wie in korpus_aus_texten().
-# Neu erzeugen: python3 tools/skalierung_check.py --korpus-neu
+# Neu erzeugen: python3 tools/skalierung_check.py --korpus-neu 6d32ae3
 [saetze]
 Wissen ist Treibstoff (flüchtig), der Skill ist der Motor (stabil).
 SkillSafe ist ein lokaler, evidenzgebundener Wissensspeicher als purer Skill für LLM-Agenten wie Claude Code und Codex.
